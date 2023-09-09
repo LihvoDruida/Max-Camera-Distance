@@ -1,0 +1,15 @@
+## Interface: 100107
+## Interface-Classic: 11404
+## Interface-BCC: 20504
+## Interface-Wrath: 30402
+## Title:<|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
+## Notes: Automatically set the camera to its maximum distance when the addon is loaded.
+## IconTexture: Interface\AddOns\Max_Camera_Distance\assets\logo
+## Version: 1.0
+## Author: melles1991
+## DefaultState: Enabled
+## X-Website: https://legacy.curseforge.com/wow/addons/max-camera-distance
+## X-Curse-Project-ID: 911525
+## Libs: AceLocale-3.0: Max_Camera_Distance
+
+manifest.xml
