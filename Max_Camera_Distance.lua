@@ -1,24 +1,33 @@
-local L = LibStub("AceLocale-3.0"):GetLocale("Max_Camera_Distance")
 local addonName = "Max_Camera_Distance"
 local f = CreateFrame("Frame")
-local initialized = false
+local AceConfig = LibStub("AceConfig-3.0")
+local AceConfigDialog = LibStub("AceConfigDialog-3.0")
+local AceDB = LibStub("AceDB-3.0")
+local L = LibStub("AceLocale-3.0"):GetLocale("Max_Camera_Distance")
 
+local db
 local MAX_ZOOM_FACTOR = 2.6
 local AVERAGE_ZOOM_FACTOR = 2.0
 local MIN_ZOOM_FACTOR = 1.0
-
 local MAX_MOVE_DISTANCE = 50000
 local AVERAGE_MOVE_DISTANCE = 30000
 local MIN_MOVE_DISTANCE = 10000
 
+local defaults = {
+	profile = {
+		maxZoomFactor = MAX_ZOOM_FACTOR,
+		moveViewDistance = MAX_MOVE_DISTANCE,
+	},
+}
+
 local function SendMessage(message)
-	DEFAULT_CHAT_FRAME:AddMessage("|cff0070deMax Camer Distance|r: " .. message)
+	DEFAULT_CHAT_FRAME:AddMessage("|cff0070deMax Camera Distance|r: " .. message)
 end
 
 local function AdjustCamera()
 	if not InCombatLockdown() then
-		SetCVar("cameraDistanceMaxZoomFactor", MAX_ZOOM_FACTOR)
-		MoveViewOutStart(MAX_MOVE_DISTANCE)
+		SetCVar("cameraDistanceMaxZoomFactor", db.profile.maxZoomFactor)
+		MoveViewOutStart(db.profile.moveViewDistance)
 
 		if f.Ticker then
 			f.Ticker:Cancel()
@@ -28,45 +37,64 @@ local function AdjustCamera()
 end
 
 local function ChangeCameraSettings(newMaxZoomFactor, newMoveViewDistance, message)
-	if not initialized then
-		local AceDB = LibStub("AceDB-3.0")
-		addonSettings = AceDB:New("MaxCameraDistanceDB", {
-			profile = {
-				maxZoomFactor = MAX_ZOOM_FACTOR,
-				moveViewDistance = MAX_MOVE_DISTANCE,
-			},
-		}, false)
-		initialized = true
-	end
-
-	addonSettings.profile.maxZoomFactor = newMaxZoomFactor
-	addonSettings.profile.moveViewDistance = newMoveViewDistance
-
-	MAX_ZOOM_FACTOR = newMaxZoomFactor
-	MAX_MOVE_DISTANCE = newMoveViewDistance
-
+	db.profile.maxZoomFactor = newMaxZoomFactor
+	db.profile.moveViewDistance = newMoveViewDistance
 	AdjustCamera()
 	SendMessage(message)
 end
 
-if not initialized then
-	ChangeCameraSettings(MAX_ZOOM_FACTOR, MAX_MOVE_DISTANCE, L["SETTINGS_SET_TO_DEFAULT"])
-end
-
 local function OnAddonLoaded(self, event, loadedAddonName)
 	if loadedAddonName == addonName then
+		db = AceDB:New("MaxCameraDistanceDB", defaults, true)
+
 		f.Ticker = C_Timer.NewTicker(1, function()
 			local currentMaxZoomFactor = tonumber(GetCVar("cameraDistanceMaxZoomFactor"))
 			local currentMoveViewDistance = tonumber(GetCVar("cameraDistanceMoveSpeed"))
 
-			if currentMaxZoomFactor ~= MAX_ZOOM_FACTOR or currentMoveViewDistance ~= MAX_MOVE_DISTANCE then
-				ChangeCameraSettings(currentMaxZoomFactor, currentMoveViewDistance, L["SETTINGS_CHANGED"])
+			if currentMaxZoomFactor ~= db.profile.maxZoomFactor or currentMoveViewDistance ~= db.profile.moveViewDistance then
+				ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance, L["SETTINGS_CHANGED"])
 			end
 		end)
 
 		self:UnregisterEvent("ADDON_LOADED")
 	end
 end
+
+local options = {
+	name = "Max Camera Distance",
+	type = "group",
+	args = {
+		maxZoomFactor = {
+			type = "range",
+			name = L["MAX_ZOOM_FACTOR"],
+			desc = L["MAX_ZOOM_FACTOR_DESC"],
+			min = MIN_ZOOM_FACTOR,
+			max = MAX_ZOOM_FACTOR,
+			step = 0.1,
+			get = function() return db.profile.maxZoomFactor end,
+			set = function(_, value)
+				db.profile.maxZoomFactor = value
+				ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance, L["SETTINGS_SET_TO_MAX"])
+			end,
+		},
+		moveViewDistance = {
+			type = "range",
+			name = L["MOVE_VIDEO_DISTANCE"],
+			desc = L["MOVE_VIDEO_DISTANCE_DESC"],
+			min = MIN_MOVE_DISTANCE,
+			max = MAX_MOVE_DISTANCE,
+			step = 1000,
+			get = function() return db.profile.moveViewDistance end,
+			set = function(_, value)
+				db.profile.moveViewDistance = value
+				ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance, L["SETTINGS_SET_TO_MAX"])
+			end,
+		},
+	},
+}
+
+AceConfig:RegisterOptionsTable(addonName, options)
+AceConfigDialog:AddToBlizOptions(addonName, "Max Camera Distance")
 
 f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", OnAddonLoaded)
