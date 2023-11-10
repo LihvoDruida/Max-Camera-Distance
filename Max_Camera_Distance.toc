@@ -1,11 +1,11 @@
-## Interface: 100107
+## Interface: 100200
 ## Interface-Classic: 11404
 ## Interface-BCC: 20504
-## Interface-Wrath: 30402
+## Interface-Wrath: 30403
 ## Title:<|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
 ## Notes: Automatically set the camera to its maximum distance when the addon is loaded.
 ## IconTexture: Interface\AddOns\Max_Camera_Distance\assets\logo
-## Version: 1.1
+## Version: 1.2
 ## Author: melles1991
 ## DefaultState: Enabled
 ## SavedVariablesPerCharacter: MaxCameraDistanceDB
