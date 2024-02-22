@@ -19,6 +19,7 @@ local defaults = {
 		maxZoomFactor = MAX_ZOOM_FACTOR,
 		moveViewDistance = MAX_MOVE_DISTANCE,
 		reduceUnexpectedMovement = true, -- Додано значення за замовчуванням
+		resampleAlwaysSharpen = true,
 	},
 }
 
@@ -32,6 +33,9 @@ local function AdjustCamera()
 		MoveViewOutStart(db.profile.moveViewDistance)
 		-- Встановлює значення cameraReduceUnexpectedMovement
 		CVar.SetCVar("cameraReduceUnexpectedMovement", db.profile.reduceUnexpectedMovement and "1" or "0")
+		-- Graphics
+		C_CVar.SetCVar("renderscale", 0.999)
+		C_CVar.SetCVar("ResampleAlwaysSharpen", db.profile.resampleAlwaysSharpen and "1" or "0")
 
 		if f.Ticker then
 			f.Ticker:Cancel()
@@ -40,10 +44,12 @@ local function AdjustCamera()
 	end
 end
 
-local function ChangeCameraSettings(newMaxZoomFactor, newMoveViewDistance, newReduceMovementValue, message)
+local function ChangeCameraSettings(newMaxZoomFactor, newMoveViewDistance, newReduceMovementValue, newResampleValue,
+									message)
 	db.profile.maxZoomFactor = newMaxZoomFactor
 	db.profile.moveViewDistance = newMoveViewDistance
 	db.profile.reduceUnexpectedMovement = newReduceMovementValue
+	db.profile.resampleAlwaysSharpen = newResampleValue
 	AdjustCamera()
 	SendMessage(message)
 end
@@ -59,7 +65,7 @@ local function OnAddonLoaded(self, event, loadedAddonName)
 
 			if currentMaxZoomFactor ~= db.profile.maxZoomFactor or currentMoveViewDistance ~= db.profile.moveViewDistance or currentReduceMovementValue ~= db.profile.reduceUnexpectedMovement then
 				ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-					db.profile.reduceUnexpectedMovement, L["SETTINGS_CHANGED"])
+					db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen, L["SETTINGS_CHANGED"])
 			end
 		end)
 
@@ -88,7 +94,8 @@ local options = {
 					set = function(_, value)
 						db.profile.maxZoomFactor = value
 						ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-							db.profile.reduceUnexpectedMovement, L["SETTINGS_SET_TO_MAX"])
+							db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen,
+							L["SETTINGS_SET_TO_MAX"])
 					end,
 					order = 1,
 				},
@@ -103,7 +110,8 @@ local options = {
 					set = function(_, value)
 						db.profile.moveViewDistance = value
 						ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-							db.profile.reduceUnexpectedMovement, L["SETTINGS_SET_TO_MAX"])
+							db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen,
+							L["SETTINGS_SET_TO_MAX"])
 					end,
 					order = 2,
 				},
@@ -123,9 +131,21 @@ local options = {
 					set = function(_, value)
 						db.profile.reduceUnexpectedMovement = value
 						ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-							db.profile.reduceUnexpectedMovement, L["SETTINGS_CHANGED"])
+							db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen, L["SETTINGS_CHANGED"])
 					end,
 					order = 1,
+				},
+				resampleAlwaysSharpen = {
+					type = "toggle",
+					name = L["RESAMPLE_ALWAYS_SHARPEN"],
+					desc = L["RESAMPLE_ALWAYS_SHARPEN_DESC"],
+					get = function() return db.profile.resampleAlwaysSharpen end,
+					set = function(_, value)
+						db.profile.resampleAlwaysSharpen = value
+						ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
+							db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen, L["SETTINGS_CHANGED"])
+					end,
+					order = 2,
 				},
 			},
 		},
@@ -144,15 +164,15 @@ SLASH_DIS_MIN1 = "/dis_min"
 
 function SlashCmdList.DIS_MAX()
 	ChangeCameraSettings(MAX_ZOOM_FACTOR, MAX_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
-		L["SETTINGS_SET_TO_MAX"])
+		db.profile.ResampleAlwaysSharpen, L["SETTINGS_SET_TO_MAX"])
 end
 
 function SlashCmdList.DIS_AVG()
 	ChangeCameraSettings(AVERAGE_ZOOM_FACTOR, AVERAGE_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
-		L["SETTINGS_SET_TO_AVERAGE"])
+		db.profile.ResampleAlwaysSharpen, L["SETTINGS_SET_TO_AVERAGE"])
 end
 
 function SlashCmdList.DIS_MIN()
 	ChangeCameraSettings(MIN_ZOOM_FACTOR, MIN_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
-		L["SETTINGS_SET_TO_MIN"])
+		db.profile.ResampleAlwaysSharpen, L["SETTINGS_SET_TO_MIN"])
 end
