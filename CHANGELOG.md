@@ -1,4 +1,5 @@
-#### release 1.3
+#### release 1.4
 
-- Update TOC for Retail patch 10.2.5
-- Added missing 'AceConfig-3.0' library instance in addon.
+- Splitting settings parameters into two groups: "General Settings" and "Advanced Settings".
+- Added graphics settings and camera movement reduction option
+- Add option to reduce unexpected camera movements
