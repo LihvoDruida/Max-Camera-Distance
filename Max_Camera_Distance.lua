@@ -7,7 +7,23 @@ local L = LibStub("AceLocale-3.0"):GetLocale("Max_Camera_Distance")
 local CVar = C_CVar
 
 local db
-local MAX_ZOOM_FACTOR = 2.6
+local WoWClassicEra, WoWClassicTBC, WoWRetail
+local wowtocversion = select(4, GetBuildInfo())
+if wowtocversion < 20000 then
+	WoWClassicEra = true
+elseif wowtocversion > 19999 and wowtocversion < 90000 then
+	WoWClassicTBC = true
+elseif wowtocversion > 89999 then
+	WoWRetail = true
+end
+
+local MAX_ZOOM_FACTOR
+
+if WoWClassicEra and WoWClassicTBC then
+	MAX_ZOOM_FACTOR = 3.34
+elseif WoWRetail then
+	MAX_ZOOM_FACTOR = 2.6
+end
 local AVERAGE_ZOOM_FACTOR = 2.0
 local MIN_ZOOM_FACTOR = 1.0
 local MAX_MOVE_DISTANCE = 50000
