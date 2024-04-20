@@ -22,22 +22,14 @@ local MAX_ZOOM_FACTOR
 if WoWClassicEra and WoWClassicTBC then
 	MAX_ZOOM_FACTOR = 3.34
 elseif WoWRetail then
-	MAX_ZOOM_FACTOR = 2.6
+	MAX_ZOOM_FACTOR = 2.6 -- Default value for WoWRetail
 end
+
 local AVERAGE_ZOOM_FACTOR = 2.0
 local MIN_ZOOM_FACTOR = 1.0
 local MAX_MOVE_DISTANCE = 50000
 local AVERAGE_MOVE_DISTANCE = 30000
 local MIN_MOVE_DISTANCE = 10000
-
-local defaults = {
-	profile = {
-		maxZoomFactor = MAX_ZOOM_FACTOR,
-		moveViewDistance = MAX_MOVE_DISTANCE,
-		reduceUnexpectedMovement = true, -- Додано значення за замовчуванням
-		resampleAlwaysSharpen = true,
-	},
-}
 
 local function SendMessage(message)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff0070deMax Camera Distance|r: " .. message)
@@ -47,16 +39,9 @@ local function AdjustCamera()
 	if not InCombatLockdown() then
 		SetCVar("cameraDistanceMaxZoomFactor", db.profile.maxZoomFactor)
 		MoveViewOutStart(db.profile.moveViewDistance)
-		-- Встановлює значення cameraReduceUnexpectedMovement
 		CVar.SetCVar("cameraReduceUnexpectedMovement", db.profile.reduceUnexpectedMovement and "1" or "0")
-		-- Graphics
 		C_CVar.SetCVar("renderscale", 0.999)
 		C_CVar.SetCVar("ResampleAlwaysSharpen", db.profile.resampleAlwaysSharpen and "1" or "0")
-
-		if f.Ticker then
-			f.Ticker:Cancel()
-			f.Ticker = nil
-		end
 	end
 end
 
@@ -72,22 +57,36 @@ end
 
 local function OnAddonLoaded(self, event, loadedAddonName)
 	if loadedAddonName == addonName then
-		db = AceDB:New("MaxCameraDistanceDB", defaults, true)
+		db = AceDB:New("MaxCameraDistanceDB", { profile = defaults }, true)
 
-		f.Ticker = C_Timer.NewTicker(1, function()
-			local currentMaxZoomFactor = tonumber(GetCVar("cameraDistanceMaxZoomFactor"))
-			local currentMoveViewDistance = tonumber(GetCVar("cameraDistanceMoveSpeed"))
-			local currentReduceMovementValue = tonumber(GetCVar("cameraReduceUnexpectedMovement"))
+		-- Встановлення початкових налаштувань камери на основі значень, збережених у базі даних
+		AdjustCamera()
 
-			if currentMaxZoomFactor ~= db.profile.maxZoomFactor or currentMoveViewDistance ~= db.profile.moveViewDistance or currentReduceMovementValue ~= db.profile.reduceUnexpectedMovement then
-				ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-					db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen, L["SETTINGS_CHANGED"])
-			end
-		end)
+		-- Реєстрація функції зворотнього виклику для налаштування камери при зміні налаштувань
+		db.RegisterCallback(self, "MaxCameraDistance_SettingsChanged", AdjustCamera)
 
+		-- Відміна реєстрації прослуховувача подій після завантаження додатка
 		self:UnregisterEvent("ADDON_LOADED")
 	end
 end
+
+local function OnCVarUpdate(_, cvarName, value)
+	-- Якщо змінено будь-який з параметрів камери, змінюємо відповідні налаштування
+	if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMoveSpeed" or cvarName == "cameraReduceUnexpectedMovement" then
+		local currentMaxZoomFactor = tonumber(GetCVar("cameraDistanceMaxZoomFactor"))
+		local currentMoveViewDistance = tonumber(GetCVar("cameraDistanceMoveSpeed"))
+		local currentReduceMovementValue = tonumber(GetCVar("cameraReduceUnexpectedMovement"))
+
+		if currentMaxZoomFactor ~= db.profile.maxZoomFactor or currentMoveViewDistance ~= db.profile.moveViewDistance or currentReduceMovementValue ~= db.profile.reduceUnexpectedMovement then
+			ChangeCameraSettings(currentMaxZoomFactor, currentMoveViewDistance,
+				currentReduceMovementValue, db.profile.resampleAlwaysSharpen, L["SETTINGS_CHANGED"])
+		end
+	end
+end
+
+-- Реєстрація подій для відстеження змін у налаштуваннях камери
+f:RegisterEvent("CVAR_UPDATE")
+f:SetScript("OnEvent", OnCVarUpdate)
 
 local options = {
 	name = "Max Camera Distance",
@@ -170,6 +169,11 @@ local options = {
 
 AceConfig:RegisterOptionsTable(addonName, options)
 AceConfigDialog:AddToBlizOptions(addonName, "Max Camera Distance")
+
+SLASH_MAXCAMDIST1 = "/maxcamdist"
+SlashCmdList["MAXCAMDIST"] = function()
+	InterfaceOptionsFrame_OpenToCategory(addonName)
+end
 
 f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", OnAddonLoaded)
