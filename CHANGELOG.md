@@ -1,4 +1,3 @@
-#### release 1.6
+#### release 1.6.1
 
-- Modernize toc structure
-- Refactor camera settings tracking in Max_Camera_Distance addon
+- Toc Bumps for retail to 10.2.7
