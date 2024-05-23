@@ -19,7 +19,7 @@ end
 
 local MAX_ZOOM_FACTOR
 
-if WoWClassicEra and WoWClassicTBC then
+if WoWClassicEra or WoWClassicTBC then
 	MAX_ZOOM_FACTOR = 3.34
 elseif WoWRetail then
 	MAX_ZOOM_FACTOR = 2.6 -- Default value for WoWRetail
@@ -40,8 +40,8 @@ local function AdjustCamera()
 		SetCVar("cameraDistanceMaxZoomFactor", db.profile.maxZoomFactor)
 		MoveViewOutStart(db.profile.moveViewDistance)
 		CVar.SetCVar("cameraReduceUnexpectedMovement", db.profile.reduceUnexpectedMovement and "1" or "0")
-		C_CVar.SetCVar("renderscale", 0.999)
-		C_CVar.SetCVar("ResampleAlwaysSharpen", db.profile.resampleAlwaysSharpen and "1" or "0")
+		CVar.SetCVar("renderscale", 0.999)
+		CVar.SetCVar("ResampleAlwaysSharpen", db.profile.resampleAlwaysSharpen and "1" or "0")
 	end
 end
 
@@ -54,39 +54,6 @@ local function ChangeCameraSettings(newMaxZoomFactor, newMoveViewDistance, newRe
 	AdjustCamera()
 	SendMessage(message)
 end
-
-local function OnAddonLoaded(self, event, loadedAddonName)
-	if loadedAddonName == addonName then
-		db = AceDB:New("MaxCameraDistanceDB", { profile = defaults }, true)
-
-		-- Встановлення початкових налаштувань камери на основі значень, збережених у базі даних
-		AdjustCamera()
-
-		-- Реєстрація функції зворотнього виклику для налаштування камери при зміні налаштувань
-		db.RegisterCallback(self, "MaxCameraDistance_SettingsChanged", AdjustCamera)
-
-		-- Відміна реєстрації прослуховувача подій після завантаження додатка
-		self:UnregisterEvent("ADDON_LOADED")
-	end
-end
-
-local function OnCVarUpdate(_, cvarName, value)
-	-- Якщо змінено будь-який з параметрів камери, змінюємо відповідні налаштування
-	if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMoveSpeed" or cvarName == "cameraReduceUnexpectedMovement" then
-		local currentMaxZoomFactor = tonumber(GetCVar("cameraDistanceMaxZoomFactor"))
-		local currentMoveViewDistance = tonumber(GetCVar("cameraDistanceMoveSpeed"))
-		local currentReduceMovementValue = tonumber(GetCVar("cameraReduceUnexpectedMovement"))
-
-		if currentMaxZoomFactor ~= db.profile.maxZoomFactor or currentMoveViewDistance ~= db.profile.moveViewDistance or currentReduceMovementValue ~= db.profile.reduceUnexpectedMovement then
-			ChangeCameraSettings(currentMaxZoomFactor, currentMoveViewDistance,
-				currentReduceMovementValue, db.profile.resampleAlwaysSharpen, L["SETTINGS_CHANGED"])
-		end
-	end
-end
-
--- Реєстрація подій для відстеження змін у налаштуваннях камери
-f:RegisterEvent("CVAR_UPDATE")
-f:SetScript("OnEvent", OnCVarUpdate)
 
 local options = {
 	name = "Max Camera Distance",
@@ -167,32 +134,71 @@ local options = {
 	},
 }
 
+-- Register options with AceConfig and add to Blizzard options
 AceConfig:RegisterOptionsTable(addonName, options)
 AceConfigDialog:AddToBlizOptions(addonName, "Max Camera Distance")
 
-SLASH_MAXCAMDIST1 = "/maxcamdist"
-SlashCmdList["MAXCAMDIST"] = function()
-	InterfaceOptionsFrame_OpenToCategory(addonName)
+local function OnCVarUpdate(_, cvarName, value)
+	-- Якщо змінено будь-який з параметрів камери, змінюємо відповідні налаштування
+	if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMoveSpeed" or cvarName == "cameraReduceUnexpectedMovement" then
+		local currentMaxZoomFactor = tonumber(GetCVar("cameraDistanceMaxZoomFactor"))
+		local currentMoveViewDistance = tonumber(GetCVar("cameraDistanceMoveSpeed"))
+		local currentReduceMovementValue = tonumber(GetCVar("cameraReduceUnexpectedMovement"))
+
+		if currentMaxZoomFactor ~= db.profile.maxZoomFactor or currentMoveViewDistance ~= db.profile.moveViewDistance or currentReduceMovementValue ~= db.profile.reduceUnexpectedMovement then
+			ChangeCameraSettings(currentMaxZoomFactor, currentMoveViewDistance,
+				currentReduceMovementValue, db.profile.resampleAlwaysSharpen, L["SETTINGS_CHANGED"])
+		end
+	end
 end
 
+-- Реєстрація подій для відстеження змін у налаштуваннях камери
+f:RegisterEvent("CVAR_UPDATE")
+f:SetScript("OnEvent", OnCVarUpdate)
+
+-- Slash command handler
+local function SlashCmdHandler(msg, editBox)
+	local command = strlower(msg)
+	if command == "max" then
+		ChangeCameraSettings(MAX_ZOOM_FACTOR, MAX_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
+			db.profile.resampleAlwaysSharpen, "Settings set to maximum.")
+	elseif command == "avg" then
+		ChangeCameraSettings(AVERAGE_ZOOM_FACTOR, AVERAGE_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
+			db.profile.resampleAlwaysSharpen, "Settings set to average.")
+	elseif command == "min" then
+		ChangeCameraSettings(MIN_ZOOM_FACTOR, MIN_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
+			db.profile.resampleAlwaysSharpen, "Settings set to minimum.")
+	elseif command == "config" then
+		InterfaceOptionsFrame_OpenToCategory("Max Camera Distance")
+	else
+		print("Usage: /maxcamdist max | avg | min | config")
+	end
+end
+
+-- Register the slash commands
+SLASH_MAXCAMDIST1 = "/maxcamdist"
+SlashCmdList["MAXCAMDIST"] = SlashCmdHandler
+
+-- Event handler for ADDON_LOADED
+local function OnAddonLoaded(self, event, loadedAddonName)
+	if loadedAddonName == addonName then
+		db = AceDB:New("MaxCameraDistanceDB",
+			{ profile = { maxZoomFactor = MAX_ZOOM_FACTOR, moveViewDistance = AVERAGE_MOVE_DISTANCE, reduceUnexpectedMovement = false, resampleAlwaysSharpen = false } },
+			true)
+
+		-- Встановлення початкових налаштувань камери на основі значень, збережених у базі даних
+		AdjustCamera()
+
+		-- Реєстрація функції зворотнього виклику для налаштування камери при зміні налаштувань
+		db.RegisterCallback(self, "OnProfileChanged", AdjustCamera)
+		db.RegisterCallback(self, "OnProfileCopied", AdjustCamera)
+		db.RegisterCallback(self, "OnProfileReset", AdjustCamera)
+
+		-- Відміна реєстрації прослуховувача подій після завантаження додатка
+		self:UnregisterEvent("ADDON_LOADED")
+	end
+end
+
+-- Register ADDON_LOADED event
 f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", OnAddonLoaded)
-
-SLASH_DIS_MAX1 = "/dis_max"
-SLASH_DIS_AVG1 = "/dis_avg"
-SLASH_DIS_MIN1 = "/dis_min"
-
-function SlashCmdList.DIS_MAX()
-	ChangeCameraSettings(MAX_ZOOM_FACTOR, MAX_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
-		db.profile.ResampleAlwaysSharpen, L["SETTINGS_SET_TO_MAX"])
-end
-
-function SlashCmdList.DIS_AVG()
-	ChangeCameraSettings(AVERAGE_ZOOM_FACTOR, AVERAGE_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
-		db.profile.ResampleAlwaysSharpen, L["SETTINGS_SET_TO_AVERAGE"])
-end
-
-function SlashCmdList.DIS_MIN()
-	ChangeCameraSettings(MIN_ZOOM_FACTOR, MIN_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
-		db.profile.ResampleAlwaysSharpen, L["SETTINGS_SET_TO_MIN"])
-end
