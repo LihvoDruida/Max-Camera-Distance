@@ -36,7 +36,7 @@ local function SendMessage(message)
 end
 
 local function AdjustCamera()
-	if not InCombatLockdown() then
+	if not InCombatLockdown() and IsLoggedIn() then
 		SetCVar("cameraDistanceMaxZoomFactor", db.profile.maxZoomFactor)
 		MoveViewOutStart(db.profile.moveViewDistance)
 		CVar.SetCVar("cameraReduceUnexpectedMovement", db.profile.reduceUnexpectedMovement and "1" or "0")
@@ -47,12 +47,16 @@ end
 
 local function ChangeCameraSettings(newMaxZoomFactor, newMoveViewDistance, newReduceMovementValue, newResampleValue,
 									message)
-	db.profile.maxZoomFactor = newMaxZoomFactor
-	db.profile.moveViewDistance = newMoveViewDistance
-	db.profile.reduceUnexpectedMovement = newReduceMovementValue
-	db.profile.resampleAlwaysSharpen = newResampleValue
-	AdjustCamera()
-	SendMessage(message)
+	if IsLoggedIn() then
+		db.profile.maxZoomFactor = newMaxZoomFactor
+		db.profile.moveViewDistance = newMoveViewDistance
+		db.profile.reduceUnexpectedMovement = newReduceMovementValue
+		db.profile.resampleAlwaysSharpen = newResampleValue
+		AdjustCamera()
+		SendMessage(message)
+	else
+		SendMessage("Cannot change settings while in character edit mode.")
+	end
 end
 
 local options = {
