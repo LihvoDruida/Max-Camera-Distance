@@ -18,11 +18,10 @@ elseif wowtocversion >= 90000 then
 end
 
 local MAX_ZOOM_FACTOR
-
 if WoWClassicEra or WoWClassicTBC then
 	MAX_ZOOM_FACTOR = 3.34
 elseif WoWRetail then
-	MAX_ZOOM_FACTOR = 2.6 -- Значення за замовчуванням для WoWRetail
+	MAX_ZOOM_FACTOR = 2.6
 end
 
 local AVERAGE_ZOOM_FACTOR = 2.0
@@ -45,27 +44,33 @@ end
 
 local function AdjustCamera()
 	if not InCombatLockdown() and IsLoggedIn() then
-		SetCVar("cameraDistanceMaxZoomFactor", db.profile.maxZoomFactor)
-		MoveViewOutStart(db.profile.moveViewDistance)
-		CVar.SetCVar("cameraReduceUnexpectedMovement", db.profile.reduceUnexpectedMovement and "1" or "0")
-		CVar.SetCVar("renderscale", 0.999)
-		CVar.SetCVar("ResampleAlwaysSharpen", db.profile.resampleAlwaysSharpen and "1" or "0")
-
-		-- Налаштування швидкостей обертання yaw та pitch
-		SetCVar("cameraYawMoveSpeed", db.profile.cameraYawMoveSpeed)
-		SetCVar("cameraPitchMoveSpeed", db.profile.cameraPitchMoveSpeed)
+		if db.profile.maxZoomFactor then
+			SetCVar("cameraDistanceMaxZoomFactor", db.profile.maxZoomFactor)
+		end
+		if db.profile.moveViewDistance then
+			MoveViewOutStart(db.profile.moveViewDistance)
+		end
+		if db.profile.reduceUnexpectedMovement ~= nil then
+			CVar.SetCVar("cameraReduceUnexpectedMovement", db.profile.reduceUnexpectedMovement and "1" or "0")
+		end
+		if db.profile.resampleAlwaysSharpen ~= nil then
+			CVar.SetCVar("ResampleAlwaysSharpen", db.profile.resampleAlwaysSharpen and "1" or "0")
+		end
+		if db.profile.cameraIndirectVisibility ~= nil then
+			CVar.SetCVar("cameraIndirectVisibility", db.profile.cameraIndirectVisibility and "1" or "0")
+		end
+		if db.profile.cameraYawMoveSpeed then
+			SetCVar("cameraYawMoveSpeed", db.profile.cameraYawMoveSpeed)
+		end
+		if db.profile.cameraPitchMoveSpeed then
+			SetCVar("cameraPitchMoveSpeed", db.profile.cameraPitchMoveSpeed)
+		end
 	end
 end
 
-local function ChangeCameraSettings(newMaxZoomFactor, newMoveViewDistance, newReduceMovementValue, newResampleValue,
-									newCameraYawSpeed, newCameraPitchSpeed, message)
+local function ChangeCameraSetting(key, value, message)
 	if IsLoggedIn() then
-		db.profile.maxZoomFactor = newMaxZoomFactor
-		db.profile.moveViewDistance = newMoveViewDistance
-		db.profile.reduceUnexpectedMovement = newReduceMovementValue
-		db.profile.resampleAlwaysSharpen = newResampleValue
-		db.profile.cameraYawMoveSpeed = newCameraYawSpeed
-		db.profile.cameraPitchMoveSpeed = newCameraPitchSpeed
+		db.profile[key] = value
 		AdjustCamera()
 		SendMessage(message)
 	else
@@ -92,11 +97,7 @@ local options = {
 					step = 0.1,
 					get = function() return db.profile.maxZoomFactor end,
 					set = function(_, value)
-						db.profile.maxZoomFactor = value
-						ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-							db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen,
-							db.profile.cameraYawMoveSpeed, db.profile.cameraPitchMoveSpeed,
-							L["SETTINGS_SET_TO_MAX"])
+						ChangeCameraSetting("maxZoomFactor", value, L["SETTINGS_CHANGED"])
 					end,
 					order = 1,
 				},
@@ -109,11 +110,7 @@ local options = {
 					step = 1000,
 					get = function() return db.profile.moveViewDistance end,
 					set = function(_, value)
-						db.profile.moveViewDistance = value
-						ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-							db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen,
-							db.profile.cameraYawMoveSpeed, db.profile.cameraPitchMoveSpeed,
-							L["SETTINGS_CHANGED"])
+						ChangeCameraSetting("moveViewDistance", value, L["SETTINGS_CHANGED"])
 					end,
 					order = 2,
 				},
@@ -126,11 +123,7 @@ local options = {
 					step = 10,
 					get = function() return db.profile.cameraYawMoveSpeed end,
 					set = function(_, value)
-						db.profile.cameraYawMoveSpeed = value
-						ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-							db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen,
-							db.profile.cameraYawMoveSpeed, db.profile.cameraPitchMoveSpeed,
-							L["SETTINGS_CHANGED"])
+						ChangeCameraSetting("cameraYawMoveSpeed", value, L["SETTINGS_CHANGED"])
 					end,
 					order = 3,
 				},
@@ -143,11 +136,7 @@ local options = {
 					step = 10,
 					get = function() return db.profile.cameraPitchMoveSpeed end,
 					set = function(_, value)
-						db.profile.cameraPitchMoveSpeed = value
-						ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-							db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen,
-							db.profile.cameraYawMoveSpeed, db.profile.cameraPitchMoveSpeed,
-							L["SETTINGS_CHANGED"])
+						ChangeCameraSetting("cameraPitchMoveSpeed", value, L["SETTINGS_CHANGED"])
 					end,
 					order = 4,
 				},
@@ -165,11 +154,7 @@ local options = {
 					desc = L["REDUCE_UNEXPECTED_MOVEMENT_DESC"],
 					get = function() return db.profile.reduceUnexpectedMovement end,
 					set = function(_, value)
-						db.profile.reduceUnexpectedMovement = value
-						ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-							db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen,
-							db.profile.cameraYawMoveSpeed, db.profile.cameraPitchMoveSpeed,
-							L["SETTINGS_CHANGED"])
+						ChangeCameraSetting("reduceUnexpectedMovement", value, L["SETTINGS_CHANGED"])
 					end,
 					order = 1,
 				},
@@ -179,56 +164,83 @@ local options = {
 					desc = L["RESAMPLE_ALWAYS_SHARPEN_DESC"],
 					get = function() return db.profile.resampleAlwaysSharpen end,
 					set = function(_, value)
-						db.profile.resampleAlwaysSharpen = value
-						ChangeCameraSettings(db.profile.maxZoomFactor, db.profile.moveViewDistance,
-							db.profile.reduceUnexpectedMovement, db.profile.resampleAlwaysSharpen,
-							db.profile.cameraYawMoveSpeed, db.profile.cameraPitchMoveSpeed,
-							L["SETTINGS_CHANGED"])
+						ChangeCameraSetting("resampleAlwaysSharpen", value, L["SETTINGS_CHANGED"])
 					end,
 					order = 2,
 				},
+				cameraIndirectVisibility = {
+					type = "toggle",
+					name = L["INDIRECT_VISIBILITY"],
+					desc = L["INDIRECT_VISIBILITY_DESC"],
+					get = function() return db.profile.cameraIndirectVisibility end,
+					set = function(_, value)
+						ChangeCameraSetting("cameraIndirectVisibility", value, L["SETTINGS_CHANGED"])
+					end,
+					order = 3,
+				}
 			},
 		},
 	},
 }
 
--- Реєстрація параметрів з AceConfig та додавання до опцій Blizzard
+-- Register AceConfig options and add to Blizzard options
 AceConfig:RegisterOptionsTable(addonName, options)
 AceConfigDialog:AddToBlizOptions(addonName, "Max Camera Distance")
 
 local function OnCVarUpdate(_, cvarName, value)
-	-- Якщо змінено будь-який з параметрів камери, змінюємо відповідні налаштування
-	if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMoveSpeed" or cvarName == "cameraReduceUnexpectedMovement" or cvarName == "cameraYawMoveSpeed" or cvarName == "cameraPitchMoveSpeed" then
+	-- Check if any relevant CVars are updated
+	if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMoveSpeed" or cvarName == "cameraReduceUnexpectedMovement" or cvarName == "cameraYawMoveSpeed" or cvarName == "cameraPitchMoveSpeed" or cvarName == "cameraIndirectVisibility" then
 		local currentMaxZoomFactor = tonumber(GetCVar("cameraDistanceMaxZoomFactor"))
 		local currentMoveViewDistance = tonumber(GetCVar("cameraDistanceMoveSpeed"))
 		local currentReduceMovementValue = tonumber(GetCVar("cameraReduceUnexpectedMovement"))
 		local currentYawSpeed = tonumber(GetCVar("cameraYawMoveSpeed"))
 		local currentPitchSpeed = tonumber(GetCVar("cameraPitchMoveSpeed"))
+		local currentIndirectVisibility = tonumber(GetCVar("cameraIndirectVisibility"))
 
-		if currentMaxZoomFactor ~= db.profile.maxZoomFactor or currentMoveViewDistance ~= db.profile.moveViewDistance or currentReduceMovementValue ~= db.profile.reduceUnexpectedMovement or currentYawSpeed ~= db.profile.cameraYawMoveSpeed or currentPitchSpeed ~= db.profile.cameraPitchMoveSpeed then
-			ChangeCameraSettings(currentMaxZoomFactor, currentMoveViewDistance,
-				currentReduceMovementValue, db.profile.resampleAlwaysSharpen,
-				currentYawSpeed, currentPitchSpeed, L["SETTINGS_CHANGED"])
+		-- Only change settings if any value is different
+		if currentMaxZoomFactor ~= db.profile.maxZoomFactor then
+			ChangeCameraSetting("maxZoomFactor", currentMaxZoomFactor, L["SETTINGS_CHANGED"])
+		end
+		if currentMoveViewDistance ~= db.profile.moveViewDistance then
+			ChangeCameraSetting("moveViewDistance", currentMoveViewDistance, L["SETTINGS_CHANGED"])
+		end
+		if currentReduceMovementValue ~= db.profile.reduceUnexpectedMovement then
+			ChangeCameraSetting("reduceUnexpectedMovement", currentReduceMovementValue, L["SETTINGS_CHANGED"])
+		end
+		if currentYawSpeed ~= db.profile.cameraYawMoveSpeed then
+			ChangeCameraSetting("cameraYawMoveSpeed", currentYawSpeed, L["SETTINGS_CHANGED"])
+		end
+		if currentPitchSpeed ~= db.profile.cameraPitchMoveSpeed then
+			ChangeCameraSetting("cameraPitchMoveSpeed", currentPitchSpeed, L["SETTINGS_CHANGED"])
+		end
+		if currentIndirectVisibility ~= db.profile.cameraIndirectVisibility then
+			ChangeCameraSetting("cameraIndirectVisibility", currentIndirectVisibility, L["SETTINGS_CHANGED"])
 		end
 	end
 end
 
--- Реєстрація подій для відстеження змін у налаштуваннях камери
+-- Register CVAR_UPDATE event
 f:RegisterEvent("CVAR_UPDATE")
 f:SetScript("OnEvent", OnCVarUpdate)
 
--- Обробник команд Slash
+-- Slash command handler
 local function SlashCmdHandler(msg, editBox)
 	local command = strlower(msg)
 	if command == "max" then
-		ChangeCameraSettings(MAX_ZOOM_FACTOR, MAX_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
-			db.profile.resampleAlwaysSharpen, MAX_YAW_SPEED, MAX_PITCH_SPEED, L["SETTINGS_SET_TO_MAX"])
+		ChangeCameraSetting("maxZoomFactor", MAX_ZOOM_FACTOR, L["SETTINGS_SET_TO_MAX"])
+		ChangeCameraSetting("moveViewDistance", MAX_MOVE_DISTANCE, L["SETTINGS_SET_TO_MAX"])
+		ChangeCameraSetting("cameraYawMoveSpeed", MAX_YAW_SPEED, L["SETTINGS_SET_TO_MAX"])
+		ChangeCameraSetting("cameraPitchMoveSpeed", MAX_PITCH_SPEED, L["SETTINGS_SET_TO_MAX"])
 	elseif command == "avg" then
-		ChangeCameraSettings(AVERAGE_ZOOM_FACTOR, AVERAGE_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
-			db.profile.resampleAlwaysSharpen, AVERAGE_YAW_SPEED, AVERAGE_PITCH_SPEED, L["SETTINGS_SET_TO_AVERAGE"])
+		ChangeCameraSetting("maxZoomFactor", AVERAGE_ZOOM_FACTOR, L["SETTINGS_SET_TO_AVERAGE"])
+		ChangeCameraSetting("moveViewDistance", AVERAGE_MOVE_DISTANCE, L["SETTINGS_SET_TO_AVERAGE"])
+		ChangeCameraSetting("cameraYawMoveSpeed", AVERAGE_YAW_SPEED, L["SETTINGS_SET_TO_AVERAGE"])
+		ChangeCameraSetting("cameraPitchMoveSpeed", AVERAGE_PITCH_SPEED, L["SETTINGS_SET_TO_AVERAGE"])
 	elseif command == "min" then
-		ChangeCameraSettings(MIN_ZOOM_FACTOR, MIN_MOVE_DISTANCE, db.profile.reduceUnexpectedMovement,
-			db.profile.resampleAlwaysSharpen, MIN_YAW_SPEED, MIN_PITCH_SPEED, L["SETTINGS_SET_TO_MIN"])
+		ChangeCameraSetting("maxZoomFactor", MIN_ZOOM_FACTOR, L["SETTINGS_SET_TO_MIN"])
+		ChangeCameraSetting("moveViewDistance", MIN_MOVE_DISTANCE, L["SETTINGS_SET_TO_MIN"])
+		ChangeCameraSetting("cameraYawMoveSpeed", MIN_YAW_SPEED, L["SETTINGS_SET_TO_MIN"])
+		ChangeCameraSetting("cameraPitchMoveSpeed", MIN_PITCH_SPEED, L["SETTINGS_SET_TO_MIN"])
 	elseif command == "config" then
 		InterfaceOptionsFrame_OpenToCategory("Max Camera Distance")
 	else
@@ -236,30 +248,30 @@ local function SlashCmdHandler(msg, editBox)
 	end
 end
 
--- Реєстрація Slash команд
+-- Register Slash commands
 SLASH_MAXCAMDIST1 = "/maxcamdist"
 SlashCmdList["MAXCAMDIST"] = SlashCmdHandler
 
--- Обробник подій для ADDON_LOADED
+-- ADDON_LOADED event handler
 local function OnAddonLoaded(self, event, loadedAddonName)
 	if loadedAddonName == addonName then
 		db = AceDB:New("MaxCameraDistanceDB",
-			{ profile = { maxZoomFactor = MAX_ZOOM_FACTOR, moveViewDistance = AVERAGE_MOVE_DISTANCE, reduceUnexpectedMovement = false, resampleAlwaysSharpen = false, cameraYawMoveSpeed = AVERAGE_YAW_SPEED, cameraPitchMoveSpeed = AVERAGE_PITCH_SPEED } },
+			{ profile = { maxZoomFactor = MAX_ZOOM_FACTOR, moveViewDistance = AVERAGE_MOVE_DISTANCE, reduceUnexpectedMovement = false, resampleAlwaysSharpen = false, cameraYawMoveSpeed = AVERAGE_YAW_SPEED, cameraPitchMoveSpeed = AVERAGE_PITCH_SPEED, cameraIndirectVisibility = false } },
 			true)
 
-		-- Встановлення початкових налаштувань камери на основі значень, збережених у базі даних
+		-- Apply initial camera settings
 		AdjustCamera()
 
-		-- Реєстрація функції зворотного виклику для налаштування камери при зміні налаштувань
+		-- Register callback functions for database profile changes
 		db.RegisterCallback(self, "OnProfileChanged", AdjustCamera)
 		db.RegisterCallback(self, "OnProfileCopied", AdjustCamera)
 		db.RegisterCallback(self, "OnProfileReset", AdjustCamera)
 
-		-- Відміна реєстрації прослуховувача подій після завантаження додатка
+		-- Unregister event handler after the addon is loaded
 		self:UnregisterEvent("ADDON_LOADED")
 	end
 end
 
--- Реєстрація події ADDON_LOADED
+-- Register ADDON_LOADED event
 f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", OnAddonLoaded)
