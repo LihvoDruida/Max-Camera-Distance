@@ -3,5 +3,8 @@
     xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
     <Include file="libs\_manifest.xml"/>
     <Include file="locale\_manifest.xml"/>
+    <Script file="Database.lua"/>
+    <Script file="Functions.lua"/>
+    <Script file="Config.lua"/>    
     <Script file="Max_Camera_Distance.lua"/>
 </Ui>
