@@ -25,3 +25,11 @@ L["SETTINGS_SET_TO_MAX"] = "Camera settings set to maximum values."
 L["SETTINGS_SET_TO_AVERAGE"] = "Camera settings set to average values."
 L["SETTINGS_SET_TO_MIN"] = "Camera settings set to minimum values."
 L["SETTINGS_SET_TO_DEFAULT"] = "Camera settings set to default values."
+
+L["WARNING_TEXT"] =
+"This addon automatically adjusts the maximum camera distance to improve navigation during boss fights, ensuring a seamless gaming experience."
+L["RELOAD_BUTTON"] = "Reload UI"
+L["RELOAD_BUTTON_DESC"] = "Click this button to reload the user interface."
+L["RESET_BUTTON"] = "Reset Settings"
+L["RESET_BUTTON_DESC"] = "Click this button to reset all settings to their default values."
+L["SETTINGS_RESET"] = "Settings have been reset to default."
