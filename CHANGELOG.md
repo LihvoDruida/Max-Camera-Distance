@@ -1,7 +1,13 @@
-#### release 1.9
+#### release 2.0
 
-- Added 'INDIRECT_VISIBILITY' as a new camera collision option to the addon configuration.
-- Refactored code to ensure that each camera setting (e.g., zoom factor, move view distance, camera collision) is updated and saved independently without affecting others.
-- Modified the CVar update handler to ensure that changes to individual camera settings, including the new camera collision option, are correctly reflected in the addon settings and interface.
-- Added detailed slash commands for different camera settings configurations, including max, average, min, and config options.
-- Revised database setup to ensure proper storage and retrieval of camera settings, including handling profile changes and resets.
+- Implemented automatic camera zoom adjustment on mounting and dismounting
+- Added configuration option for autoMountZoom in settings
+- Introduced localizations for new settings
+- Improved code readability and ensured proper restoration of camera zoom levels
+- Added a 'Reload UI' button to reload the user interface and apply new settings.
+- Added a 'Reset to Default' button to reset settings to their default values.
+- Included version information at the top of the options panel, showing the current version of the addon.
+- Updated the localization for new button labels and descriptions.
+- Completely rewrote the logic for the addon to enhance performance and responsiveness.
+- Replaced the outdated camera settings tracking method with an event listener for the CVAR_UPDATE event.
+- The new approach ensures that changes to camera settings are detected promptly, maintaining consistency and avoiding unnecessary updates.
