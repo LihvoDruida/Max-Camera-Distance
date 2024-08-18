@@ -14,6 +14,8 @@ end
 f:RegisterEvent("ADDON_LOADED")
 f:RegisterEvent("CVAR_UPDATE")
 f:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+f:RegisterEvent("PLAYER_REGEN_DISABLED")
+f:RegisterEvent("PLAYER_REGEN_ENABLED")
 
 -- Обробка подій
 local function OnEvent(self, event, arg1)
@@ -31,16 +33,23 @@ local function OnEvent(self, event, arg1)
 	if event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
 		Functions:OnMounted()
 	end
+	if event == "PLAYER_REGEN_DISABLED" then
+		-- Гравець вступає в бій
+		Functions:OnEnterCombat()
+	elseif event == "PLAYER_REGEN_ENABLED" then
+		-- Гравець виходить із бою
+		Functions:OnExitCombat()
+	end
 end
 
 -- Set the script for event handling
 f:SetScript("OnEvent", OnEvent)
 
 -- Реєстрація Slash команд
-SLASH_MAXCAMDIST1 = "/maxcamdist"
+SLASH_MAXCAMDIST1 = "/mcd"
 SlashCmdList["MAXCAMDIST"] = function(msg)
 	Functions:SlashCmdHandler(msg)
 end
 
 -- Першочергові дії при завантаженні аддона
-print("|cff0070deMax Camera Distance|r loaded! Type /maxcamdist for options.")
+print("|cff0070deMax Camera Distance|r loaded! Type /mcd for options.")

@@ -131,6 +131,19 @@ function Config:SetupOptions()
                 inline = true,
                 order = 3,
                 args = {
+                    dismountDelay = {
+                        type = "range",
+                        name = L["DISMOUNT_DELAY"],
+                        desc = L["DISMOUNT_DELAY_DESC"],
+                        min = 3,
+                        max = 10,
+                        step = 1,
+                        get = function() return Database.db.profile.dismountDelay end,
+                        set = function(_, value)
+                            Database.db.profile.dismountDelay = value
+                        end,
+                        order = 0,
+                    },
                     autoMountZoom = {
                         type = "toggle",
                         name = L["AUTO_ZOOM_MOUNT"],
@@ -140,6 +153,16 @@ function Config:SetupOptions()
                             Functions:ChangeCameraSetting("autoMountZoom", value, L["SETTINGS_CHANGED"])
                         end,
                         order = 1,
+                    },
+                    autoCombatZoom = {
+                        type = "toggle",
+                        name = L["AUTO_ZOOM_COMBAT"],
+                        desc = L["AUTO_ZOOM_COMBAT_DESC"],
+                        get = function() return Database.db.profile.autoCombatZoom end,
+                        set = function(_, value)
+                            Functions:ChangeCameraSetting("autoCombatZoom", value, L["SETTINGS_CHANGED"])
+                        end,
+                        order = 2,
                     },
                 },
             },

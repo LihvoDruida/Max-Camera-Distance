@@ -1,10 +1,12 @@
 Functions = {}
 
 local addonName = "Max_Camera_Distance"
+local settingName = "Max Camera Distance"
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local CVar = C_CVar
 
 local savedCameraZoomLevel = nil
+local savedMaxZoomFactor = nil
 
 -- Функція для виведення повідомлень в чат
 function Functions:SendMessage(message)
@@ -26,27 +28,48 @@ function Functions:ChangeCameraSetting(key, value, message)
     end
 end
 
+-- Function to set camera zoom to a specific level
+local function SetZoomLevel(targetZoomLevel)
+    local currentZoom = GetCameraZoom() or 0
+
+    if targetZoomLevel then
+        -- Calculate the difference needed to achieve the target zoom level
+        local difference = targetZoomLevel - currentZoom
+
+        if difference > 0 then
+            CameraZoomOut(difference)
+        elseif difference < 0 then
+            CameraZoomIn(-difference)
+        end
+    end
+end
+
 -- Function to handle when the player mounts up
 local function OnMount()
-    savedCameraZoomLevel = tonumber(GetCVar("cameraDistanceMaxZoomFactor")) or Database.DEFAULT_ZOOM_FACTOR
+    -- Save current camera zoom level and max zoom factor
+    savedCameraZoomLevel = GetCameraZoom() or 0
+    savedMaxZoomFactor = tonumber(GetCVar("cameraDistanceMaxZoomFactor")) or Database.DEFAULT_ZOOM_FACTOR
 
-    -- Set the camera zoom to maximum zoom level
-    local maxCameraZoom = Database.MAX_ZOOM_FACTOR
+    -- Set new max zoom factor
+    local maxCameraZoom = Database.MAX_ZOOM_FACTOR -- Maximum zoom factor
     SetCVar("cameraDistanceMaxZoomFactor", maxCameraZoom)
 end
 
 -- Function to handle when the player dismounts
 local function OnDismount()
     local db = Database.db.profile
-
-    -- Restore the camera zoom level
-    if savedCameraZoomLevel then
-        SetCVar("cameraDistanceMaxZoomFactor", savedCameraZoomLevel)
-    else
-        SetCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor or Database.DEFAULT_ZOOM_FACTOR)
-    end
+    local delay = db.dismountDelay or Database.DISMOUNT_DELAY
+    -- Додати затримку в 3 секунди перед відновленням налаштувань камери
+    C_Timer.After(delay, function()
+        -- Restore saved camera zoom level and max zoom factor
+        if savedCameraZoomLevel then
+            SetZoomLevel(savedCameraZoomLevel)
+        end
+        if savedMaxZoomFactor then
+            SetCVar("cameraDistanceMaxZoomFactor", savedMaxZoomFactor)
+        end
+    end)
 end
-
 -- Функція для налаштування камери
 function Functions:AdjustCamera()
     -- Отримання налаштувань з бази даних
@@ -135,7 +158,7 @@ end
 -- Функція для обробки Slash команд
 function Functions:SlashCmdHandler(msg)
     if not msg then
-        self:SendMessage(L["Usage: /maxcamdist max | avg | min | config"])
+        self:SendMessage(L["Usage: /mcd max | avg | min | config"])
         return
     end
 
@@ -151,9 +174,9 @@ function Functions:SlashCmdHandler(msg)
         self:ChangeCameraSetting("maxZoomFactor", setting.zoomFactor, setting.message)
         self:ChangeCameraSetting("moveViewDistance", setting.moveDistance, setting.message)
     elseif command == "config" then
-        InterfaceOptionsFrame_OpenToCategory(addonName)
+        InterfaceOptionsFrame_OpenToCategory(settingName)
     else
-        self:SendMessage(L["Usage: /maxcamdist max | avg | min | config"])
+        self:SendMessage(L["Usage: /mcd max | avg | min | config"])
     end
 end
 
@@ -168,6 +191,24 @@ end
 
 function Functions:OnProfileReset()
     self:AdjustCamera()
+end
+
+function Functions:OnEnterCombat()
+    local db = Database.db.profile
+
+    -- Check if automatic combat zoom is enabled
+    if db.autoCombatZoom then
+        OnMount()
+    end
+end
+
+function Functions:OnExitCombat()
+    local db = Database.db.profile
+
+    -- Check if automatic combat zoom is enabled
+    if db.autoCombatZoom then
+        OnDismount()
+    end
 end
 
 function Functions:OnMounted()
