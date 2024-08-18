@@ -12,7 +12,7 @@ end
 -- Функція для зміни налаштувань камери
 function Functions:ChangeCameraSetting(key, value, message)
     if IsLoggedIn() then
-        local db = MKD.db.profile -- Оновлення db з актуальної бази даних
+        local db = Database.db.profile -- Оновлення db з актуальної бази даних
         db[key] = value
         self:AdjustCamera()
         self:SendMessage(message)
@@ -27,7 +27,7 @@ end
 -- Функція для налаштування камери
 function Functions:AdjustCamera()
     -- Отримання налаштувань з бази даних
-    local db = MKD.db.profile -- Оновлення db з актуальної бази даних
+    local db = Database.db.profile -- Оновлення db з актуальної бази даних
     if not InCombatLockdown() and IsLoggedIn() then
         -- Налаштування максимального зуму
         if db.maxZoomFactor then
@@ -118,17 +118,15 @@ function Functions:SlashCmdHandler(msg)
 
     local command = strlower(msg)
     local settings = {
-        max = { zoomFactor = 2.6, moveDistance = 50000, yawSpeed = 500, pitchSpeed = 500, message = L["SETTINGS_SET_TO_MAX"] },
-        avg = { zoomFactor = 2.0, moveDistance = 30000, yawSpeed = 250, pitchSpeed = 250, message = L["SETTINGS_SET_TO_AVERAGE"] },
-        min = { zoomFactor = 1.0, moveDistance = 10000, yawSpeed = 10, pitchSpeed = 10, message = L["SETTINGS_SET_TO_MIN"] }
+        max = { zoomFactor = 2.6, moveDistance = 50000, message = L["SETTINGS_SET_TO_MAX"] },
+        avg = { zoomFactor = 2.0, moveDistance = 30000, message = L["SETTINGS_SET_TO_AVERAGE"] },
+        min = { zoomFactor = 1.0, moveDistance = 10000, message = L["SETTINGS_SET_TO_MIN"] }
     }
 
     local setting = settings[command]
     if setting then
         self:ChangeCameraSetting("maxZoomFactor", setting.zoomFactor, setting.message)
         self:ChangeCameraSetting("moveViewDistance", setting.moveDistance, setting.message)
-        self:ChangeCameraSetting("cameraYawMoveSpeed", setting.yawSpeed, setting.message)
-        self:ChangeCameraSetting("cameraPitchMoveSpeed", setting.pitchSpeed, setting.message)
     elseif command == "config" then
         InterfaceOptionsFrame_OpenToCategory(addonName)
     else

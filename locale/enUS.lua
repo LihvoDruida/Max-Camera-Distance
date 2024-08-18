@@ -1,4 +1,5 @@
-local L = LibStub("AceLocale-3.0"):NewLocale("Max_Camera_Distance", "enUS", true, true)
+local addonName = "Max_Camera_Distance"
+local L = LibStub("AceLocale-3.0"):NewLocale(addonName, "enUS", true, true)
 
 L["GENERAL_SETTINGS"] = "General Settings"
 L["MAX_ZOOM_FACTOR"] = "Max Zoom Factor"

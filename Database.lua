@@ -1,51 +1,58 @@
 -- Створюємо глобальну таблицю Database
 Database = {}
-local addonName = "Max_Camera_Distance"
-
 -- Імплементація AceDB
 local AceDB = LibStub("AceDB-3.0")
-local AceAddon = LibStub("AceAddon-3.0")
-local AceEvent = LibStub("AceEvent-3.0")
-MKD = AceAddon:NewAddon(addonName, "AceEvent-3.0")
 
+Database.DEFAULT_ZOOM_FACTOR = 1.9
 
--- Функція для ініціалізації бази даних
+Database.DEFAULT_YAW_MOVE_SPEED = 180
+Database.DEFAULT_PITCH_MOVE_SPEED = 90
+
+Database.MIN_PITCH_YAW_MOVE_SPEED = 90
+Database.MAX_ZOOM_FACTOR = 2.6
+Database.MAX_PITCH_YAW_MOVE_SPEED = 360
+
+Database.MOVE_VIEW_DISTANCE = 30000
+
+--- Boolean
+Database.REDUCE_UNEXPECTED_MOVEMENT = false
+Database.RESAMPLE_ALWAYS_SHARPEN = false
+Database.CAMERA_INDIRECT_VISIBILITY = false
+
+Database.CAMERA_PITCH_MOVE_SPEED = 180
+
+-- Database initialization function
 function Database:InitDB()
-    -- Set up our database
-    MKD.db = AceDB:New("MaxCameraDistanceDB", {
-        profile = {
-            maxZoomFactor = 2.6,
-            moveViewDistance = 30000,
-            reduceUnexpectedMovement = false,
-            resampleAlwaysSharpen = false,
-            cameraYawMoveSpeed = 180,
-            cameraPitchMoveSpeed = 180,
-            cameraIndirectVisibility = false,
-        }
-    }, true)
+    -- Define default settings
+    local defaultProfile = {
+        maxZoomFactor = Database.DEFAULT_ZOOM_FACTOR,
+        moveViewDistance = Database.MOVE_VIEW_DISTANCE,
+        cameraYawMoveSpeed = Database.DEFAULT_YAW_MOVE_SPEED,
+        cameraPitchMoveSpeed = Database.DEFAULT_PITCH_MOVE_SPEED,
+        reduceUnexpectedMovement = Database.REDUCE_UNEXPECTED_MOVEMENT,
+        resampleAlwaysSharpen = Database.RESAMPLE_ALWAYS_SHARPEN,
+        cameraIndirectVisibility = Database.CAMERA_INDIRECT_VISIBILITY
+    }
+
+    -- Create or load the database with default settings
+    Database.db = AceDB:New("MaxCameraDistanceDB", { profile = defaultProfile }, true)
+
     -- Register callback functions for database profile changes
-    MKD.db:RegisterCallback("OnProfileChanged", function()
+    Database.db:RegisterCallback("OnProfileChanged", function()
         if Functions and Functions.OnProfileChanged then
             Functions:OnProfileChanged()
         end
     end)
-    MKD.db:RegisterCallback("OnProfileCopied", function()
+
+    Database.db:RegisterCallback("OnProfileCopied", function()
         if Functions and Functions.OnProfileCopied then
             Functions:OnProfileCopied()
         end
     end)
-    MKD.db:RegisterCallback("OnProfileReset", function()
+
+    Database.db:RegisterCallback("OnProfileReset", function()
         if Functions and Functions.OnProfileReset then
             Functions:OnProfileReset()
         end
     end)
-end
-
--- Функція для перевірки бази даних
-function CheckDatabase()
-    local data = MKD.db.profile
-    print("Profile Settings:")
-    for key, value in pairs(data) do
-        print(key, value)
-    end
 end
