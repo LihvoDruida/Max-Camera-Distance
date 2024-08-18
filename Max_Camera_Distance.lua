@@ -16,6 +16,9 @@ f:RegisterEvent("CVAR_UPDATE")
 f:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
 f:RegisterEvent("PLAYER_REGEN_DISABLED")
 f:RegisterEvent("PLAYER_REGEN_ENABLED")
+f:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+f:RegisterEvent("UNIT_ENTERED_VEHICLE")
+f:RegisterEvent("UNIT_EXITED_VEHICLE")
 
 -- Обробка подій
 local function OnEvent(self, event, arg1)
@@ -35,10 +38,28 @@ local function OnEvent(self, event, arg1)
 	end
 	if event == "PLAYER_REGEN_DISABLED" then
 		-- Гравець вступає в бій
-		Functions:OnEnterCombat()
+		Functions:OnCombat()
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		-- Гравець виходить із бою
-		Functions:OnExitCombat()
+		Functions:OnCombat()
+	end
+	if Functions:IsDruidOrShaman() then
+		if event == "UPDATE_SHAPESHIFT_FORM" then
+			local formID = GetShapeshiftForm()
+			if formID > 0 then
+				Functions:OnEnterForm()
+			else
+				Functions:OnExitForm()
+			end
+		end
+
+		if event == "UNIT_ENTERED_VEHICLE" and arg1 == "player" then
+			Functions:OnEnterForm()
+		end
+
+		if event == "UNIT_EXITED_VEHICLE" and arg1 == "player" then
+			Functions:OnExitForm()
+		end
 	end
 end
 

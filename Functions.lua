@@ -13,6 +13,12 @@ function Functions:SendMessage(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff0070deMax Camera Distance|r: " .. message)
 end
 
+-- Function to check if the player is a Druid or Shaman
+function Functions:IsDruidOrShaman()
+    local _, playerClass = UnitClass("player")
+    return playerClass == "DRUID" or playerClass == "SHAMAN"
+end
+
 -- Функція для зміни налаштувань камери
 function Functions:ChangeCameraSetting(key, value, message)
     if IsLoggedIn() then
@@ -70,6 +76,21 @@ local function OnDismount()
         end
     end)
 end
+-- Function to check if the player is in a specific form
+local function IsInDruidForm()
+    local form = GetShapeshiftForm()
+    return form ~= nil and form > 0
+end
+
+function Functions:HandleSpecialForm()
+    if IsInDruidForm() then
+        print("Character is in a special form!")
+        -- Виконати специфічні дії тут
+    else
+        print("Character is not in a special form.")
+    end
+end
+
 -- Функція для налаштування камери
 function Functions:AdjustCamera()
     -- Отримання налаштувань з бази даних
@@ -207,6 +228,24 @@ function Functions:OnExitCombat()
 
     -- Check if automatic combat zoom is enabled
     if db.autoCombatZoom then
+        OnDismount()
+    end
+end
+
+function Functions:OnEnterForm()
+    local db = Database.db.profile
+
+    -- Check if automatic combat zoom is enabled
+    if db.autoMountZoom then
+        OnMount()
+    end
+end
+
+function Functions:OnExitForm()
+    local db = Database.db.profile
+
+    -- Check if automatic combat zoom is enabled
+    if db.autoMountZoom then
         OnDismount()
     end
 end
