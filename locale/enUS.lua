@@ -11,6 +11,11 @@ L["YAW_MOVE_SPEED_DESC"] = "Adjust the speed of yaw (horizontal) camera movement
 L["PITCH_MOVE_SPEED"] = "Pitch Move Speed"
 L["PITCH_MOVE_SPEED_DESC"] = "Adjust the speed of pitch (vertical) camera movement."
 
+L["AUTO_SETTINGS"] = "Auto Settings"
+L["AUTO_ZOOM_MOUNT"] = "Auto Zoom on Mount"
+L["AUTO_ZOOM_MOUNT_DESC"] =
+"Automatically zooms the camera out to the maximum level when mounted and restores the previous zoom level when dismounted."
+
 L["ADVANCED_SETTINGS"] = "Advanced Settings"
 L["REDUCE_UNEXPECTED_MOVEMENT"] = "Reduce Unexpected Camera Movement"
 L["REDUCE_UNEXPECTED_MOVEMENT_DESC"] = "Enable this option to reduce unexpected camera movements during gameplay."

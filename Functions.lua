@@ -4,6 +4,8 @@ local addonName = "Max_Camera_Distance"
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local CVar = C_CVar
 
+local savedCameraZoomLevel = nil
+
 -- Функція для виведення повідомлень в чат
 function Functions:SendMessage(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff0070deMax Camera Distance|r: " .. message)
@@ -21,6 +23,27 @@ function Functions:ChangeCameraSetting(key, value, message)
         -- print("Setting changed:", key, value)
     else
         self:SendMessage(L["Cannot change settings while in character edit mode."])
+    end
+end
+
+-- Function to handle when the player mounts up
+local function OnMount()
+    savedCameraZoomLevel = tonumber(GetCVar("cameraDistanceMaxZoomFactor")) or Database.DEFAULT_ZOOM_FACTOR
+
+    -- Set the camera zoom to maximum zoom level
+    local maxCameraZoom = Database.MAX_ZOOM_FACTOR
+    SetCVar("cameraDistanceMaxZoomFactor", maxCameraZoom)
+end
+
+-- Function to handle when the player dismounts
+local function OnDismount()
+    local db = Database.db.profile
+
+    -- Restore the camera zoom level
+    if savedCameraZoomLevel then
+        SetCVar("cameraDistanceMaxZoomFactor", savedCameraZoomLevel)
+    else
+        SetCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor or Database.DEFAULT_ZOOM_FACTOR)
     end
 end
 
@@ -145,4 +168,18 @@ end
 
 function Functions:OnProfileReset()
     self:AdjustCamera()
+end
+
+function Functions:OnMounted()
+    local db = Database.db.profile
+
+    -- Check if automatic mount zoom is enabled
+    if db.autoMountZoom then
+        -- Apply mount or dismount logic based on the player's mount status
+        if IsMounted() then
+            OnMount()
+        else
+            OnDismount()
+        end
+    end
 end

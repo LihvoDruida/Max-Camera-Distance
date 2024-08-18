@@ -12,8 +12,8 @@ end
 
 -- Реєстрація подій
 f:RegisterEvent("ADDON_LOADED")
-f:RegisterEvent("PLAYER_LOGOUT")
 f:RegisterEvent("CVAR_UPDATE")
+f:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
 
 -- Обробка подій
 local function OnEvent(self, event, arg1)
@@ -23,12 +23,17 @@ local function OnEvent(self, event, arg1)
 
 		-- Відписуємось від події після ініціалізації
 		self:UnregisterEvent("ADDON_LOADED")
-	elseif event == "CVAR_UPDATE" then
+	end
+	if event == "CVAR_UPDATE" then
 		-- Обробка оновлення CVAR
 		Functions:OnCVarUpdate(_, arg1, GetCVar(arg1))
 	end
+	if event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
+		Functions:OnMounted()
+	end
 end
 
+-- Set the script for event handling
 f:SetScript("OnEvent", OnEvent)
 
 -- Реєстрація Slash команд

@@ -125,11 +125,29 @@ function Config:SetupOptions()
                     },
                 },
             },
+            autoSettings = {
+                type = "group",
+                name = L["AUTO_SETTINGS"],
+                inline = true,
+                order = 3,
+                args = {
+                    autoMountZoom = {
+                        type = "toggle",
+                        name = L["AUTO_ZOOM_MOUNT"],
+                        desc = L["AUTO_ZOOM_MOUNT_DESC"],
+                        get = function() return Database.db.profile.autoMountZoom end,
+                        set = function(_, value)
+                            Functions:ChangeCameraSetting("autoMountZoom", value, L["SETTINGS_CHANGED"])
+                        end,
+                        order = 1,
+                    },
+                },
+            },
             advancedSettings = {
                 type = "group",
                 name = L["ADVANCED_SETTINGS"],
                 inline = true,
-                order = 3,
+                order = 4,
                 args = {
                     reduceUnexpectedMovement = {
                         type = "toggle",
