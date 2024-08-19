@@ -4,9 +4,12 @@ local addonName = "Max_Camera_Distance"
 local settingName = "Max Camera Distance"
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local CVar = C_CVar
+local _, playerClass = UnitClass("player")
 
-local savedCameraZoomLevel = nil
 local savedMaxZoomFactor = nil
+-- Flag to prevent duplicate execution
+local lastExecutionTime = 0
+local executionCooldown = 1 -- Cooldown in seconds
 
 -- Функція для виведення повідомлень в чат
 function Functions:SendMessage(message)
@@ -15,7 +18,6 @@ end
 
 -- Function to check if the player is a Druid or Shaman
 function Functions:IsDruidOrShaman()
-    local _, playerClass = UnitClass("player")
     return playerClass == "DRUID" or playerClass == "SHAMAN"
 end
 
@@ -34,26 +36,9 @@ function Functions:ChangeCameraSetting(key, value, message)
     end
 end
 
--- Function to set camera zoom to a specific level
-local function SetZoomLevel(targetZoomLevel)
-    local currentZoom = GetCameraZoom() or 0
-
-    if targetZoomLevel then
-        -- Calculate the difference needed to achieve the target zoom level
-        local difference = targetZoomLevel - currentZoom
-
-        if difference > 0 then
-            CameraZoomOut(difference)
-        elseif difference < 0 then
-            CameraZoomIn(-difference)
-        end
-    end
-end
-
 -- Function to handle when the player mounts up
 local function OnMount()
     -- Save current camera zoom level and max zoom factor
-    savedCameraZoomLevel = GetCameraZoom() or 0
     savedMaxZoomFactor = tonumber(GetCVar("cameraDistanceMaxZoomFactor")) or Database.DEFAULT_ZOOM_FACTOR
 
     -- Set new max zoom factor
@@ -67,28 +52,10 @@ local function OnDismount()
     local delay = db.dismountDelay or Database.DISMOUNT_DELAY
     -- Додати затримку в 3 секунди перед відновленням налаштувань камери
     C_Timer.After(delay, function()
-        -- Restore saved camera zoom level and max zoom factor
-        if savedCameraZoomLevel then
-            SetZoomLevel(savedCameraZoomLevel)
-        end
         if savedMaxZoomFactor then
             SetCVar("cameraDistanceMaxZoomFactor", savedMaxZoomFactor)
         end
     end)
-end
--- Function to check if the player is in a specific form
-local function IsInDruidForm()
-    local form = GetShapeshiftForm()
-    return form ~= nil and form > 0
-end
-
-function Functions:HandleSpecialForm()
-    if IsInDruidForm() then
-        print("Character is in a special form!")
-        -- Виконати специфічні дії тут
-    else
-        print("Character is not in a special form.")
-    end
 end
 
 -- Функція для налаштування камери
@@ -232,21 +199,45 @@ function Functions:OnExitCombat()
     end
 end
 
-function Functions:OnEnterForm()
-    local db = Database.db.profile
+-- Function to get the current shapeshift form ID
+function Functions:getForm()
+    local formID = GetShapeshiftForm()
+    local numForms = GetNumShapeshiftForms()
 
-    -- Check if automatic combat zoom is enabled
-    if db.autoMountZoom then
-        OnMount()
+    -- Check if the formID is valid
+    if formID and formID < numForms then
+        return formID
+    else
+        return 0
     end
 end
 
-function Functions:OnExitForm()
-    local db = Database.db.profile
+-- Function to handle shapeshift form changes
+function Functions:OnForm()
+    local currentTime = GetTime() -- Get the current time
+    if currentTime - lastExecutionTime < executionCooldown then
+        -- If the cooldown period has not passed, return early
+        return
+    end
 
-    -- Check if automatic combat zoom is enabled
+    -- Update the last execution time
+    lastExecutionTime = currentTime
+
+    local db = Database.db.profile
+    local formID = Functions:getForm()
+
+    -- Check if automatic mount zoom is enabled
     if db.autoMountZoom then
-        OnDismount()
+        -- Handle form-specific logic
+        if formID > 0 then
+            if (formID == 6 or formID == 3) and playerClass == "DRUID" then
+                OnMount()
+            elseif formID == 1 and playerClass == "SHAMAN" then
+                OnMount()
+            end
+        else
+            OnDismount()
+        end
     end
 end
 
