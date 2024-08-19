@@ -214,20 +214,22 @@ end
 
 -- Function to handle shapeshift form changes
 function Functions:OnForm()
-    local currentTime = GetTime() -- Get the current time
-    if currentTime - lastExecutionTime < executionCooldown then
-        -- If the cooldown period has not passed, return early
-        return
-    end
-
-    -- Update the last execution time
-    lastExecutionTime = currentTime
-
     local db = Database.db.profile
-    local formID = Functions:getForm()
+    -- Check if automatic form zoom is enabled
+    if db.autoFormZoom then
+        local currentTime = GetTime() -- Get the current time
+        if currentTime - lastExecutionTime < executionCooldown then
+            -- If the cooldown period has not passed, return early
+            return
+        end
 
-    -- Check if automatic mount zoom is enabled
-    if db.autoMountZoom then
+        -- Update the last execution time
+        lastExecutionTime = currentTime
+
+
+        local formID = Functions:getForm()
+
+
         -- Handle form-specific logic
         if formID > 0 then
             if (formID == 6 or formID == 3) and playerClass == "DRUID" then

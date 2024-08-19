@@ -154,6 +154,16 @@ function Config:SetupOptions()
                         end,
                         order = 1,
                     },
+                    autoFormZoom = {
+                        type = "toggle",
+                        name = L["AUTO_ZOOM_FORM"],
+                        desc = L["AUTO_ZOOM_FORM_DESC"],
+                        get = function() return Database.db.profile.autoFormZoom end,
+                        set = function(_, value)
+                            Functions:ChangeCameraSetting("autoFormZoom", value, L["SETTINGS_CHANGED"])
+                        end,
+                        order = 2,
+                    },
                     autoCombatZoom = {
                         type = "toggle",
                         name = L["AUTO_ZOOM_COMBAT"],
@@ -162,7 +172,7 @@ function Config:SetupOptions()
                         set = function(_, value)
                             Functions:ChangeCameraSetting("autoCombatZoom", value, L["SETTINGS_CHANGED"])
                         end,
-                        order = 2,
+                        order = 3,
                     },
                 },
             },

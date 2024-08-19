@@ -18,6 +18,8 @@ L["DISMOUNT_DELAY_DESC"] =
 L["AUTO_ZOOM_MOUNT"] = "Auto Zoom on Mount"
 L["AUTO_ZOOM_MOUNT_DESC"] =
 "Automatically zooms the camera out to the maximum level when mounted and restores the previous zoom level when dismounted."
+L["AUTO_ZOOM_FORM"] = "Auto Zoom on Form Change"
+L["AUTO_ZOOM_FORM_DESC"] = "Enable automatic zoom when changing forms. Applies only to Druids and Shamans."
 L["AUTO_ZOOM_COMBAT"] = "Auto Zoom in Combat"
 L["AUTO_ZOOM_COMBAT_DESC"] = "Enable to automatically adjust camera zoom when your character is in combat."
 

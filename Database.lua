@@ -24,6 +24,7 @@ Database.REDUCE_UNEXPECTED_MOVEMENT = false
 Database.RESAMPLE_ALWAYS_SHARPEN = false
 Database.CAMERA_INDIRECT_VISIBILITY = true
 Database.DEFAULT_ZOOM_MOUNT = true
+Database.DEFAULT_ZOOM_FORM = true
 Database.DEFAULT_ZOOM_COMBAT = true
 
 Database.CAMERA_PITCH_MOVE_SPEED = 180
@@ -38,6 +39,7 @@ function Database:InitDB()
         cameraPitchMoveSpeed = Database.DEFAULT_PITCH_MOVE_SPEED,
         dismountDelay = Database.DISMOUNT_DELAY,
         autoMountZoom = Database.DEFAULT_ZOOM_MOUNT,
+        autoFormZoom = Database.DEFAULT_ZOOM_FORM,
         autoCombatZoom = Database.DEFAULT_ZOOM_COMBAT,
         reduceUnexpectedMovement = Database.REDUCE_UNEXPECTED_MOVEMENT,
         resampleAlwaysSharpen = Database.RESAMPLE_ALWAYS_SHARPEN,
