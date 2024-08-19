@@ -2,7 +2,7 @@
 ## Title:<|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
 ## Notes: Automatically set the camera to its maximum distance when the addon is loaded.
 ## IconTexture: Interface\AddOns\Max_Camera_Distance\assets\logo
-## Version: 2.0
+## Version: 3.0
 ## Author: melles1991
 ## DefaultState: Enabled
 ## SavedVariablesPerCharacter: MaxCameraDistanceDB
