@@ -29,7 +29,7 @@ local function OnEvent(self, event, arg1)
 
 	-- Handle combat status changes
 	if event == "PLAYER_REGEN_DISABLED" then
-		Functions:OnCombat()
+		Functions:OnEnterCombat()
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		Functions:OnExitCombat()
 	end
