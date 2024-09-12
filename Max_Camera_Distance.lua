@@ -15,27 +15,15 @@ local function OnEvent(self, event, arg1)
 	if event == "ADDON_LOADED" and arg1 == addonName then
 		InitializeAddon()
 		self:UnregisterEvent("ADDON_LOADED")
-	end
-
-	-- Handle CVAR update events
-	if event == "CVAR_UPDATE" then
+	elseif event == "CVAR_UPDATE" then
 		Functions:OnCVarUpdate(_, arg1, GetCVar(arg1))
-	end
-
-	-- Handle mount display changes
-	if event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
+	elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
 		Functions:OnMounted()
-	end
-
-	-- Handle combat status changes
-	if event == "PLAYER_REGEN_DISABLED" then
+	elseif event == "PLAYER_REGEN_DISABLED" then
 		Functions:OnEnterCombat()
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		Functions:OnExitCombat()
-	end
-
-	-- Handle shapeshift form changes
-	if Functions:IsDruidOrShaman() then
+	elseif Functions:IsDruidOrShaman() then
 		if event == "UPDATE_SHAPESHIFT_FORM" then
 			Functions:OnForm()
 		end
@@ -59,6 +47,3 @@ SLASH_MAXCAMDIST1 = "/mcd"
 SlashCmdList["MAXCAMDIST"] = function(msg)
 	Functions:SlashCmdHandler(msg)
 end
-
--- Першочергові дії при завантаженні аддона
-print("|cff0070deMax Camera Distance|r loaded! Type /mcd config for options.")

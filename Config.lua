@@ -125,62 +125,11 @@ function Config:SetupOptions()
                     },
                 },
             },
-            autoSettings = {
-                type = "group",
-                name = L["AUTO_SETTINGS"],
-                inline = true,
-                order = 3,
-                args = {
-                    dismountDelay = {
-                        type = "range",
-                        name = L["DISMOUNT_DELAY"],
-                        desc = L["DISMOUNT_DELAY_DESC"],
-                        min = 3,
-                        max = 10,
-                        step = 1,
-                        get = function() return Database.db.profile.dismountDelay end,
-                        set = function(_, value)
-                            Database.db.profile.dismountDelay = value
-                        end,
-                        order = 0,
-                    },
-                    autoMountZoom = {
-                        type = "toggle",
-                        name = L["AUTO_ZOOM_MOUNT"],
-                        desc = L["AUTO_ZOOM_MOUNT_DESC"],
-                        get = function() return Database.db.profile.autoMountZoom end,
-                        set = function(_, value)
-                            Functions:ChangeCameraSetting("autoMountZoom", value, L["SETTINGS_CHANGED"])
-                        end,
-                        order = 1,
-                    },
-                    autoFormZoom = {
-                        type = "toggle",
-                        name = L["AUTO_ZOOM_FORM"],
-                        desc = L["AUTO_ZOOM_FORM_DESC"],
-                        get = function() return Database.db.profile.autoFormZoom end,
-                        set = function(_, value)
-                            Functions:ChangeCameraSetting("autoFormZoom", value, L["SETTINGS_CHANGED"])
-                        end,
-                        order = 2,
-                    },
-                    autoCombatZoom = {
-                        type = "toggle",
-                        name = L["AUTO_ZOOM_COMBAT"],
-                        desc = L["AUTO_ZOOM_COMBAT_DESC"],
-                        get = function() return Database.db.profile.autoCombatZoom end,
-                        set = function(_, value)
-                            Functions:ChangeCameraSetting("autoCombatZoom", value, L["SETTINGS_CHANGED"])
-                        end,
-                        order = 3,
-                    },
-                },
-            },
             advancedSettings = {
                 type = "group",
                 name = L["ADVANCED_SETTINGS"],
                 inline = true,
-                order = 4,
+                order = 3,
                 args = {
                     reduceUnexpectedMovement = {
                         type = "toggle",
@@ -214,6 +163,112 @@ function Config:SetupOptions()
                     },
                 },
             },
+            experimentalSettings = {
+                type = "group",
+                name = L["EXPERIMENTAL_SETTINGS"],
+                inline = true,
+                order = 4,
+                args = {
+                    info = {
+                        type = "description",
+                        name = L["EXPERIMENTAL_SETTINGS_WARNING"],
+                        fontSize = "medium",
+                        order = 0,
+                        width = "full"
+                    },
+                    spacer0 = {
+                        type = "description",
+                        name = " ",
+                        order = 0.5, -- Position this to add spacing
+                        width = "full",
+                    },
+                    dismountDelay = {
+                        type = "range",
+                        name = L["DISMOUNT_DELAY"],
+                        desc = L["DISMOUNT_DELAY_DESC"],
+                        min = 3,
+                        max = 10,
+                        step = 1,
+                        get = function() return Database.db.profile.dismountDelay end,
+                        set = function(_, value)
+                            Database.db.profile.dismountDelay = value
+                        end,
+                        order = 1,
+                    },
+                    autoMountZoom = {
+                        type = "toggle",
+                        name = L["AUTO_ZOOM_MOUNT"],
+                        desc = L["AUTO_ZOOM_MOUNT_DESC"],
+                        get = function() return Database.db.profile.autoMountZoom end,
+                        set = function(_, value)
+                            Functions:ChangeCameraSetting("autoMountZoom", value, L["SETTINGS_CHANGED"])
+                        end,
+                        order = 2,
+                    },
+                    autoFormZoom = {
+                        type = "toggle",
+                        name = L["AUTO_ZOOM_FORM"],
+                        desc = L["AUTO_ZOOM_FORM_DESC"],
+                        get = function() return Database.db.profile.autoFormZoom end,
+                        set = function(_, value)
+                            Functions:ChangeCameraSetting("autoFormZoom", value, L["SETTINGS_CHANGED"])
+                        end,
+                        order = 3,
+                    },
+                    autoCombatZoom = {
+                        type = "toggle",
+                        name = L["AUTO_ZOOM_COMBAT"],
+                        desc = L["AUTO_ZOOM_COMBAT_DESC"],
+                        get = function() return Database.db.profile.autoCombatZoom end,
+                        set = function(_, value)
+                            Functions:ChangeCameraSetting("autoCombatZoom", value, L["SETTINGS_CHANGED"])
+                        end,
+                        order = 4,
+                    },
+                },
+            },
+            debugSettings = {
+                type = "group",
+                name = L["DEBUG_SETTINGS"],
+                inline = true,
+                order = 5,
+                args = {
+                    -- Debug toggle settings
+                    enableDebugLogging = {
+                        type = "toggle",
+                        name = L["ENABLE_DEBUG_LOGGING"],
+                        desc = L["ENABLE_DEBUG_LOGGING_DESC"],
+                        get = function() return Database.db.profile.enableDebugLogging end,
+                        set = function(_, value)
+                            Database.db.profile.enableDebugLogging = value
+                            -- Optionally send a message or perform additional actions
+                        end,
+                        order = 0,
+                    },
+                    debugLevel = {
+                        type = "multiselect",
+                        name = L["DEBUG_LEVEL"],
+                        desc = L["DEBUG_LEVEL_DESC"],
+                        values = {
+                            ["error"] = L["DEBUG_LEVEL_ERROR"],
+                            ["warning"] = L["DEBUG_LEVEL_WARNING"],
+                            ["info"] = L["DEBUG_LEVEL_INFO"],
+                            ["debug"] = L["DEBUG_LEVEL_DEBUG"]
+                        },
+                        get = function(_, key)
+                            local profile = Database.db.profile.debugLevel
+                            return profile and profile[key] -- Ensure profile and key exist
+                        end,
+                        set = function(_, key, value)
+                            if Database.db.profile.enableDebugLogging then
+                                Database.db.profile.debugLevel[key] = value -- Set the level as selected or deselected
+                            end
+                        end,
+                        order = 1,
+                        disabled = function() return not Database.db.profile.enableDebugLogging end, -- Disable if logging is off
+                    },
+                },
+            },           
         },
     }
 

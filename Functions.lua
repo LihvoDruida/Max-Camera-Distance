@@ -7,13 +7,50 @@ local CVar = C_CVar
 local _, playerClass = UnitClass("player")
 
 local savedMaxZoomFactor = nil
--- Flag to prevent duplicate execution
 local lastExecutionTime = 0
 local executionCooldown = 1 -- Cooldown in seconds
 
 -- Функція для виведення повідомлень в чат
 function Functions:SendMessage(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff0070deMax Camera Distance|r: " .. message)
+end
+
+-- Функція логування для відображення повідомлень у різних кольорах залежно від рівня важливості
+function Functions:logMessage(level, message)
+        local db = Database.db.profile
+        if not db.enableDebugLogging then return end -- Skip if debugging is disabled
+    
+        -- Check if the current level is enabled
+        if not db.debugLevel[level] then return end
+    
+        local prefix
+        local color
+    
+        if level == "error" then
+            color = "|cffff0000"  -- Red for errors
+            prefix = "|cff0070deMax Camera Distance|r [E]: "  -- Prefix with 'E' for errors
+        elseif level == "warning" then
+            color = "|cffffff00"  -- Yellow for warnings
+            prefix = "|cff0070deMax Camera Distance|r [W]: "  -- Prefix with 'W' for warnings
+        elseif level == "info" then
+            color = "|cff00ff00"  -- Green for info
+            prefix = "|cff0070deMax Camera Distance|r [I]: "  -- Prefix with 'I' for info
+        else
+            color = "|cffffffff"  -- White for debug and others
+            prefix = "|cff0070deMax Camera Distance|r [D]: "  -- Prefix with 'D' for debug
+        end
+    
+        DEFAULT_CHAT_FRAME:AddMessage(prefix .. color .. message .. "|r")
+    end
+    
+    
+function getSavedMaxZoomFactor()
+    if savedMaxZoomFactor == nil then
+        -- Якщо змінна ще не встановлена, задаємо її значення
+        savedMaxZoomFactor = tonumber(GetCVar("cameraDistanceMaxZoomFactor")) or Database.DEFAULT_ZOOM_FACTOR
+        self:logMessage("info", "Saved current camera zoom level.")
+    end
+    return savedMaxZoomFactor  -- Повертаємо значення
 end
 
 -- Function to check if the player is a Druid or Shaman
@@ -27,85 +64,81 @@ function Functions:ChangeCameraSetting(key, value, message)
         local db = Database.db.profile -- Оновлення db з актуальної бази даних
         db[key] = value
         self:AdjustCamera()
-        self:SendMessage(message)
-
-        -- Виводимо значення для перевірки
-        -- print("Setting changed:", key, value)
+        self:logMessage("info", message)
     else
-        self:SendMessage(L["Cannot change settings while in character edit mode."])
+        self:logMessage("warning", "Cannot change settings while in character edit mode.")
     end
 end
 
 -- Function to handle when the player mounts up
 local function OnMount()
-    -- Save current camera zoom level and max zoom factor
-    savedMaxZoomFactor = tonumber(GetCVar("cameraDistanceMaxZoomFactor")) or Database.DEFAULT_ZOOM_FACTOR
+    getSavedMaxZoomFactor()
 
-    -- Set new max zoom factor
-    local maxCameraZoom = Database.MAX_ZOOM_FACTOR -- Maximum zoom factor
+    local maxCameraZoom = Database.MAX_ZOOM_FACTOR
     SetCVar("cameraDistanceMaxZoomFactor", maxCameraZoom)
+    self:logMessage("info", "Set max zoom factor to " .. maxCameraZoom .. ".")
 end
 
 -- Function to handle when the player dismounts
 local function OnDismount()
     local db = Database.db.profile
     local delay = db.dismountDelay or Database.DISMOUNT_DELAY
-    -- Додати затримку в 3 секунди перед відновленням налаштувань камери
     C_Timer.After(delay, function()
         if savedMaxZoomFactor then
             SetCVar("cameraDistanceMaxZoomFactor", savedMaxZoomFactor)
+            self:logMessage("info", "Restored previous camera zoom factor.")
+            savedMaxZoomFactor = nil
+        else
+            self:logMessage("warning", "No saved camera zoom factor to restore.")
         end
     end)
 end
 
 -- Функція для налаштування камери
 function Functions:AdjustCamera()
-    -- Отримання налаштувань з бази даних
-    local db = Database.db.profile -- Оновлення db з актуальної бази даних
+    local db = Database.db.profile
     if not InCombatLockdown() and IsLoggedIn() then
-        -- Налаштування максимального зуму
         if db.maxZoomFactor then
             SetCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
+            self:logMessage("info", "Adjusted max zoom factor to " .. db.maxZoomFactor .. ".")
         end
 
-        -- Налаштування дистанції перегляду
         if db.moveViewDistance then
             MoveViewOutStart(db.moveViewDistance)
+            self:logMessage("info", "Adjusted move view distance to " .. db.moveViewDistance .. ".")
         end
 
-        -- Налаштування зменшення несподіваних рухів камери
         if db.reduceUnexpectedMovement ~= nil then
             CVar.SetCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and "1" or "0")
+            self:logMessage("info", "Set reduce unexpected movement to " .. tostring(db.reduceUnexpectedMovement) .. ".")
         end
 
-        -- Налаштування різкості при ресемплінгу
         if db.resampleAlwaysSharpen ~= nil then
             CVar.SetCVar("ResampleAlwaysSharpen", db.resampleAlwaysSharpen and "1" or "0")
+            self:logMessage("info", "Set resample always sharpen to " .. tostring(db.resampleAlwaysSharpen) .. ".")
         end
 
-        -- Налаштування непрямої видимості камери
         if db.cameraIndirectVisibility ~= nil then
             CVar.SetCVar("cameraIndirectVisibility", db.cameraIndirectVisibility and "1" or "0")
+            self:logMessage("info", "Set camera indirect visibility to " .. tostring(db.cameraIndirectVisibility) .. ".")
 
-            -- Залежно від cameraIndirectVisibility змінюємо cameraIndirectOffset
             if db.cameraIndirectVisibility then
                 SetCVar("cameraIndirectOffset", 1.5)
             else
                 SetCVar("cameraIndirectOffset", 10)
             end
+            self:logMessage("info", "Set camera indirect offset based on visibility.")
         end
 
-        -- Налаштування швидкості повороту (Yaw)
         if db.cameraYawMoveSpeed then
             SetCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
+            self:logMessage("info", "Adjusted yaw move speed to " .. db.cameraYawMoveSpeed .. ".")
         end
 
-        -- Налаштування швидкості нахилу (Pitch)
         if db.cameraPitchMoveSpeed then
             SetCVar("cameraPitchMoveSpeed", db.cameraPitchMoveSpeed)
+            self:logMessage("info", "Adjusted pitch move speed to " .. db.cameraPitchMoveSpeed .. ".")
         end
-
-        -- print("Adjusting camera with settings:", db)
     end
 end
 
@@ -146,7 +179,7 @@ end
 -- Функція для обробки Slash команд
 function Functions:SlashCmdHandler(msg)
     if not msg then
-        self:SendMessage(L["Usage: /mcd max | avg | min | config"])
+        self:logMessage(" ", "Usage: /mcd max | avg | min | config ")
         return
     end
 
@@ -164,7 +197,7 @@ function Functions:SlashCmdHandler(msg)
     elseif command == "config" then
         InterfaceOptionsFrame_OpenToCategory(settingName)
     else
-        self:SendMessage(L["Usage: /mcd max | avg | min | config"])
+        self:logMessage(" ", "Usage: /mcd max | avg | min | config ")
     end
 end
 

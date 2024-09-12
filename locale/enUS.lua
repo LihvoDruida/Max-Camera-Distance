@@ -11,7 +11,8 @@ L["YAW_MOVE_SPEED_DESC"] = "Adjust the speed of yaw (horizontal) camera movement
 L["PITCH_MOVE_SPEED"] = "Pitch Move Speed"
 L["PITCH_MOVE_SPEED_DESC"] = "Adjust the speed of pitch (vertical) camera movement."
 
-L["AUTO_SETTINGS"] = "Auto Settings"
+L["EXPERIMENTAL_SETTINGS"] = "Experimental Settings"
+L["EXPERIMENTAL_SETTINGS_WARNING"] = "|cff0070deAll parameters in this section are under development and may not work correctly.|r"
 L["DISMOUNT_DELAY"] = "Camera Restore Delay"
 L["DISMOUNT_DELAY_DESC"] =
 "Set the delay time before the camera zoom level is restored after dismounting (3-10 seconds)."
@@ -45,3 +46,14 @@ L["RELOAD_BUTTON_DESC"] = "Click this button to reload the user interface."
 L["RESET_BUTTON"] = "Reset Settings"
 L["RESET_BUTTON_DESC"] = "Click this button to reset all settings to their default values."
 L["SETTINGS_RESET"] = "Settings have been reset to default."
+
+-- Add the new locales for debug settings
+L["DEBUG_SETTINGS"] = "Debug Settings"
+L["ENABLE_DEBUG_LOGGING"] = "Enable Debug Logging"
+L["ENABLE_DEBUG_LOGGING_DESC"] = "Toggle to enable or disable debug logging."
+L["DEBUG_LEVEL"] = "Debug Level"  -- Title for the debug level setting
+L["DEBUG_LEVEL_DESC"] = "Select which debug levels should be enabled for logging."  -- Description of the debug level setting
+L["DEBUG_LEVEL_ERROR"] = "Error"  -- Option for "Error" debug level
+L["DEBUG_LEVEL_WARNING"] = "Warning"  -- Option for "Warning" debug level
+L["DEBUG_LEVEL_INFO"] = "Info"  -- Option for "Info" debug level
+L["DEBUG_LEVEL_DEBUG"] = "Debug"  -- Option for "Debug" debug level
