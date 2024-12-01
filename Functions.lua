@@ -38,7 +38,7 @@ function Functions:logMessage(level, message)
 end
 
 -- *** Збереження початкового рівня масштабу камери ***
-local function getSavedMaxZoomFactor()
+function getSavedMaxZoomFactor()
     if not savedMaxZoomFactor then
         savedMaxZoomFactor = tonumber(C_CVar.GetCVar("cameraDistanceMaxZoomFactor")) or Database.DEFAULT_ZOOM_FACTOR
     end
@@ -55,21 +55,25 @@ function Functions:ChangeCameraSetting(key, value, message)
 end
 
 -- *** Логіка для Mount ***
-local function OnMount()
+function OnMount()
     getSavedMaxZoomFactor()
     C_CVar.SetCVar("cameraDistanceMaxZoomFactor", Database.MAX_ZOOM_FACTOR)
     Functions:logMessage("info", "Set max zoom factor to " .. Database.MAX_ZOOM_FACTOR .. ".")
 end
 
 -- *** Логіка для Dismount ***
-local function OnDismount()
-    local delay = Database.db.profile.dismountDelay or Database.DISMOUNT_DELAY
+function OnDismount()
+    local delay = Database.db.profile.dismountDelay or Database.DISMOUNT_DELAY -- Затримка для dismount.
+    
+    -- Затримка виконання дій після dismount.
     C_Timer.After(delay, function()
         if savedMaxZoomFactor then
+            -- Відновлюємо попередній рівень зуму.
             C_CVar.SetCVar("cameraDistanceMaxZoomFactor", savedMaxZoomFactor)
             Functions:logMessage("info", "Restored previous camera zoom factor.")
-            savedMaxZoomFactor = nil
+            savedMaxZoomFactor = nil -- Скидаємо значення після відновлення.
         else
+            -- Якщо значення не збережено, виводимо попередження.
             Functions:logMessage("warning", "No saved camera zoom factor to restore.")
         end
     end)
@@ -88,6 +92,11 @@ function Functions:AdjustCamera()
             self:logMessage("info", "Adjusted move view distance to " .. db.moveViewDistance .. ".")
         end
     end
+end
+
+-- Function to check if the player is a Druid or Shaman
+function Functions:IsDruidOrShaman()
+    return playerClass == "DRUID" or playerClass == "SHAMAN"
 end
 
 -- *** Логіка для форми Друїда/Шамана ***
