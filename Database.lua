@@ -3,8 +3,9 @@ Database = {}
 -- Імплементація AceDB
 local AceDB = LibStub("AceDB-3.0")
 
-local yawMoveSpeed = tonumber(GetCVar("cameraYawMoveSpeed"))
-local pitchMoveSpeed = tonumber(GetCVar("cameraPitchMoveSpeed"))
+-- Ініціалізація стандартних значень
+local yawMoveSpeed = tonumber(GetCVar("cameraYawMoveSpeed")) or 180
+local pitchMoveSpeed = tonumber(GetCVar("cameraPitchMoveSpeed")) or 180
 
 -- *** Numeric Values ***
 Database.DEFAULT_ZOOM_FACTOR = 2.6
@@ -34,18 +35,16 @@ Database.DEFAULT_DEBUG_LEVEL = {
     ["debug"] = false
 }
 
--- Database initialization function
+-- Ініціалізація бази даних
 function Database:InitDB()
-    -- Define default settings
+    -- Визначаємо стандартний профіль
     local defaultProfile = {
-        -- Numeric values
         maxZoomFactor = Database.DEFAULT_ZOOM_FACTOR,
         moveViewDistance = Database.MOVE_VIEW_DISTANCE,
         cameraYawMoveSpeed = Database.DEFAULT_YAW_MOVE_SPEED,
         cameraPitchMoveSpeed = Database.DEFAULT_PITCH_MOVE_SPEED,
         dismountDelay = Database.DISMOUNT_DELAY,
 
-        -- Boolean values
         autoMountZoom = Database.DEFAULT_ZOOM_MOUNT,
         autoFormZoom = Database.DEFAULT_ZOOM_FORM,
         autoCombatZoom = Database.DEFAULT_ZOOM_COMBAT,
@@ -54,29 +53,48 @@ function Database:InitDB()
         cameraIndirectVisibility = Database.CAMERA_INDIRECT_VISIBILITY,
         enableDebugLogging = Database.ENABLE_DEBUG_LOGGING,
 
-        -- Table values
-        debugLevel = Database.DEFAULT_DEBUG_LEVEL  -- Initialize with default debug level
+        debugLevel = Database.DEFAULT_DEBUG_LEVEL
     }
 
-    -- Create or load the database with default settings
+    -- Створюємо або завантажуємо базу даних
     Database.db = AceDB:New("MaxCameraDistanceDB", { profile = defaultProfile }, true)
+    if not Database.db then
+        print("Max_Camera_Distance: Database initialization failed.")
+        return
+    end
 
-    -- Register callback functions for database profile changes
+    -- Реєструємо колбеки для зміни профілів
     Database.db:RegisterCallback("OnProfileChanged", function()
-        if Functions and Functions.OnProfileChanged then
-            Functions:OnProfileChanged()
-        end
-    end)
-
-    Database.db:RegisterCallback("OnProfileCopied", function()
-        if Functions and Functions.OnProfileCopied then
-            Functions:OnProfileCopied()
-        end
+        print("Profile changed. Updating settings...")
+        Database:UpdateCameraSettings()
     end)
 
     Database.db:RegisterCallback("OnProfileReset", function()
-        if Functions and Functions.OnProfileReset then
-            Functions:OnProfileReset()
-        end
+        print("Profile reset to defaults.")
+        Database:UpdateCameraSettings()
     end)
 end
+
+-- Оновлення налаштувань камери
+function Database:UpdateCameraSettings()
+    SetCVar("cameraYawMoveSpeed", self.db.profile.cameraYawMoveSpeed or Database.DEFAULT_YAW_MOVE_SPEED)
+    SetCVar("cameraPitchMoveSpeed", self.db.profile.cameraPitchMoveSpeed or Database.DEFAULT_PITCH_MOVE_SPEED)
+    print("Camera settings updated.")
+end
+
+-- Функції доступу до значень профілю
+function Database:SetZoomFactor(value)
+    self.db.profile.maxZoomFactor = value
+end
+
+function Database:GetZoomFactor()
+    return self.db.profile.maxZoomFactor or self.DEFAULT_ZOOM_FACTOR
+end
+
+-- Логи та налагодження
+function Database:Log(level, message)
+    if self.db.profile.debugLevel[level] then
+        print("Max_Camera_Distance [" .. level:upper() .. "]: " .. message)
+    end
+end
+
