@@ -1,20 +1,24 @@
 local addonName = "Max_Camera_Distance"
 
+-- Функція для безпечного виклику функцій та логування помилок
+local function SafeCall(func, name)
+    if func then
+        func()
+    else
+        print(addonName .. ": Error initializing " .. name)
+    end
+end
+
 -- Ініціалізація налаштувань аддона
 local function InitializeAddon()
-    if Database and Database.InitDB then
-        Database:InitDB()
-    end
+    -- Ініціалізація бази даних
+    SafeCall(function() Database:InitDB() end, "Database.InitDB")
 
-    if Config and Config.SetupOptions then
-        Config:SetupOptions()
-    end
+    -- Налаштування опцій
+    SafeCall(function() Config:SetupOptions() end, "Config.SetupOptions")
 
-    if Functions and Functions.AdjustCamera then
-        Functions:AdjustCamera()
-    else
-        print(addonName .. ": Error initializing Functions.AdjustCamera")
-    end
+    -- Актуалізація налаштувань камери
+    SafeCall(function() Functions:AdjustCamera() end, "Functions.AdjustCamera")
 end
 
 -- Обробка подій

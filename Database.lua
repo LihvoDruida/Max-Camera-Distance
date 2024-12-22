@@ -63,7 +63,12 @@ function Database:InitDB()
         return
     end
 
-    -- Реєструємо колбеки для зміни профілів
+    -- Реєстрація колбеків для зміни профілів
+    self:RegisterProfileCallbacks()
+end
+
+-- Реєстрація колбеків для зміни профілів
+function Database:RegisterProfileCallbacks()
     Database.db:RegisterCallback("OnProfileChanged", function()
         print("Profile changed. Updating settings...")
         Database:UpdateCameraSettings()
@@ -77,8 +82,9 @@ end
 
 -- Оновлення налаштувань камери
 function Database:UpdateCameraSettings()
-    SetCVar("cameraYawMoveSpeed", self.db.profile.cameraYawMoveSpeed or Database.DEFAULT_YAW_MOVE_SPEED)
-    SetCVar("cameraPitchMoveSpeed", self.db.profile.cameraPitchMoveSpeed or Database.DEFAULT_PITCH_MOVE_SPEED)
+    -- Оновлюємо налаштування камери з профілю або використовуємо значення за замовчуванням
+    SetCVar("cameraYawMoveSpeed", self.db.profile.cameraYawMoveSpeed or defaultValues.DEFAULT_YAW_MOVE_SPEED)
+    SetCVar("cameraPitchMoveSpeed", self.db.profile.cameraPitchMoveSpeed or defaultValues.DEFAULT_PITCH_MOVE_SPEED)
     print("Camera settings updated.")
 end
 
@@ -88,7 +94,7 @@ function Database:SetZoomFactor(value)
 end
 
 function Database:GetZoomFactor()
-    return self.db.profile.maxZoomFactor or self.DEFAULT_ZOOM_FACTOR
+    return self.db.profile.maxZoomFactor or defaultValues.DEFAULT_ZOOM_FACTOR
 end
 
 -- Логи та налагодження

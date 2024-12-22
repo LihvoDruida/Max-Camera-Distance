@@ -48,7 +48,10 @@ end
 function Functions:ChangeCameraSetting(key, value, message)
     local db = Database.db.profile
     db[key] = value
+    -- Актуалізуємо камеру
     self:AdjustCamera()
+    
+    -- Якщо є повідомлення, логуємо його
     if message then
         self:logMessage("info", message)
     end
@@ -82,7 +85,9 @@ end
 -- *** Налаштування параметрів камери ***
 function Functions:AdjustCamera()
     local db = Database.db.profile
+    -- Перевірка, чи можна змінювати налаштування камери
     if not InCombatLockdown() and IsLoggedIn() then
+        -- Оновлюємо параметри камери
         if db.maxZoomFactor then
             C_CVar.SetCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
             self:logMessage("info", "Adjusted max zoom factor to " .. db.maxZoomFactor .. ".")
