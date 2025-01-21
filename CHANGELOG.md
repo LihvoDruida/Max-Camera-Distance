@@ -1,3 +1,9 @@
+#### release 5.1 (HOTFIX)
+
+- fix: Handle CVAR updates in OnCVarUpdate function
+  - Added cvarHandlers table for centralized CVAR update handling.
+  - Simplified OnCVarUpdate function code.
+
 #### release 5.0
 
 - Implemented automatic camera zoom adjustments:
