@@ -1,5 +1,9 @@
-#### release 4.0
+#### release 5.0
 
-- Toc Bumps for retail
-- Refactor addon initialization for better readability and error handling
-- Optimized addon initialization by combining function existence checks and calls.
+- Implemented automatic camera zoom adjustments:
+  - Max zoom during combat and min zoom after combat with configurable delay
+
+- Code cleanup:
+  - Encapsulated camera adjustment logic in reusable functions.
+  - Improved error handling with `SafeCall`.
+  - Refined event registration and handling for reliability.
