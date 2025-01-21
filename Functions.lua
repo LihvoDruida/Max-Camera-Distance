@@ -36,7 +36,6 @@ function Functions:logMessage(level, message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff0070deMax Camera Distance|r " .. prefix .. ": " .. color .. message .. "|r")
 end
 
-
 function Functions:ChangeCameraSetting(key, value, message)
     local db = Database.db.profile
     db[key] = value
@@ -56,6 +55,34 @@ local function UpdateCVar(key, value)
     end
 end
 
+-- *** Обробка оновлення параметрів CVAR ***
+function Functions:OnCVarUpdate(_, cvarName, value)
+    local cvarHandlers = {
+        ["cameraDistanceMaxZoomFactor"] = function()
+            self:ChangeCameraSetting("maxZoomFactor", tonumber(value), L["SETTINGS_CHANGED"])
+        end,
+        ["cameraDistanceMoveSpeed"] = function()
+            self:ChangeCameraSetting("moveViewDistance", tonumber(value), L["SETTINGS_CHANGED"])
+        end,
+        ["cameraReduceUnexpectedMovement"] = function()
+            self:ChangeCameraSetting("reduceUnexpectedMovement", tonumber(value) == 1, L["SETTINGS_CHANGED"])
+        end,
+        ["cameraYawMoveSpeed"] = function()
+            self:ChangeCameraSetting("cameraYawMoveSpeed", tonumber(value), L["SETTINGS_CHANGED"])
+        end,
+        ["cameraPitchMoveSpeed"] = function()
+            self:ChangeCameraSetting("cameraPitchMoveSpeed", tonumber(value), L["SETTINGS_CHANGED"])
+        end,
+        ["cameraIndirectVisibility"] = function()
+            self:ChangeCameraSetting("cameraIndirectVisibility", tonumber(value) == 1, L["SETTINGS_CHANGED"])
+        end,
+    }
+
+    -- Викликаємо обробник для відповідного CVar
+    if cvarHandlers[cvarName] then
+        cvarHandlers[cvarName]()
+    end
+end
 
 -- *** Функція для зміни налаштувань камери залежно від бою ***
 function Functions:UpdateCameraOnCombat()
@@ -72,7 +99,6 @@ function Functions:UpdateCameraOnCombat()
         end)
     end
 end
-
 
 -- *** Налаштування параметрів камери ***
 function Functions:AdjustCamera()
@@ -92,7 +118,6 @@ function Functions:AdjustCamera()
         end
     end
 end
-
 
 -- *** Колбеки для зміни профілів ***
 function Functions:OnProfileChanged() self:AdjustCamera() end
