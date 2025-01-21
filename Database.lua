@@ -9,6 +9,7 @@ local pitchMoveSpeed = tonumber(GetCVar("cameraPitchMoveSpeed")) or 180
 
 -- *** Numeric Values ***
 Database.DEFAULT_ZOOM_FACTOR = 2.6
+Database.DEFAULT_MIN_ZOOM_FACTOR = 1.9
 Database.DEFAULT_YAW_MOVE_SPEED = yawMoveSpeed
 Database.DEFAULT_PITCH_MOVE_SPEED = pitchMoveSpeed
 Database.DISMOUNT_DELAY = 3
@@ -22,8 +23,6 @@ Database.CAMERA_PITCH_MOVE_SPEED = 180
 Database.REDUCE_UNEXPECTED_MOVEMENT = false
 Database.RESAMPLE_ALWAYS_SHARPEN = false
 Database.CAMERA_INDIRECT_VISIBILITY = true
-Database.DEFAULT_ZOOM_MOUNT = false
-Database.DEFAULT_ZOOM_FORM = false
 Database.DEFAULT_ZOOM_COMBAT = false
 Database.ENABLE_DEBUG_LOGGING = false
 
@@ -40,13 +39,12 @@ function Database:InitDB()
     -- Визначаємо стандартний профіль
     local defaultProfile = {
         maxZoomFactor = Database.DEFAULT_ZOOM_FACTOR,
+        minZoomFactor = Database.DEFAULT_MIN_ZOOM_FACTOR,
         moveViewDistance = Database.MOVE_VIEW_DISTANCE,
         cameraYawMoveSpeed = Database.DEFAULT_YAW_MOVE_SPEED,
         cameraPitchMoveSpeed = Database.DEFAULT_PITCH_MOVE_SPEED,
         dismountDelay = Database.DISMOUNT_DELAY,
 
-        autoMountZoom = Database.DEFAULT_ZOOM_MOUNT,
-        autoFormZoom = Database.DEFAULT_ZOOM_FORM,
         autoCombatZoom = Database.DEFAULT_ZOOM_COMBAT,
         reduceUnexpectedMovement = Database.REDUCE_UNEXPECTED_MOVEMENT,
         resampleAlwaysSharpen = Database.RESAMPLE_ALWAYS_SHARPEN,

@@ -5,7 +5,6 @@ local settingName = "Max Camera Distance"
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local _, playerClass = UnitClass("player")
 
-local savedMaxZoomFactor = nil
 local lastExecutionTime = 0
 local executionCooldown = 1 -- Cooldown in seconds
 
@@ -37,13 +36,6 @@ function Functions:logMessage(level, message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff0070deMax Camera Distance|r " .. prefix .. ": " .. color .. message .. "|r")
 end
 
--- *** Збереження початкового рівня масштабу камери ***
-function getSavedMaxZoomFactor()
-    if not savedMaxZoomFactor then
-        savedMaxZoomFactor = tonumber(C_CVar.GetCVar("cameraDistanceMaxZoomFactor")) or Database.DEFAULT_ZOOM_FACTOR
-    end
-    return savedMaxZoomFactor
-end
 
 function Functions:ChangeCameraSetting(key, value, message)
     local db = Database.db.profile
@@ -57,30 +49,30 @@ function Functions:ChangeCameraSetting(key, value, message)
     end
 end
 
--- *** Логіка для Mount ***
-function OnMount()
-    getSavedMaxZoomFactor()
-    C_CVar.SetCVar("cameraDistanceMaxZoomFactor", Database.MAX_ZOOM_FACTOR)
-    Functions:logMessage("info", "Set max zoom factor to " .. Database.MAX_ZOOM_FACTOR .. ".")
+local function UpdateCVar(key, value)
+    if C_CVar.GetCVar(key) ~= tostring(value) then
+        C_CVar.SetCVar(key, value)
+        Functions:logMessage("info", "Updated " .. key .. " to " .. value)
+    end
 end
 
--- *** Логіка для Dismount ***
-function OnDismount()
-    local delay = Database.db.profile.dismountDelay or Database.DISMOUNT_DELAY -- Затримка для dismount.
-    
-    -- Затримка виконання дій після dismount.
-    C_Timer.After(delay, function()
-        if savedMaxZoomFactor then
-            -- Відновлюємо попередній рівень зуму.
-            C_CVar.SetCVar("cameraDistanceMaxZoomFactor", savedMaxZoomFactor)
-            Functions:logMessage("info", "Restored previous camera zoom factor.")
-            savedMaxZoomFactor = nil -- Скидаємо значення після відновлення.
-        else
-            -- Якщо значення не збережено, виводимо попередження.
-            Functions:logMessage("warning", "No saved camera zoom factor to restore.")
-        end
-    end)
+
+-- *** Функція для зміни налаштувань камери залежно від бою ***
+function Functions:UpdateCameraOnCombat()
+    local db = Database.db.profile
+    if UnitAffectingCombat("player") then
+        -- У бою: встановлюємо максимальне наближення
+        UpdateCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
+        self:logMessage("info", "In combat: max zoom factor set to " .. db.maxZoomFactor .. ".")
+    else
+        -- Поза боєм: встановлюємо мінімальне наближення із затримкою
+        C_Timer.After(db.dismountDelay or 0, function()
+            UpdateCVar("cameraDistanceMaxZoomFactor", db.minZoomFactor)
+            self:logMessage("info", "Out of combat: max zoom factor set to " .. db.minZoomFactor .. " after delay.")
+        end)
+    end
 end
+
 
 -- *** Налаштування параметрів камери ***
 function Functions:AdjustCamera()
@@ -88,8 +80,10 @@ function Functions:AdjustCamera()
     -- Перевірка, чи можна змінювати налаштування камери
     if not InCombatLockdown() and IsLoggedIn() then
         -- Оновлюємо параметри камери
-        if db.maxZoomFactor then
-            C_CVar.SetCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
+        if db.autoCombatZoom then
+            Functions:UpdateCameraOnCombat()
+        elseif db.maxZoomFactor then
+            UpdateCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
             self:logMessage("info", "Adjusted max zoom factor to " .. db.maxZoomFactor .. ".")
         end
         if db.moveViewDistance then
@@ -99,27 +93,6 @@ function Functions:AdjustCamera()
     end
 end
 
--- Function to check if the player is a Druid or Shaman
-function Functions:IsDruidOrShaman()
-    return playerClass == "DRUID" or playerClass == "SHAMAN"
-end
-
--- *** Логіка для форми Друїда/Шамана ***
-function Functions:OnForm()
-    if GetTime() - lastExecutionTime < executionCooldown then return end
-    lastExecutionTime = GetTime()
-
-    local formID = GetShapeshiftForm()
-    if formID > 0 then
-        if (formID == 6 or formID == 3) and playerClass == "DRUID" then
-            OnMount()
-        elseif formID == 1 and playerClass == "SHAMAN" then
-            OnMount()
-        end
-    else
-        OnDismount()
-    end
-end
 
 -- *** Колбеки для зміни профілів ***
 function Functions:OnProfileChanged() self:AdjustCamera() end

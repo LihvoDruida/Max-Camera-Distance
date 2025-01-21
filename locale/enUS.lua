@@ -11,18 +11,17 @@ L["YAW_MOVE_SPEED_DESC"] = "Adjust the speed of yaw (horizontal) camera movement
 L["PITCH_MOVE_SPEED"] = "Pitch Move Speed"
 L["PITCH_MOVE_SPEED_DESC"] = "Adjust the speed of pitch (vertical) camera movement."
 
-L["EXPERIMENTAL_SETTINGS"] = "Experimental Settings"
-L["EXPERIMENTAL_SETTINGS_WARNING"] = "|cff0070deAll parameters in this section are under development and may not work correctly.|r"
+L["COMBAT_SETTINGS"] = "Combat Settings"
+L["COMBAT_SETTINGS_WARNING"] = "|cff0070deSettings in this section will automatically adjust camera distance based on combat status. Max zoom is applied during combat, and min zoom is restored shortly after exiting combat.|r"
 L["DISMOUNT_DELAY"] = "Camera Restore Delay"
 L["DISMOUNT_DELAY_DESC"] =
 "Set the delay time before the camera zoom level is restored after dismounting (3-10 seconds)."
-L["AUTO_ZOOM_MOUNT"] = "Auto Zoom on Mount"
-L["AUTO_ZOOM_MOUNT_DESC"] =
-"Automatically zooms the camera out to the maximum level when mounted and restores the previous zoom level when dismounted."
-L["AUTO_ZOOM_FORM"] = "Auto Zoom on Form Change"
-L["AUTO_ZOOM_FORM_DESC"] = "Enable automatic zoom when changing forms. Applies only to Druids and Shamans."
 L["AUTO_ZOOM_COMBAT"] = "Auto Zoom in Combat"
 L["AUTO_ZOOM_COMBAT_DESC"] = "Enable to automatically adjust camera zoom when your character is in combat."
+L["MAX_COMBAT_ZOOM_FACTOR"] = "Maximum Combat Zoom Factor"
+L["MAX_COMBAT_ZOOM_FACTOR_DESC"] = "The maximum camera zoom factor during combat."
+L["MIN_COMBAT_ZOOM_FACTOR"] = "Minimum Combat Zoom Factor"
+L["MIN_COMBAT_ZOOM_FACTOR_DESC"] = "The minimum camera zoom factor outside of combat."
 
 L["ADVANCED_SETTINGS"] = "Advanced Settings"
 L["REDUCE_UNEXPECTED_MOVEMENT"] = "Reduce Unexpected Camera Movement"

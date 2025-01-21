@@ -83,6 +83,7 @@ function Config:SetupOptions()
                             Functions:ChangeCameraSetting("maxZoomFactor", value, L["SETTINGS_CHANGED"])
                         end,
                         order = 1,
+                        disabled = function() return Database.db.profile.autoCombatZoom end,
                     },
                     moveViewDistance = {
                         type = "range",
@@ -165,13 +166,13 @@ function Config:SetupOptions()
             },
             experimentalSettings = {
                 type = "group",
-                name = L["EXPERIMENTAL_SETTINGS"],
+                name = L["COMBAT_SETTINGS"],
                 inline = true,
                 order = 4,
                 args = {
                     info = {
                         type = "description",
-                        name = L["EXPERIMENTAL_SETTINGS_WARNING"],
+                        name = L["COMBAT_SETTINGS_WARNING"],
                         fontSize = "medium",
                         order = 0,
                         width = "full"
@@ -181,6 +182,16 @@ function Config:SetupOptions()
                         name = " ",
                         order = 0.5, -- Position this to add spacing
                         width = "full",
+                    },
+                    autoCombatZoom = {
+                        type = "toggle",
+                        name = L["AUTO_ZOOM_COMBAT"],
+                        desc = L["AUTO_ZOOM_COMBAT_DESC"],
+                        get = function() return Database.db.profile.autoCombatZoom end,
+                        set = function(_, value)
+                            Functions:ChangeCameraSetting("autoCombatZoom", value, L["SETTINGS_CHANGED"])
+                        end,
+                        order = 1 ,
                     },
                     dismountDelay = {
                         type = "range",
@@ -193,38 +204,38 @@ function Config:SetupOptions()
                         set = function(_, value)
                             Database.db.profile.dismountDelay = value
                         end,
-                        order = 1,
-                    },
-                    autoMountZoom = {
-                        type = "toggle",
-                        name = L["AUTO_ZOOM_MOUNT"],
-                        desc = L["AUTO_ZOOM_MOUNT_DESC"],
-                        get = function() return Database.db.profile.autoMountZoom end,
-                        set = function(_, value)
-                            Functions:ChangeCameraSetting("autoMountZoom", value, L["SETTINGS_CHANGED"])
-                        end,
                         order = 2,
+                        disabled = function() return not Database.db.profile.autoCombatZoom end,
                     },
-                    autoFormZoom = {
-                        type = "toggle",
-                        name = L["AUTO_ZOOM_FORM"],
-                        desc = L["AUTO_ZOOM_FORM_DESC"],
-                        get = function() return Database.db.profile.autoFormZoom end,
+                    maxZoomFactor = {
+                        type = "range",
+                        name = L["MAX_COMBAT_ZOOM_FACTOR"],
+                        desc = L["MAX_COMBAT_ZOOM_FACTOR_DESC"],
+                        min = 1.0,
+                        max = Database.MAX_ZOOM_FACTOR,
+                        step = 0.1,
+                        get = function() return Database.db.profile.maxZoomFactor end,
                         set = function(_, value)
-                            Functions:ChangeCameraSetting("autoFormZoom", value, L["SETTINGS_CHANGED"])
+                            Functions:ChangeCameraSetting("maxZoomFactor", value, L["SETTINGS_CHANGED"])
                         end,
                         order = 3,
+                        disabled = function() return not Database.db.profile.autoCombatZoom end,
                     },
-                    autoCombatZoom = {
-                        type = "toggle",
-                        name = L["AUTO_ZOOM_COMBAT"],
-                        desc = L["AUTO_ZOOM_COMBAT_DESC"],
-                        get = function() return Database.db.profile.autoCombatZoom end,
+                    minZoomFactor = {
+                        type = "range",
+                        name = L["MIN_COMBAT_ZOOM_FACTOR"],
+                        desc = L["MIN_COMBAT_ZOOM_FACTOR_DESC"],
+                        min = 1.0,
+                        max = Database.MAX_ZOOM_FACTOR,
+                        step = 0.1,
+                        get = function() return Database.db.profile.minZoomFactor end,
                         set = function(_, value)
-                            Functions:ChangeCameraSetting("autoCombatZoom", value, L["SETTINGS_CHANGED"])
+                            Functions:ChangeCameraSetting("minZoomFactor", value, L["SETTINGS_CHANGED"])
                         end,
                         order = 4,
+                        disabled = function() return not Database.db.profile.autoCombatZoom end,
                     },
+
                 },
             },
             debugSettings = {
