@@ -40,11 +40,11 @@ function Functions:ChangeCameraSetting(key, value, message)
     local db = Database.db.profile
     db[key] = value
     -- Актуалізуємо камеру
-    self:AdjustCamera()
+    Functions:AdjustCamera()  -- Використовуємо правильний виклик функції без `self`
     
     -- Якщо є повідомлення, логуємо його
     if message then
-        self:logMessage("info", message)
+        Functions:logMessage("info", message)  -- Використовуємо правильний виклик функції без `self`
     end
 end
 
@@ -59,22 +59,22 @@ end
 function Functions:OnCVarUpdate(_, cvarName, value)
     local cvarHandlers = {
         ["cameraDistanceMaxZoomFactor"] = function()
-            self:ChangeCameraSetting("maxZoomFactor", tonumber(value), L["SETTINGS_CHANGED"])
+            Functions:ChangeCameraSetting("maxZoomFactor", tonumber(value), L["SETTINGS_CHANGED"])
         end,
         ["cameraDistanceMoveSpeed"] = function()
-            self:ChangeCameraSetting("moveViewDistance", tonumber(value), L["SETTINGS_CHANGED"])
+            Functions:ChangeCameraSetting("moveViewDistance", tonumber(value), L["SETTINGS_CHANGED"])
         end,
         ["cameraReduceUnexpectedMovement"] = function()
-            self:ChangeCameraSetting("reduceUnexpectedMovement", tonumber(value) == 1, L["SETTINGS_CHANGED"])
+            Functions:ChangeCameraSetting("reduceUnexpectedMovement", tonumber(value) == 1, L["SETTINGS_CHANGED"])
         end,
         ["cameraYawMoveSpeed"] = function()
-            self:ChangeCameraSetting("cameraYawMoveSpeed", tonumber(value), L["SETTINGS_CHANGED"])
+            Functions:ChangeCameraSetting("cameraYawMoveSpeed", tonumber(value), L["SETTINGS_CHANGED"])
         end,
         ["cameraPitchMoveSpeed"] = function()
-            self:ChangeCameraSetting("cameraPitchMoveSpeed", tonumber(value), L["SETTINGS_CHANGED"])
+            Functions:ChangeCameraSetting("cameraPitchMoveSpeed", tonumber(value), L["SETTINGS_CHANGED"])
         end,
         ["cameraIndirectVisibility"] = function()
-            self:ChangeCameraSetting("cameraIndirectVisibility", tonumber(value) == 1, L["SETTINGS_CHANGED"])
+            Functions:ChangeCameraSetting("cameraIndirectVisibility", tonumber(value) == 1, L["SETTINGS_CHANGED"])
         end,
     }
 
@@ -90,12 +90,12 @@ function Functions:UpdateCameraOnCombat()
     if UnitAffectingCombat("player") then
         -- У бою: встановлюємо максимальне наближення
         UpdateCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
-        self:logMessage("info", "In combat: max zoom factor set to " .. db.maxZoomFactor .. ".")
+        Functions:logMessage("info", "In combat: max zoom factor set to " .. db.maxZoomFactor .. ".")
     else
         -- Поза боєм: встановлюємо мінімальне наближення із затримкою
         C_Timer.After(db.dismountDelay or 0, function()
             UpdateCVar("cameraDistanceMaxZoomFactor", db.minZoomFactor)
-            self:logMessage("info", "Out of combat: max zoom factor set to " .. db.minZoomFactor .. " after delay.")
+            Functions:logMessage("info", "Out of combat: max zoom factor set to " .. db.minZoomFactor .. " after delay.")
         end)
     end
 end
@@ -107,22 +107,22 @@ function Functions:AdjustCamera()
     if not InCombatLockdown() and IsLoggedIn() then
         -- Оновлюємо параметри камери
         if db.autoCombatZoom then
-            Functions:UpdateCameraOnCombat()
+            Functions:UpdateCameraOnCombat()  -- Використовуємо правильний виклик функції без `self`
         elseif db.maxZoomFactor then
             UpdateCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
-            self:logMessage("info", "Adjusted max zoom factor to " .. db.maxZoomFactor .. ".")
+            Functions:logMessage("info", "Adjusted max zoom factor to " .. db.maxZoomFactor .. ".")
         end
         if db.moveViewDistance then
             MoveViewOutStart(db.moveViewDistance)
-            self:logMessage("info", "Adjusted move view distance to " .. db.moveViewDistance .. ".")
+            Functions:logMessage("info", "Adjusted move view distance to " .. db.moveViewDistance .. ".")
         end
     end
 end
 
 -- *** Колбеки для зміни профілів ***
-function Functions:OnProfileChanged() self:AdjustCamera() end
-function Functions:OnProfileCopied() self:AdjustCamera() end
-function Functions:OnProfileReset() self:AdjustCamera() end
+function Functions:OnProfileChanged() Functions:AdjustCamera() end
+function Functions:OnProfileCopied() Functions:AdjustCamera() end
+function Functions:OnProfileReset() Functions:AdjustCamera() end
 
 -- *** Обробка Slash команд ***
 function Functions:SlashCmdHandler(msg)
@@ -137,15 +137,15 @@ function Functions:SlashCmdHandler(msg)
         local setting = settings[command]
         Database.db.profile.maxZoomFactor = setting.zoomFactor
         Database.db.profile.moveViewDistance = setting.moveDistance
-        self:AdjustCamera()
-        self:logMessage("info", "Settings set to " .. command .. ".")
+        Functions:AdjustCamera()  -- Використовуємо правильний виклик функції без `self`
+        Functions:logMessage("info", "Settings set to " .. command .. ".")
     elseif command == "config" then
         if Settings and Settings.OpenToCategory then
             Settings.OpenToCategory(settingName)
         else
-            self:logMessage("error", "Unable to open settings. Settings API unavailable.")
+            Functions:logMessage("error", "Unable to open settings. Settings API unavailable.")
         end
     else
-        self:SendMessage("Usage: /mcd max | avg | min | config")
+        Functions:SendMessage("Usage: /mcd max | avg | min | config")
     end
 end

@@ -62,7 +62,7 @@ function Database:InitDB()
     end
 
     -- Реєстрація колбеків для зміни профілів
-    self:RegisterProfileCallbacks()
+    Database:RegisterProfileCallbacks()
 end
 
 -- Реєстрація колбеків для зміни профілів

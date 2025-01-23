@@ -1,54 +1,57 @@
 local addonName = "Max_Camera_Distance"
 
 -- *** Функція для безпечного виклику функцій та логування помилок ***
-local function SafeCall(func, name)
+local function SafeCall(func, name, ...)
     if func then
-        local status, err = pcall(func)
+        local status, err = pcall(func, ...)
         if not status then
-            print(addonName .. ": Error in " .. name .. ": " .. err)
+            print(string.format("%s: Error in %s: %s", addonName, name, err))
         end
     else
-        print(addonName .. ": Missing function: " .. name)
+        print(string.format("%s: Missing function: %s", addonName, name))
     end
 end
 
 -- *** Ініціалізація аддона ***
 local function InitializeAddon()
     -- Ініціалізація бази даних
-    SafeCall(function() Database:InitDB() end, "Database:InitDB")
+    SafeCall(Database.InitDB, "Database:InitDB")
 
     -- Налаштування опцій
-    SafeCall(function() Config:SetupOptions() end, "Config:SetupOptions")
+    SafeCall(Config.SetupOptions, "Config:SetupOptions")
 
     -- Актуалізація початкових параметрів камери
-    SafeCall(function() Functions:AdjustCamera() end, "Functions:AdjustCamera")
+    SafeCall(Functions.AdjustCamera, "Functions:AdjustCamera")
 end
 
 -- *** Обробка подій ***
-local function OnEvent(self, event, arg1, ...)
-    if event == "ADDON_LOADED" and arg1 == addonName then
-        InitializeAddon()
-        self:UnregisterEvent("ADDON_LOADED")
+local function OnEvent(self, event, ...)
+    if event == "ADDON_LOADED" then
+        local addon = ...
+        if addon == addonName then
+            InitializeAddon()
+            self:UnregisterEvent("ADDON_LOADED")
+        end
     elseif event == "CVAR_UPDATE" then
         local cvarName, newValue = ...
-        SafeCall(function() Functions:OnCVarUpdate(_, cvarName, newValue) end, "Functions:OnCVarUpdate")
+        SafeCall(Functions.OnCVarUpdate, "Functions:OnCVarUpdate", nil, cvarName, newValue)
     elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD" then
-        -- Об'єднано виклики AdjustCamera для цих подій
-        SafeCall(function() Functions:AdjustCamera() end, "Functions:AdjustCamera")
+        SafeCall(Functions.AdjustCamera, "Functions:AdjustCamera")
     end
 end
 
-
 -- *** Створення фрейму та реєстрація подій ***
-local f = CreateFrame("Frame")
-f:RegisterEvent("ADDON_LOADED")
-f:RegisterEvent("CVAR_UPDATE")
-f:RegisterEvent("PLAYER_REGEN_DISABLED")
-f:RegisterEvent("PLAYER_REGEN_ENABLED")
-f:RegisterEvent("PLAYER_ENTERING_WORLD")
+local frame = CreateFrame("Frame")
 
--- Додавання скрипта для обробки подій
-f:SetScript("OnEvent", OnEvent)
+-- Реєструємо події
+frame:RegisterEvent("ADDON_LOADED")
+frame:RegisterEvent("CVAR_UPDATE")
+frame:RegisterEvent("PLAYER_REGEN_DISABLED")
+frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+-- Додаємо обробник подій
+frame:SetScript("OnEvent", OnEvent)
 
 -- *** Реєстрація Slash-команд ***
 SLASH_MAXCAMDIST1 = "/mcd"
@@ -56,6 +59,6 @@ SlashCmdList["MAXCAMDIST"] = function(msg)
     if Functions and Functions.SlashCmdHandler then
         SafeCall(function() Functions:SlashCmdHandler(msg) end, "Functions:SlashCmdHandler")
     else
-        print(addonName .. ": Slash command handler not found")
+        print(string.format("%s: Slash command handler not found", addonName))
     end
 end
