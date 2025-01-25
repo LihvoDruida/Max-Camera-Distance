@@ -4,6 +4,7 @@ local addonName = "Max_Camera_Distance"
 local settingName = "Max Camera Distance"
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local _, playerClass = UnitClass("player")
+local UnitAffectingCombat = UnitAffectingCombat
 
 local lastExecutionTime = 0
 local executionCooldown = 1 -- Cooldown in seconds
@@ -87,18 +88,27 @@ end
 -- *** Функція для зміни налаштувань камери залежно від бою ***
 function Functions:UpdateCameraOnCombat()
     local db = Database.db.profile
-    if UnitAffectingCombat("player") then
-        -- У бою: встановлюємо максимальне наближення
-        UpdateCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
-        Functions:logMessage("info", "In combat: max zoom factor set to " .. db.maxZoomFactor .. ".")
-    else
-        -- Поза боєм: встановлюємо мінімальне наближення із затримкою
-        C_Timer.After(db.dismountDelay or 0, function()
-            UpdateCVar("cameraDistanceMaxZoomFactor", db.minZoomFactor)
-            Functions:logMessage("info", "Out of combat: max zoom factor set to " .. db.minZoomFactor .. " after delay.")
-        end)
+    local inCombat = UnitAffectingCombat("player")  
+    
+    -- Перевіряємо, чи змінився стан бою
+    if inCombat ~= uic.wasInCombat then
+        if inCombat then
+            -- Якщо в бою: встановлюємо максимальне наближення
+            UpdateCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
+            Functions:logMessage("info", "In combat: max zoom factor set to " .. db.maxZoomFactor .. ".")
+        else
+            -- Якщо поза боєм: встановлюємо мінімальне наближення із затримкою
+            C_Timer.After(db.dismountDelay or 0, function()
+                UpdateCVar("cameraDistanceMaxZoomFactor", db.minZoomFactor)
+                Functions:logMessage("info", "Out of combat: max zoom factor set to " .. db.minZoomFactor .. " after delay.")
+            end)
+        end
+
+        -- Оновлюємо попередній стан бою
+        uic.wasInCombat = inCombat
     end
 end
+
 
 -- *** Налаштування параметрів камери ***
 function Functions:AdjustCamera()
