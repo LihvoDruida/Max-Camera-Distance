@@ -89,9 +89,17 @@ end
 function Functions:UpdateCameraOnCombat()
     local db = Database.db.profile
     local inCombat = UnitAffectingCombat("player")  
-    
+
+    -- Перевіряємо, чи гравець в данжі або рейді
+    local inInstance, instanceType = IsInInstance()
+
+    -- Встановлюємо inCombat як true, якщо гравець в данжі або рейді
+    if inInstance and (instanceType == "party" or instanceType == "raid") then
+        inCombat = true
+    end
+        
     -- Перевіряємо, чи змінився стан бою
-    if inCombat ~= uic.wasInCombat then
+    if inCombat ~= wasInCombat then
         if inCombat then
             -- Якщо в бою: встановлюємо максимальне наближення
             UpdateCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
@@ -105,7 +113,7 @@ function Functions:UpdateCameraOnCombat()
         end
 
         -- Оновлюємо попередній стан бою
-        uic.wasInCombat = inCombat
+        wasInCombat = inCombat
     end
 end
 
