@@ -1,16 +1,17 @@
 local addonName = "Max_Camera_Distance"
 
 -- *** Функція для безпечного виклику функцій та логування помилок ***
-local function SafeCall(func, name, ...)
+local function SafeCall(func, name, event, ...)
     if func then
         local status, err = pcall(func, ...)
         if not status then
-            print(string.format("%s: Error in %s: %s", addonName, name, err))
+            print(string.format("%s: Error in %s (%s): %s", addonName, name, event or "No Event", err))
         end
     else
-        print(string.format("%s: Missing function: %s", addonName, name))
+        print(string.format("%s: Missing function: %s (%s)", addonName, name, event or "No Event"))
     end
 end
+
 
 -- *** Ініціалізація аддона ***
 local function InitializeAddon()
@@ -29,17 +30,16 @@ local function OnEvent(self, event, ...)
     if event == "ADDON_LOADED" then
         local addon = ...
         if addon == addonName then
-            InitializeAddon()
+            SafeCall(InitializeAddon, "InitializeAddon", event, ...)
             self:UnregisterEvent("ADDON_LOADED")
         end
     elseif event == "CVAR_UPDATE" then
         local cvarName, newValue = ...
-        SafeCall(Functions.OnCVarUpdate, "Functions:OnCVarUpdate", nil, cvarName, newValue)
-    elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD" then
-        SafeCall(Functions.AdjustCamera, "Functions:AdjustCamera")
+        SafeCall(Functions.OnCVarUpdate, "Functions:OnCVarUpdate", event, cvarName, newValue)
+    elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
+        SafeCall(Functions.AdjustCamera, "Functions:AdjustCamera", event)    
     end
 end
-
 -- *** Створення фрейму та реєстрація подій ***
 local frame = CreateFrame("Frame")
 

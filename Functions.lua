@@ -4,10 +4,10 @@ local addonName = "Max_Camera_Distance"
 local settingName = "Max Camera Distance"
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local _, playerClass = UnitClass("player")
-local UnitAffectingCombat = UnitAffectingCombat
+local wasInCombat = UnitAffectingCombat("player")
 
-local lastExecutionTime = 0
-local executionCooldown = 1 -- Cooldown in seconds
+local lastCombatUpdate = 0
+local combatCooldown = 1 -- Cooldown in seconds
 
 -- *** Функція для виведення повідомлень в чат ***
 function Functions:SendMessage(message)
@@ -86,56 +86,56 @@ function Functions:OnCVarUpdate(_, cvarName, value)
 end
 
 -- *** Функція для зміни налаштувань камери залежно від бою ***
-function Functions:UpdateCameraOnCombat()
-    local db = Database.db.profile
-    local inCombat = UnitAffectingCombat("player")  
+function Functions:UpdateCameraOnCombat(event)
+    local inCombat = UnitAffectingCombat("player") or event == "PLAYER_REGEN_DISABLED"
 
-    -- Перевіряємо, чи гравець в данжі або рейді
+    -- Анти-спам перевірка
+    local currentTime = GetTime()
+    if (currentTime - lastCombatUpdate) < combatCooldown then return end  
+    lastCombatUpdate = currentTime
+
+    local db = Database.db.profile
     local inInstance, instanceType = IsInInstance()
 
-    -- Встановлюємо inCombat як true, якщо гравець в данжі або рейді
-    if inInstance and (instanceType == "party" or instanceType == "raid") then
+    -- Включаємо inCombat в PvE і PvP активностях
+    if inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp") then
         inCombat = true
     end
         
     -- Перевіряємо, чи змінився стан бою
     if inCombat ~= wasInCombat then
+        wasInCombat = inCombat  -- Оновлюємо змінну
         if inCombat then
-            -- Якщо в бою: встановлюємо максимальне наближення
             UpdateCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
             Functions:logMessage("info", "In combat: max zoom factor set to " .. db.maxZoomFactor .. ".")
         else
-            -- Якщо поза боєм: встановлюємо мінімальне наближення із затримкою
             C_Timer.After(db.dismountDelay or 0, function()
                 UpdateCVar("cameraDistanceMaxZoomFactor", db.minZoomFactor)
                 Functions:logMessage("info", "Out of combat: max zoom factor set to " .. db.minZoomFactor .. " after delay.")
             end)
         end
-
-        -- Оновлюємо попередній стан бою
-        wasInCombat = inCombat
     end
 end
 
 
 -- *** Налаштування параметрів камери ***
-function Functions:AdjustCamera()
+function Functions:AdjustCamera(event)
     local db = Database.db.profile
-    -- Перевірка, чи можна змінювати налаштування камери
-    if not InCombatLockdown() and IsLoggedIn() then
-        -- Оновлюємо параметри камери
-        if db.autoCombatZoom then
-            Functions:UpdateCameraOnCombat()  -- Використовуємо правильний виклик функції без `self`
-        elseif db.maxZoomFactor then
-            UpdateCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
-            Functions:logMessage("info", "Adjusted max zoom factor to " .. db.maxZoomFactor .. ".")
-        end
-        if db.moveViewDistance then
-            MoveViewOutStart(db.moveViewDistance)
-            Functions:logMessage("info", "Adjusted move view distance to " .. db.moveViewDistance .. ".")
-        end
+
+    -- Завжди перевіряємо бій
+    if db.autoCombatZoom then
+        Functions:UpdateCameraOnCombat(event)  -- Передаємо `event`
+    elseif db.maxZoomFactor then
+        UpdateCVar("cameraDistanceMaxZoomFactor", db.maxZoomFactor)
+        Functions:logMessage("info", "Adjusted max zoom factor to " .. db.maxZoomFactor .. ".")
+    end
+    if db.moveViewDistance then
+        MoveViewOutStart(db.moveViewDistance)
+        Functions:logMessage("info", "Adjusted move view distance to " .. db.moveViewDistance .. ".")
     end
 end
+
+
 
 -- *** Колбеки для зміни профілів ***
 function Functions:OnProfileChanged() Functions:AdjustCamera() end
