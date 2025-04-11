@@ -1,12 +1,17 @@
 package-as: Max_Camera_Distance
-
 enable-nolib-creation: no
 
 manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
-
+ 
 ignore:
   - README.md
+  - .releaserc
   - .vscode
   - .git
+  - screenshots
+  - package.json
+  - package-lock.json
+  - release.sh
+  - cliff.toml

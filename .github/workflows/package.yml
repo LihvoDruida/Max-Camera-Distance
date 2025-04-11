@@ -1,0 +1,89 @@
+name: Continuous Integration
+
+on:
+  push:
+    tags:
+      - "*"
+      - "!**-alpha**"
+      - "!**-beta**"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    outputs:
+      changeLogText: ${{ steps.readChanglog.outputs.text }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags (required for next steps)
+        run: git fetch --tags --force
+
+      - name: Get Latest Tag or use TOC version
+        id: get_latest_tag
+        run: |
+          # Отримуємо версію з .toc
+          TOC_VERSION=$(grep -oP '^## Version: \K.*' Max_Camera_Distance-Mainline.toc | cut -d '.' -f1,2)
+          TOC_FALLBACK="v${TOC_VERSION}"
+
+          TAGS=$(git tag -l)
+          if [ -z "$TAGS" ]; then
+            LATEST_TAG="$TOC_FALLBACK"
+            echo "⚠️ Теги не знайдено, використовується версія з TOC: $LATEST_TAG"
+          else
+            LATEST_TAG=$(git describe --tags --abbrev=0)
+            echo "🧷 Знайдено останній тег: $LATEST_TAG"
+          fi
+
+          echo "FINAL_VERSION=$LATEST_TAG" >> $GITHUB_ENV
+          echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+      - name: Print Debug Info
+        run: |
+          echo "GitHub Ref: ${{ github.ref }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Використана версія: $FINAL_VERSION"
+
+      - name: Update Version in .toc Files
+        run: |
+          find . -type f -name "*.toc" | while read toc_file; do
+            echo "Оновлення версії в файлі: $toc_file"
+            sed -i "s/^## Version: .*/## Version: ${FINAL_VERSION}/" "$toc_file"
+            echo "✅ Версія в $toc_file оновлено до ${FINAL_VERSION}"
+          done
+
+      - name: Generate CHANGELOG.md
+        uses: orhun/git-cliff-action@v2
+        with:
+          config: cliff.toml
+          args: --verbose
+        env:
+          FINAL_VERSION: ${{ env.FINAL_VERSION }}
+          OUTPUT: CHANGELOG.md
+
+      - name: Save Changelog in Variable
+        uses: Stanzilla/cat@2.0.2
+        id: readChanglog
+        with:
+          path: CHANGELOG.md
+
+      - name: Create and Upload Package
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+        uses: BigWigsMods/packager@v2
+
+      - name: Add Summary
+        run: |
+          echo "## ✅ CI завершено успішно" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify Discord on Failure
+        if: failure()
+        uses: nebularg/actions-discord-webhook@v1
+        with:
+          webhook_url: ${{ secrets.WEBHOOK_URL }}
+          status: ${{ job.status }}
