@@ -60,7 +60,7 @@ jobs:
         uses: orhun/git-cliff-action@v2
         with:
           config: cliff.toml
-          args: --verbose
+          args: --tag ${{ env.FINAL_VERSION }} --verbose
         env:
           FINAL_VERSION: ${{ env.FINAL_VERSION }}
           OUTPUT: CHANGELOG.md

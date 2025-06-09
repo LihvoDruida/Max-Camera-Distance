@@ -20,18 +20,18 @@ body = """
 
 {% for group, commits in commits | group_by(attribute="group") %}
     {% if group != "📦 Other Changes" %}
-    ### {{ group | upper_first }}
+### {{ group | upper_first }}
     {% for commit in commits %}
-        - {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }}  
+- {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }}
     {% endfor %}
     {% endif %}
 {% endfor %}
 
-### 📦 Other Changes
 {% for group, commits in commits | group_by(attribute="group") %}
-    {% if group == "📦 Other Changes" %}
+    {% if group == "📦 Other Changes" and commits | length > 0 %}
+### 📦 Other Changes
     {% for commit in commits %}
-        - {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }}  
+- {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }}
     {% endfor %}
     {% endif %}
 {% endfor %}
