@@ -1,6 +1,6 @@
-## X-Flavor: retail
-## X-Expansion: TWW
-## Interface: 110200, 110205
+## X-Flavor: classic
+## X-Expansion: MOP
+## Interface: 50501
 
 ## Title:<|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
 ## Notes: Automatically set the camera to its maximum distance when the addon is loaded.
@@ -10,6 +10,7 @@
 ## DefaultState: Enabled
 ## SavedVariablesPerCharacter: MaxCameraDistanceDB
 ## Category-enUS: Camera
+## X-Development: True
 ## X-Website: https://legacy.curseforge.com/wow/addons/max-camera-distance
 ## X-Curse-Project-ID: 911525
 
