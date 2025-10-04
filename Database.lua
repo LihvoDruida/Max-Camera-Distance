@@ -8,14 +8,17 @@ local yawMoveSpeed = tonumber(GetCVar("cameraYawMoveSpeed")) or 180
 local pitchMoveSpeed = tonumber(GetCVar("cameraPitchMoveSpeed")) or 180
 
 -- *** Numeric Values ***
-Database.DEFAULT_ZOOM_FACTOR = 2.6
-Database.DEFAULT_MIN_ZOOM_FACTOR = 1.9
+Database.DEFAULT_ZOOM_FACTOR = 18
+Database.DEFAULT_MIN_ZOOM_FACTOR = 10
 Database.DEFAULT_YAW_MOVE_SPEED = yawMoveSpeed
 Database.DEFAULT_PITCH_MOVE_SPEED = pitchMoveSpeed
 Database.DISMOUNT_DELAY = 3
 Database.MOVE_VIEW_DISTANCE = 30000
 Database.MIN_PITCH_YAW_MOVE_SPEED = 90
-Database.MAX_ZOOM_FACTOR = 2.6
+Database.MAX_ZOOM_FACTOR  = 39
+if WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE then
+  Database.MAX_ZOOM_FACTOR  = 50
+end
 Database.MAX_PITCH_YAW_MOVE_SPEED = 360
 Database.CAMERA_PITCH_MOVE_SPEED = 180
 

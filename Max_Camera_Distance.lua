@@ -1,23 +1,29 @@
-local addonName = ... -- Назва аддона
+local addonName, _ = ...
 local frame = CreateFrame("Frame")
 
 local ENABLE_LOGGING = false -- true для увімкнення логування
 
 -- *** Безпечний виклик з логуванням помилок ***
 local function SafeCall(func, name, event, ...)
-    if not func then
-        print(string.format("%s: Missing function: %s (%s)", addonName, name, event or "No Event"))
+    if type(func) ~= "function" then
+        print(string.format("%s: Missing function: %s (%s)", addonName, tostring(name), event or "No Event"))
         return
     end
 
-    local status, err = pcall(func, ...)
+    local status = pcall(func, ...) -- Повертаємо усі значення, отримані з func
     if not status then
-        print(string.format("%s: Error in %s (%s): %s", addonName, name, event or "No Event", err))
+        local err = select(1, ...) -- Помилка знаходиться в першому поверненому значенні
+        print(string.format("%s: Error in %s (%s): %s", addonName, tostring(name), event or "No Event", tostring(err)))
+        return false -- Повертаємо false при помилці
     end
+
+    return ... -- Повертаємо результат виклику
 end
 
 -- *** Перевірка наявності потрібних функцій ***
+-- (Логіка правильна, залишаємо без змін)
 local function CheckFunctionsAvailable(required)
+    -- Functions повинен бути глобальним або визначеним тут (у цьому прикладі вважаємо, що він глобальний після завантаження іншого файлу)
     if type(Functions) ~= "table" then
         print(string.format("%s: Error: Functions table is missing.", addonName))
         return false
@@ -33,8 +39,23 @@ local function CheckFunctionsAvailable(required)
     return true
 end
 
+-- *** Логування подій ***
+local function LogEvent(event, ...)
+    if not ENABLE_LOGGING then return end
+    local args = {...}
+    local strArgs = {}
+    for i = 1, #args do
+        -- Перетворюємо аргументи в рядок, безпечно обробляючи nil
+        strArgs[i] = tostring(args[i] or "nil")
+    end
+    print(string.format("%s: Event %s triggered with args: %s", addonName, event, table.concat(strArgs, ", ")))
+end
+
 -- *** Ініціалізація аддона ***
 local function InitializeAddon()
+    -- Якщо Functions ще не завантажено, CheckFunctionsAvailable не спрацює правильно.
+    -- У WoW аддонах, зазвичай, залежні файли завантажуються *перед* викликом ADDON_LOADED.
+    -- Якщо Functions визначено в іншому файлі, який завантажується перед цим, це окей.
     if not CheckFunctionsAvailable({
         "AdjustCamera",
         "OnCVarUpdate",
@@ -42,22 +63,20 @@ local function InitializeAddon()
         "SlashCmdHandler"
     }) then return end
 
-    SafeCall(Database and Database.InitDB, "Database:InitDB")
-    SafeCall(Config and Config.SetupOptions, "Config:SetupOptions")
+    if Database and type(Database.InitDB) == "function" then
+        SafeCall(Database.InitDB, "Database:InitDB")
+    end
+    if Config and type(Config.SetupOptions) == "function" then
+        SafeCall(Config.SetupOptions, "Config:SetupOptions")
+    end
 
+    -- Не реєструємо FRAME:UnregisterEvent("ADDON_LOADED") тут, бо ми можемо
+    -- мати багато аддонів, і цей ADDON_LOADED викликається тільки для нашого.
+    -- Якщо ми тут, наш аддон вже завантажено.
+    -- Залишаємо реєстрацію на ADDON_LOADED, щоб спрацювало один раз.
     frame:UnregisterEvent("ADDON_LOADED")
 end
 
--- *** Логування подій ***
-local function LogEvent(event, ...)
-    if not ENABLE_LOGGING then return end
-    local args = {...}
-    for i = 1, #args do
-        args[i] = tostring(args[i]) -- перетворення в рядок
-    end
-    local argsStr = table.concat(args, " ")
-    print(string.format("%s: Event %s triggered with arguments: %s", addonName, event, argsStr))
-end
 
 -- *** Таблиця обробників подій ***
 local eventHandlers = {
@@ -68,19 +87,20 @@ local eventHandlers = {
     end,
 
     PLAYER_ENTERING_WORLD = function(event)
-        SafeCall(Functions.AdjustCamera, "Functions:AdjustCamera", event)
+        SafeCall(Functions and Functions.AdjustCamera, "Functions:AdjustCamera", event, event)
     end,
 
     PLAYER_REGEN_DISABLED = function(event)
-        SafeCall(Functions.UpdateCameraOnCombat, "Functions:UpdateCameraOnCombat", event)
+        SafeCall(Functions and Functions.UpdateCameraOnCombat, "Functions:UpdateCameraOnCombat", event, event)
     end,
 
     PLAYER_REGEN_ENABLED = function(event)
-        SafeCall(Functions.UpdateCameraOnCombat, "Functions:UpdateCameraOnCombat", event)
+        SafeCall(Functions and Functions.UpdateCameraOnCombat, "Functions:UpdateCameraOnCombat", event, event)
     end,
 
-    CVAR_UPDATE = function(event, cvarName, newValue)
-        SafeCall(Functions.OnCVarUpdate, "Functions:OnCVarUpdate", event, cvarName, newValue)
+    -- CVAR_UPDATE отримує cvarName як перший аргумент після event
+    CVAR_UPDATE = function(event, cvarName, ...)
+        SafeCall(Functions and Functions.OnCVarUpdate, "Functions:OnCVarUpdate", event, event, cvarName, ...)
     end,
 }
 
@@ -89,7 +109,8 @@ local function OnEvent(self, event, ...)
     LogEvent(event, ...)
     local handler = eventHandlers[event]
     if handler then
-        handler(event, ...)
+        -- Передаємо усі аргументи далі
+        SafeCall(handler, "Event Handler: " .. event, event, event, ...)
     end
 end
 
@@ -105,5 +126,6 @@ frame:SetScript("OnEvent", OnEvent)
 -- *** Slash-команда ***
 SLASH_MAXCAMDIST1 = "/mcd"
 SlashCmdList["MAXCAMDIST"] = function(msg)
-    SafeCall(Functions and Functions.SlashCmdHandler, "Functions:SlashCmdHandler", nil, msg)
+    -- Передаємо nil як event, щоб SafeCall не виводив зайвої інформації
+    SafeCall(Functions and Functions.SlashCmdHandler, "Functions:SlashCmdHandler", "SlashCmd", msg)
 end
