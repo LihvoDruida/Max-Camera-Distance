@@ -1,39 +1,28 @@
-# git-cliff ~ default configuration file
+# git-cliff configuration file
 # https://git-cliff.org/docs/configuration
-#
-# Lines starting with "#" are comments.
-# Configuration options are organized into tables and keys.
-# See documentation for more information on available options.
 
 [changelog]
-vers = "$FINAL_VERSION"
+# Використовуємо змінну оточення або дефолт
 header = """
 # Changelog\n
 All notable changes to this project will be documented in this file.\n
 """
+
+# Оптимізований шаблон
 body = """
-{% if version %}
-## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}  
-{% else %}  
-## [{{ vers | trim_start_matches(pat="v") }}]  - {{ timestamp | date(format="%Y-%m-%d")}}  
-{% endif %}  
+{% if version -%}
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+    ## [Unreleased]
+{% endif -%}
 
 {% for group, commits in commits | group_by(attribute="group") %}
-    {% if group != "📦 Other Changes" %}
-### {{ group | upper_first }}
+    ### {{ group | upper_first }}
     {% for commit in commits %}
-- {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }}
+        - {% if commit.breaking %}[**breaking**] {% endif -%}
+          {{ commit.message | upper_first }} \
+          ([{{ commit.id | truncate(length=7, end="") }}](<REPO_URL>/commit/{{ commit.id }})) - {{ commit.author.name }}
     {% endfor %}
-    {% endif %}
-{% endfor %}
-
-{% for group, commits in commits | group_by(attribute="group") %}
-    {% if group == "📦 Other Changes" and commits | length > 0 %}
-### 📦 Other Changes
-    {% for commit in commits %}
-- {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }}
-    {% endfor %}
-    {% endif %}
 {% endfor %}
 """
 trim = true
@@ -43,30 +32,32 @@ conventional_commits = true
 filter_unconventional = false
 split_commits = false
 
+# Обробка тексту перед парсингом
 commit_preprocessors = [
-  # твій кастомний патерн сюди за потреби
+  { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](<REPO_URL>/issues/${2}))" }, # Заміна (#123) на посилання
+  { pattern = " +$", replace = "" } # Видалення пробілів в кінці
 ]
 
+# Порядок тут визначає порядок груп у changelog
 commit_parsers = [
-  { message = "^feat",     group = "🦸‍♂️ New Features" },
-  { message = "^fix",      group = "⚔️ Bug Fixes" },
-  { message = "^doc",      group = "📜 Documentation", skip = true },
-  { message = "^perf",     group = "💨 Performance Tweaks" },
-  { message = "^refactor", group = "🛠️ Code Refinements", skip = true },
-  { message = "^test",     group = "🎮 Testing & Validation" },
-  { message = "^chore",    group = "🔧 Miscellaneous Tasks", skip = true },
-  { message = "^ci",       group = "🛡️ CI/Build", skip = true },
-  { message = "^build",    group = "🛠️ Build System", skip = true },
-  { body = ".*security",   group = "🕵️‍♂️ Security Fixes" },
-
-  # 🔽 Додано: Підтримка звичайних комітів
-  { message = ".*", group = "📦 Other Changes" }
+  { message = "^feat", group = "🦸‍♂️ New Features" },
+  { message = "^fix", group = "⚔️ Bug Fixes" },
+  { message = "^perf", group = "💨 Performance Tweaks" },
+  { message = "^doc", group = "📜 Documentation", skip = true },
+  { message = "^refactor", group = "🛠️ Code Refinements" },
+  { message = "^test", group = "🎮 Testing & Validation" },
+  { message = "^ci", group = "🛡️ CI/Build", skip = true },
+  { message = "^chore", group = "🔧 Miscellaneous Tasks" },
+  { body = ".*security", group = "🕵️‍♂️ Security Fixes" },
+  { message = "^revert", group = "⏪ Revert" },
+  # Цей парсер ловить все інше і ставить в кінець
+  { message = ".*", group = "📦 Other Changes" },
 ]
 
 protect_breaking_commits = false
 filter_commits = false
-tag_pattern = "v[0-9]*"
-ignore_tags = "^v.*-alpha$"
+tag_pattern = "v[0-9].*"
+ignore_tags = "rc|beta|alpha" # Ігнорувати пре-релізи, якщо треба
 topo_order = false
-sort_commits = "oldest"
-limit_commits = 50
+sort_commits = "newest" # Зазвичай нові коміти показують зверху
+# limit_commits = 50 # ВИДАЛЕНО: Це може обрізати важливі зміни у великих релізах
