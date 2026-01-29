@@ -1,107 +1,121 @@
--- Створюємо глобальну таблицю Database
-Database = {}
--- Імплементація AceDB
+local addonName, ns = ...
+ns.Database = {} 
+local Database = ns.Database
+
 local AceDB = LibStub("AceDB-3.0")
+local C_CVar = C_CVar 
 
--- Ініціалізація стандартних значень
-local yawMoveSpeed = tonumber(GetCVar("cameraYawMoveSpeed")) or 180
-local pitchMoveSpeed = tonumber(GetCVar("cameraPitchMoveSpeed")) or 180
-
--- *** Numeric Values ***
-Database.DEFAULT_ZOOM_FACTOR = 18
-Database.DEFAULT_MIN_ZOOM_FACTOR = 10
-Database.DEFAULT_YAW_MOVE_SPEED = yawMoveSpeed
-Database.DEFAULT_PITCH_MOVE_SPEED = pitchMoveSpeed
-Database.DISMOUNT_DELAY = 3
-Database.MOVE_VIEW_DISTANCE = 30000
-Database.MIN_PITCH_YAW_MOVE_SPEED = 90
-Database.MAX_ZOOM_FACTOR  = 39
-if WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE then
-  Database.MAX_ZOOM_FACTOR  = 50
+-- Отримуємо поточні значення безпечно
+local function GetCVarDefault(name, default)
+    local success, val = pcall(C_CVar.GetCVar, name)
+    if success and val then
+        return tonumber(val) or default
+    end
+    return default
 end
-Database.MAX_PITCH_YAW_MOVE_SPEED = 360
-Database.CAMERA_PITCH_MOVE_SPEED = 180
 
--- *** Boolean Values ***
-Database.REDUCE_UNEXPECTED_MOVEMENT = false
-Database.RESAMPLE_ALWAYS_SHARPEN = false
-Database.CAMERA_INDIRECT_VISIBILITY = true
-Database.DEFAULT_ZOOM_COMBAT = false
-Database.ENABLE_DEBUG_LOGGING = false
+local yawMoveSpeed = GetCVarDefault("cameraYawMoveSpeed", 180)
+local pitchMoveSpeed = GetCVarDefault("cameraPitchMoveSpeed", 180)
 
--- *** Tables ***
-Database.DEFAULT_DEBUG_LEVEL = {
-    ["error"] = true,
-    ["warning"] = true,
-    ["info"] = false,
-    ["debug"] = false
+-- *** КОНСТАНТИ (YARDS) ***
+-- Retail: 39 ярдів = 2.6 factor (39 / 2.6 = 15)
+-- Classic: 50 ярдів = 4.0 factor (50 / 4.0 = 12.5)
+local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+local MAX_YARDS = IS_RETAIL and 39 or 50
+local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
+-- 1.9 (Blizzard Default) * 15 = 28.5 Yards
+local BLIZZARD_DEFAULT_YARDS = 28.5
+
+Database.DEFAULTS = {
+    -- Тепер тут зберігаємо ЯРДИ
+    ZOOM_DISTANCE = MAX_YARDS,
+    -- "Мінімальна" дистанція для Smart Zoom (наприклад, коли виходиш з бою).
+    -- Встановили 28.5 (стандарт гри), щоб поза боєм камера була звичною.
+    MIN_ZOOM_DISTANCE = BLIZZARD_DEFAULT_YARDS,
+    
+    YAW_MOVE_SPEED = yawMoveSpeed,
+    PITCH_MOVE_SPEED = pitchMoveSpeed,
+    DISMOUNT_DELAY = 0,
+    MOVE_VIEW_DISTANCE = 30000,
+
+    -- Константи для слайдерів у Config
+    MAX_POSSIBLE_DISTANCE = MAX_YARDS,
+    CONVERSION_RATIO = CONVERSION_RATIO,
+
+    -- Boolean
+    REDUCE_UNEXPECTED_MOVEMENT = false,
+    CAMERA_INDIRECT_VISIBILITY = true,
+    AUTO_COMBAT_ZOOM = false,
+    ENABLE_DEBUG_LOGGING = false
 }
 
--- Ініціалізація бази даних
+Database.DEFAULT_DEBUG_LEVEL = {
+    ["error"] = true, ["warning"] = true, ["info"] = false, ["debug"] = false
+}
+
 function Database:InitDB()
-    -- Визначаємо стандартний профіль
+    -- Запобіжник self
+    if not self or type(self) ~= "table" then self = Database end
+
     local defaultProfile = {
-        maxZoomFactor = Database.DEFAULT_ZOOM_FACTOR,
-        minZoomFactor = Database.DEFAULT_MIN_ZOOM_FACTOR,
-        moveViewDistance = Database.MOVE_VIEW_DISTANCE,
-        cameraYawMoveSpeed = Database.DEFAULT_YAW_MOVE_SPEED,
-        cameraPitchMoveSpeed = Database.DEFAULT_PITCH_MOVE_SPEED,
-        dismountDelay = Database.DISMOUNT_DELAY,
+        maxZoomFactor = Database.DEFAULTS.ZOOM_DISTANCE, -- Зберігаємо 39 або 50
+        minZoomFactor = Database.DEFAULTS.MIN_ZOOM_DISTANCE,
+        
+        moveViewDistance = Database.DEFAULTS.MOVE_VIEW_DISTANCE,
+        cameraYawMoveSpeed = Database.DEFAULTS.YAW_MOVE_SPEED,
+        cameraPitchMoveSpeed = Database.DEFAULTS.PITCH_MOVE_SPEED,
+        dismountDelay = Database.DEFAULTS.DISMOUNT_DELAY,
 
-        autoCombatZoom = Database.DEFAULT_ZOOM_COMBAT,
-        reduceUnexpectedMovement = Database.REDUCE_UNEXPECTED_MOVEMENT,
-        resampleAlwaysSharpen = Database.RESAMPLE_ALWAYS_SHARPEN,
-        cameraIndirectVisibility = Database.CAMERA_INDIRECT_VISIBILITY,
-        enableDebugLogging = Database.ENABLE_DEBUG_LOGGING,
-
-        debugLevel = Database.DEFAULT_DEBUG_LEVEL
+        autoCombatZoom = Database.DEFAULTS.AUTO_COMBAT_ZOOM,
+        reduceUnexpectedMovement = Database.DEFAULTS.REDUCE_UNEXPECTED_MOVEMENT,
+        cameraIndirectVisibility = Database.DEFAULTS.CAMERA_INDIRECT_VISIBILITY,
+        
+        enableDebugLogging = Database.DEFAULTS.ENABLE_DEBUG_LOGGING,
+        debugLevel = CopyTable(Database.DEFAULT_DEBUG_LEVEL)
     }
 
-    -- Створюємо або завантажуємо базу даних
-    Database.db = AceDB:New("MaxCameraDistanceDB", { profile = defaultProfile }, true)
-    if not Database.db then
-        print("Max_Camera_Distance: Database initialization failed.")
+    self.db = AceDB:New("MaxCameraDistanceDB", { profile = defaultProfile }, true)
+    
+    if not self.db then
+        print(addonName .. ": Database initialization failed.")
         return
     end
 
-    -- Реєстрація колбеків для зміни профілів
-    Database:RegisterProfileCallbacks()
+    self:RegisterProfileCallbacks()
 end
 
--- Реєстрація колбеків для зміни профілів
 function Database:RegisterProfileCallbacks()
-    Database.db:RegisterCallback("OnProfileChanged", function()
-        print("Profile changed. Updating settings...")
-        Database:UpdateCameraSettings()
-    end)
+    if not self or not self.db then return end
+    
+    local updateFunc = function(event)
+        Database:OnProfileUpdate(event)
+    end
 
-    Database.db:RegisterCallback("OnProfileReset", function()
-        print("Profile reset to defaults.")
-        Database:UpdateCameraSettings()
-    end)
+    self.db:RegisterCallback("OnProfileChanged", updateFunc)
+    self.db:RegisterCallback("OnProfileCopied", updateFunc)
+    self.db:RegisterCallback("OnProfileReset", updateFunc)
 end
 
--- Оновлення налаштувань камери
-function Database:UpdateCameraSettings()
-    -- Оновлюємо налаштування камери з профілю або використовуємо значення за замовчуванням
-    SetCVar("cameraYawMoveSpeed", self.db.profile.cameraYawMoveSpeed or defaultValues.DEFAULT_YAW_MOVE_SPEED)
-    SetCVar("cameraPitchMoveSpeed", self.db.profile.cameraPitchMoveSpeed or defaultValues.DEFAULT_PITCH_MOVE_SPEED)
-    print("Camera settings updated.")
-end
-
--- Функції доступу до значень профілю
-function Database:SetZoomFactor(value)
-    self.db.profile.maxZoomFactor = value
-end
-
-function Database:GetZoomFactor()
-    return self.db.profile.maxZoomFactor or defaultValues.DEFAULT_ZOOM_FACTOR
-end
-
--- Логи та налагодження
-function Database:Log(level, message)
-    if self.db.profile.debugLevel[level] then
-        print("Max_Camera_Distance [" .. level:upper() .. "]: " .. message)
+function Database:OnProfileUpdate(reason)
+    if ns.Functions and ns.Functions.logMessage then
+        ns.Functions:logMessage("info", reason .. ". Re-applying settings...")
+    end
+    if ns.Functions and ns.Functions.AdjustCamera then
+        ns.Functions:AdjustCamera()
     end
 end
 
+-- *** Helper: Отримати значення для CVar ***
+-- Ця функція перетворює ваші ярди (39) у фактор CVar (2.6)
+function Database:GetCVarFactor(yards)
+    return yards / Database.DEFAULTS.CONVERSION_RATIO
+end
+
+-- *** Setters/Getters ***
+function Database:SetZoomFactor(yards)
+    local dbObj = (self and self.db) and self or Database
+    if dbObj.db and dbObj.db.profile then
+        dbObj.db.profile.maxZoomFactor = tonumber(yards) or Database.DEFAULTS.ZOOM_DISTANCE
+        if ns.Functions and ns.Functions.AdjustCamera then ns.Functions:AdjustCamera() end
+    end
+end
