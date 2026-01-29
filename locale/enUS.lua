@@ -1,58 +1,75 @@
 local addonName = "Max_Camera_Distance"
 local L = LibStub("AceLocale-3.0"):NewLocale(addonName, "enUS", true, true)
 
+if not L then return end
+
+-- *** General Settings ***
 L["GENERAL_SETTINGS"] = "General Settings"
-L["MAX_ZOOM_FACTOR"] = "Max Zoom Factor"
-L["MAX_ZOOM_FACTOR_DESC"] = "Set the maximum zoom factor."
-L["MOVE_VIEW_DISTANCE"] = "Move View Distance"
-L["MOVE_VIEW_DISTANCE_DESC"] = "Set the move view distance."
-L["YAW_MOVE_SPEED"] = "Yaw Move Speed"
-L["YAW_MOVE_SPEED_DESC"] = "Adjust the speed of yaw (horizontal) camera movement."
-L["PITCH_MOVE_SPEED"] = "Pitch Move Speed"
-L["PITCH_MOVE_SPEED_DESC"] = "Adjust the speed of pitch (vertical) camera movement."
 
-L["COMBAT_SETTINGS"] = "Combat Settings"
-L["COMBAT_SETTINGS_WARNING"] = "|cff0070deSettings in this section will automatically adjust camera distance based on combat status. Max zoom is applied during combat, and min zoom is restored shortly after exiting combat.|r"
-L["DISMOUNT_DELAY"] = "Camera Restore Delay"
-L["DISMOUNT_DELAY_DESC"] =
-"Set the delay time before the camera zoom level is restored after dismounting (3-10 seconds)."
-L["AUTO_ZOOM_COMBAT"] = "Auto Zoom in Combat"
-L["AUTO_ZOOM_COMBAT_DESC"] = "Enable to automatically adjust camera zoom when your character is in combat."
-L["MAX_COMBAT_ZOOM_FACTOR"] = "Maximum Combat Zoom Factor"
-L["MAX_COMBAT_ZOOM_FACTOR_DESC"] = "The maximum camera zoom factor during combat."
-L["MIN_COMBAT_ZOOM_FACTOR"] = "Minimum Combat Zoom Factor"
-L["MIN_COMBAT_ZOOM_FACTOR_DESC"] = "The minimum camera zoom factor outside of combat."
+L["MAX_ZOOM_FACTOR"] = "Max Camera Distance"
+L["MAX_ZOOM_FACTOR_DESC"] = "Set the maximum allowed camera distance (in yards)."
 
+L["MOVE_VIEW_DISTANCE"] = "Zoom Speed"
+L["MOVE_VIEW_DISTANCE_DESC"] = "Adjusts how fast the camera zooms in and out."
+
+L["YAW_MOVE_SPEED"] = "Horizontal Rotation Speed"
+L["YAW_MOVE_SPEED_DESC"] = "Adjust the speed of the camera's horizontal movement (Yaw)."
+
+L["PITCH_MOVE_SPEED"] = "Vertical Rotation Speed"
+L["PITCH_MOVE_SPEED_DESC"] = "Adjust the speed of the camera's vertical movement (Pitch)."
+
+-- *** Combat Settings ***
+L["COMBAT_SETTINGS"] = "Smart Combat Zoom"
+L["COMBAT_SETTINGS_WARNING"] = "|cff0070deThis section allows the camera to automatically change distance depending on whether you are in combat or not.|r"
+
+L["AUTO_ZOOM_COMBAT"] = "Enable Smart Combat Zoom"
+L["AUTO_ZOOM_COMBAT_DESC"] = "If enabled, the camera will automatically zoom out when entering combat and zoom in when leaving combat."
+
+L["MAX_COMBAT_ZOOM_FACTOR"] = "Combat Distance"
+L["MAX_COMBAT_ZOOM_FACTOR_DESC"] = "The target camera distance when you are IN combat."
+
+L["MIN_COMBAT_ZOOM_FACTOR"] = "Non-Combat Distance"
+L["MIN_COMBAT_ZOOM_FACTOR_DESC"] = "The target camera distance when you are OUT of combat (Peace mode)."
+
+L["DISMOUNT_DELAY"] = "Exit Combat Delay"
+L["DISMOUNT_DELAY_DESC"] = "Time to wait (in seconds) after leaving combat before restoring the Non-Combat camera distance."
+
+-- *** Advanced Settings ***
 L["ADVANCED_SETTINGS"] = "Advanced Settings"
-L["REDUCE_UNEXPECTED_MOVEMENT"] = "Reduce Unexpected Camera Movement"
-L["REDUCE_UNEXPECTED_MOVEMENT_DESC"] = "Enable this option to reduce unexpected camera movements during gameplay."
-L["RESAMPLE_ALWAYS_SHARPEN"] = "Resample Always Sharpen"
-L["RESAMPLE_ALWAYS_SHARPEN_DESC"] = "Run sharpness pass, even if not using AMD FSR Upscale [0,1]"
-L["INDIRECT_VISIBILITY"] = "Camera Indirect Visibility"
-L["INDIRECT_VISIBILITY_DESC"] =
-"Enable or disable camera collision settings that control how the camera interacts with the environment."
 
-L["SETTINGS_CHANGED"] = "Camera settings have been changed."
-L["SETTINGS_SET_TO_MAX"] = "Camera settings set to maximum values."
-L["SETTINGS_SET_TO_AVERAGE"] = "Camera settings set to average values."
-L["SETTINGS_SET_TO_MIN"] = "Camera settings set to minimum values."
-L["SETTINGS_SET_TO_DEFAULT"] = "Camera settings set to default values."
+L["REDUCE_UNEXPECTED_MOVEMENT"] = "Reduce Unexpected Movement"
+L["REDUCE_UNEXPECTED_MOVEMENT_DESC"] = "Reduces camera jumps when the camera collides with terrain or objects."
 
-L["WARNING_TEXT"] =
-"This addon automatically adjusts the maximum camera distance to improve navigation during boss fights, ensuring a seamless gaming experience."
+L["RESAMPLE_ALWAYS_SHARPEN"] = "Always Sharpen"
+L["RESAMPLE_ALWAYS_SHARPEN_DESC"] = "Forces the game to apply a sharpness filter, even if AMD FSR Upscale is disabled."
+
+L["INDIRECT_VISIBILITY"] = "Terrain Collision"
+L["INDIRECT_VISIBILITY_DESC"] = "Controls how the camera interacts with the environment (reduces clipping through objects)."
+
+-- *** Messages & UI ***
+L["SETTINGS_CHANGED"] = "Camera settings have been updated."
+L["SETTINGS_SET_TO_MAX"] = "Camera settings set to maximum."
+L["SETTINGS_SET_TO_AVERAGE"] = "Camera settings set to average."
+L["SETTINGS_SET_TO_MIN"] = "Camera settings set to minimum."
+L["SETTINGS_SET_TO_DEFAULT"] = "Camera settings reset to defaults."
+L["SETTINGS_RESET"] = "Profile has been reset to default values."
+
+L["WARNING_TEXT"] = "This addon extends the camera distance limit to improve visibility during raids, dungeons, and PvP."
+
 L["RELOAD_BUTTON"] = "Reload UI"
-L["RELOAD_BUTTON_DESC"] = "Click this button to reload the user interface."
-L["RESET_BUTTON"] = "Reset Settings"
-L["RESET_BUTTON_DESC"] = "Click this button to reset all settings to their default values."
-L["SETTINGS_RESET"] = "Settings have been reset to default."
+L["RELOAD_BUTTON_DESC"] = "Reloads the user interface to apply critical changes."
 
--- Add the new locales for debug settings
+L["RESET_BUTTON"] = "Reset Defaults"
+L["RESET_BUTTON_DESC"] = "Resets all settings in this profile to their default values."
+
+-- *** Debug Settings ***
 L["DEBUG_SETTINGS"] = "Debug Settings"
-L["ENABLE_DEBUG_LOGGING"] = "Enable Debug Logging"
-L["ENABLE_DEBUG_LOGGING_DESC"] = "Toggle to enable or disable debug logging."
-L["DEBUG_LEVEL"] = "Debug Level"  -- Title for the debug level setting
-L["DEBUG_LEVEL_DESC"] = "Select which debug levels should be enabled for logging."  -- Description of the debug level setting
-L["DEBUG_LEVEL_ERROR"] = "Error"  -- Option for "Error" debug level
-L["DEBUG_LEVEL_WARNING"] = "Warning"  -- Option for "Warning" debug level
-L["DEBUG_LEVEL_INFO"] = "Info"  -- Option for "Info" debug level
-L["DEBUG_LEVEL_DEBUG"] = "Debug"  -- Option for "Debug" debug level
+L["ENABLE_DEBUG_LOGGING"] = "Enable Logging"
+L["ENABLE_DEBUG_LOGGING_DESC"] = "Prints debug information to the chat window."
+
+L["DEBUG_LEVEL"] = "Debug Level"
+L["DEBUG_LEVEL_DESC"] = "Select the verbosity of the logs."
+L["DEBUG_LEVEL_ERROR"] = "Error"
+L["DEBUG_LEVEL_WARNING"] = "Warning"
+L["DEBUG_LEVEL_INFO"] = "Info"
+L["DEBUG_LEVEL_DEBUG"] = "Verbose"
