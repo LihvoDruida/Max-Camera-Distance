@@ -13,7 +13,7 @@ local GetTime = GetTime
 local IsMounted = IsMounted
 local GetShapeshiftForm = GetShapeshiftForm
 local GetShapeshiftFormInfo = GetShapeshiftFormInfo
-local UnitBuff = UnitBuff
+-- UnitBuff видалено з локальних змінних, бо його немає в Retail
 
 -- *** КОНСТАНТИ КОНВЕРТАЦІЇ ***
 local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
@@ -91,63 +91,73 @@ local function UpdateCVar(key, value)
     end
 end
 
--- *** IsInTravelForm ***
 local function IsInTravelForm()
-    if IsMounted() then return true end
-    
+    -- 1. Звичайний маунт
+    if IsMounted() then
+        return true
+    end
+
+    -- 2. Shapeshift-форми (друїд, шаман, монах)
     local formIndex = GetShapeshiftForm()
     if formIndex and formIndex > 0 then
         local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
-        if spellID and TRAVEL_FORM_IDS[spellID] then return true end
+        if spellID and TRAVEL_FORM_IDS[spellID] then
+            return true
+        end
     end
-    
+
+    -- 3. Бафи / аури
     if IS_RETAIL then
-        for i = 1, 40 do
-            local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
-            if not aura then break end
-            if TRAVEL_BUFF_IDS[aura.spellId] then return true end
+        -- ✅ Retail-safe метод (10.x / 11.x)
+        -- Без unitID, без перебору, без private aura проблем
+        for spellID in pairs(TRAVEL_BUFF_IDS) do
+            if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then
+                return true
+            end
         end
     else
-        for i = 1, 40 do
-            local _, _, _, _, _, _, _, _, _, spellID = UnitBuff("player", i)
-            if not spellID then break end
-            if TRAVEL_BUFF_IDS[spellID] then return true end
+        -- ✅ Classic метод
+        local UnitBuff = _G.UnitBuff
+        if UnitBuff then
+            for i = 1, 40 do
+                local _, _, _, _, _, _, _, _, _, spellID = UnitBuff("player", i)
+                if not spellID then break end
+                if TRAVEL_BUFF_IDS[spellID] then
+                    return true
+                end
+            end
         end
     end
 
     return false
 end
 
+
 -- *** UpdateSmartZoomState ***
 function Functions:UpdateSmartZoomState(event)
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
     
-    -- Якщо функції вимкнені, просто виходимо
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
-    -- Якщо це ручний виклик (зміна налаштувань), скидаємо поточний стан, щоб змусити оновлення
     local isManual = (event == "manual_update")
     
     if updateTimerHandle then C_Timer.CancelTimer(updateTimerHandle) end
 
     updateTimerHandle = C_Timer.After(0.05, function()
         local newState = "none"
-        local targetYards = db.minZoomFactor or 28.5 -- За замовчуванням: Normal
+        local targetYards = db.minZoomFactor or 28.5
         
         local inCombat = UnitAffectingCombat("player")
         local inInstance, instanceType = IsInInstance()
         local forceCombatMode = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
 
-        -- 1. Бій
         if db.autoCombatZoom and (inCombat or forceCombatMode) then
             newState = "combat"
-            targetYards = db.maxZoomFactor -- Combat Max
-        -- 2. Маунт
+            targetYards = db.maxZoomFactor
         elseif db.autoMountZoom and IsInTravelForm() then
             newState = "mount"
             targetYards = db.mountZoomFactor or 39
-        -- 3. Спокій (вже встановлено вище)
         else
             newState = "none"
         end
@@ -155,7 +165,6 @@ function Functions:UpdateSmartZoomState(event)
         if not isManual and newState == currentZoomState then return end
 
         local isRestoring = (newState == "none")
-        -- Якщо ручне оновлення - затримка 0
         local delay = (not isManual and isRestoring) and (db.dismountDelay or 0) or 0
 
         currentZoomState = newState
@@ -169,7 +178,6 @@ function Functions:UpdateSmartZoomState(event)
             elseif db.autoMountZoom and reCheckMount then validatedState = "mount"
             end
 
-            -- Якщо стан підтвердився АБО це ручне оновлення (ми довіряємо початковій перевірці)
             if validatedState == newState or isManual then
                  local requiredLimit = math.max(targetYards, db.maxZoomFactor)
                  local limitFactor = requiredLimit / CONVERSION_RATIO
@@ -193,24 +201,18 @@ function Functions:AdjustCamera()
     local db = ns.Database.db.profile
     local LibCamera = LibStub("LibCamera-1.0", true)
 
-    -- 1. Завжди ставимо ліміт
     local limitFactor = db.maxZoomFactor / CONVERSION_RATIO
     UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
 
-    -- 2. Спроба "Розумного зуму"
-    -- Якщо розумні функції увімкнені, вони самі вирішать, куди зумити
     if db.autoCombatZoom or db.autoMountZoom then
         Functions:UpdateSmartZoomState("manual_update")
     else
-        -- !!! ВИПРАВЛЕНО: Якщо розумні функції ВИМКНЕНІ, просто застосовуємо Max Zoom
-        -- Це потрібно, щоб працював звичайний слайдер в меню
         if LibCamera then
             LibCamera:SetZoomUsingCVar(db.maxZoomFactor, db.zoomTransitionTime or 0.5)
         end
         Functions:logMessage("info", "Smart zoom disabled, applying max distance.")
     end
 
-    -- 3. Інші налаштування
     UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
     UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
@@ -220,7 +222,6 @@ function Functions:AdjustCamera()
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
 end
 
--- *** Обробка CVAR_UPDATE ***
 function Functions:OnCVarUpdate(_, cvarName, value)
     if isInternalUpdate then return end
     if not (ns.Database and ns.Database.db) then return end
@@ -254,7 +255,6 @@ end
 function Functions:ClearAllQuestTracking()
     local numWatches = C_QuestLog.GetNumQuestWatches()
     if numWatches == 0 then
-        -- ВИКОРИСТОВУЄМО ЛОКАЛІЗАЦІЮ
         Functions:SendMessage(L["QUEST_TRACKER_EMPTY"] or "Quest tracker is already empty.")
         return
     end
@@ -264,11 +264,9 @@ function Functions:ClearAllQuestTracking()
             C_QuestLog.RemoveQuestWatch(questID)
         end
     end
-    -- ВИКОРИСТОВУЄМО ЛОКАЛІЗАЦІЮ
     Functions:SendMessage(string.format(L["QUEST_TRACKER_CLEARED"] or "Stopped tracking %d quests.", numWatches))
 end
 
--- *** Slash-команди ***
 function Functions:SlashCmdHandler(msg)
     local command = strlower(msg or "")
     local settings = { max = IS_RETAIL and 39 or 50, avg = 20, min = 5 }
@@ -284,7 +282,6 @@ function Functions:SlashCmdHandler(msg)
         local yards = settings[command]
         db.maxZoomFactor = yards
         Functions:AdjustCamera()
-        -- ВИКОРИСТОВУЄМО ЛОКАЛІЗАЦІЮ
         local msgFormat = L["ZOOM_SET_MESSAGE"] or "Zoom set to %s (%.1f yards)"
         Functions:SendMessage(string.format(msgFormat, command, yards))
     elseif command == "config" then
