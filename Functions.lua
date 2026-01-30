@@ -13,6 +13,7 @@ local GetTime = GetTime
 local IsMounted = IsMounted
 local GetShapeshiftForm = GetShapeshiftForm
 local GetShapeshiftFormInfo = GetShapeshiftFormInfo
+local UnitBuff = UnitBuff
 
 -- *** КОНСТАНТИ КОНВЕРТАЦІЇ ***
 local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
@@ -24,8 +25,48 @@ local lastStateUpdate = 0
 local stateCooldown = 0.5 
 local SETTING_CATEGORY_NAME = "Max Camera Distance"
 
--- !!! ВАЖЛИВО: Прапорець для запобігання конфліктам !!!
 local isInternalUpdate = false
+
+-- *** СПИСКИ ФОРМ ТА БАФІВ (LOOKUP TABLES) ***
+
+-- 1. Форми (Shapeshift Forms) - перевіряються через GetShapeshiftForm
+local TRAVEL_FORM_IDS = {
+    -- === DRUID ===
+    [783]    = true, -- Travel Form (Retail & Classic Base)
+    [1066]   = true, -- Aquatic Form (Classic/Cata)
+    [33943]  = true, -- Flight Form (Classic/Cata)
+    [40120]  = true, -- Swift Flight Form (Classic/Cata)
+    [165962] = true, -- Flight Form (Retail)
+    [210053] = true, -- Stag Form (Retail)
+    [29166]  = true, -- Innervate/Old Flight logic
+    -- [24858]  = true, -- Moonkin Form (Base)
+    -- [197625] = true, -- Moonkin Form (Retail Glyph)
+    
+    -- === SHAMAN ===
+    [2645]   = true, -- Ghost Wolf
+    
+    -- === MONK ===
+    [125565] = true, -- Zen Flight (Retail)
+}
+
+-- 2. Аури (Buffs) - перевіряються через UnitBuff/C_UnitAuras
+-- Потрібно для Паладинів, Драктирів та деяких проків
+local TRAVEL_BUFF_IDS = {
+    -- === PALADIN ===
+    [221883] = true, -- Divine Steed (Retail)
+    [254474] = true, -- Divine Steed (Legion/BFA variants)
+    
+    -- === EVOKER (Dracthyr) ===
+    [369536] = true, -- Soar (Buff state)
+    [359618] = true, -- Soar (Alternative)
+
+    -- === DEMON HUNTER ===
+    -- [162264] = true, -- Metamorphosis (Havoc) - Розкоментуйте, якщо хочете зум у метаморфозі
+    -- [187827] = true, -- Metamorphosis (Vengeance)
+    
+    -- === DRUID (Special) ===
+    [1850] = true, -- Dash (Optional)
+}
 
 -- *** Виведення повідомлень ***
 function Functions:SendMessage(message)
@@ -71,25 +112,43 @@ local function UpdateCVar(key, value)
     end
 end
 
--- !!! НОВА ДОПОМІЖНА ФУНКЦІЯ: Перевірка "швидкої форми" (Друїд/Шаман)
+-- !!! ДОПОМІЖНА ФУНКЦІЯ: Перевірка "швидкої форми" !!!
 local function IsInTravelForm()
+    -- 1. Якщо гравець на звичайному маунті - це завжди Travel
     if IsMounted() then return true end
     
+    -- 2. Перевірка ФОРМ (Shapeshift) - Druid, Shaman, Rogue Stealth
     local formIndex = GetShapeshiftForm()
     if formIndex and formIndex > 0 then
-        -- Отримуємо інформацію про форму
+        -- GetShapeshiftFormInfo повертає spellID 4-м аргументом
         local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
-        if spellID then
-            -- Druid Travel (783), Flight (29166), Moonkin (24858 - optional), Ghost Wolf (2645)
-            -- Додавайте сюди ID форм, які ви вважаєте "подорожніми"
-            if spellID == 783 or spellID == 165962 or spellID == 2645 or spellID == 29166 then return true end 
+        if spellID and TRAVEL_FORM_IDS[spellID] then 
+            return true 
         end
     end
+    
+    -- 3. Перевірка АУР (Buffs) - Paladin Divine Steed, Evoker Soar
+    -- Ця операція трохи важча, тому виконуємо її останньою
+    if IS_RETAIL then
+        -- Оптимізований метод для Retail (11.0+)
+        for i = 1, 40 do
+            local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
+            if not aura then break end -- Кінець списку
+            if TRAVEL_BUFF_IDS[aura.spellId] then return true end
+        end
+    else
+        -- Класичний метод для Era/Cata
+        for i = 1, 40 do
+            local _, _, _, _, _, _, _, _, _, spellID = UnitBuff("player", i)
+            if not spellID then break end
+            if TRAVEL_BUFF_IDS[spellID] then return true end
+        end
+    end
+
     return false
 end
 
 -- !!! ПЕРЕПИСАНА ФУНКЦІЯ: Розумний Зум (Бій + Маунт) !!!
--- Вона замінює стару UpdateCameraOnCombat
 function Functions:UpdateSmartZoomState(event)
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
@@ -109,18 +168,18 @@ function Functions:UpdateSmartZoomState(event)
     local inInstance, instanceType = IsInInstance()
     local forceCombatMode = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
 
-    -- ПРІОРИТЕТ 1: Бій (Combat)
+    -- ПРІОРИТЕТ 1: Бій (Combat) - Найвищий пріоритет
     if db.autoCombatZoom and (inCombat or forceCombatMode) then
         newState = "combat"
         targetYards = db.maxZoomFactor -- Combat Max (він же загальний Max)
         
-    -- ПРІОРИТЕТ 2: Маунт / Подорож (Mount)
+    -- ПРІОРИТЕТ 2: Маунт / Подорож (Mount) - Середній пріоритет
     -- Працює тільки якщо ми НЕ в бою
     elseif db.autoMountZoom and IsInTravelForm() then
         newState = "mount"
         targetYards = db.mountZoomFactor
         
-    -- ПРІОРИТЕТ 3: Спокій (None)
+    -- ПРІОРИТЕТ 3: Спокій (None) - Низький пріоритет
     else
         newState = "none"
         -- targetYards вже встановлено на minZoomFactor
@@ -130,10 +189,11 @@ function Functions:UpdateSmartZoomState(event)
     if newState == currentZoomState then return end
 
     -- 3. Логіка затримки (Dismount Delay)
+    -- Затримка потрібна, коли ми виходимо зі стану "далеко" в стан "близько"
     local isZoomingOut = (newState == "combat") or (newState == "mount")
     local delay = isZoomingOut and 0 or (db.dismountDelay or 0)
 
-    -- Оновлюємо змінну стану, щоб не спамити
+    -- Оновлюємо змінну стану
     currentZoomState = newState
 
     C_Timer.After(delay, function()
@@ -148,7 +208,6 @@ function Functions:UpdateSmartZoomState(event)
 
         if validatedState == newState then
              -- Переконуємось, що ліміт CVar дозволяє цей зум
-             -- Якщо ми в бою/маунті - ліміт має бути Max. Якщо в мирі - може бути меншим (але краще тримати max)
              local requiredLimit = math.max(targetYards, db.maxZoomFactor)
              local limitFactor = requiredLimit / CONVERSION_RATIO
              UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
@@ -230,6 +289,7 @@ function Functions:ClearAllQuestTracking()
         return
     end
 
+    -- Видаляємо у зворотньому порядку, щоб не порушити індексацію
     for i = numWatches, 1, -1 do
         local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
         if questID then
