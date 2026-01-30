@@ -147,6 +147,7 @@ function Config:SetupOptions()
                         name = L["COMBAT_SETTINGS_WARNING"],
                         order = 0,
                     },
+                    -- === COMBAT ===
                     autoCombatZoom = {
                         type = "toggle",
                         name = L["AUTO_ZOOM_COMBAT"],
@@ -180,15 +181,17 @@ function Config:SetupOptions()
                         order = 3,
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
+                    
+                    -- === MOUNT ===
                     mountHeader = {
                         type = "header",
-                        name = "Mount / Travel Settings",
+                        name = L["MOUNT_SETTINGS_HEADER"],
                         order = 3.1,
                     },
                     autoMountZoom = {
                         type = "toggle",
-                        name = "Auto Zoom on Mount",
-                        desc = "Automatically zoom out when mounted or in travel form (Druid/Shaman). Priority: Combat > Mount > Normal.",
+                        name = L["AUTO_MOUNT_ZOOM"],
+                        desc = L["AUTO_MOUNT_ZOOM_DESC"],
                         get = function() return GetOption("autoMountZoom") end,
                         set = function(_, val) SetOption("autoMountZoom", val) end,
                         order = 3.2,
@@ -196,8 +199,8 @@ function Config:SetupOptions()
                     },
                     mountZoomFactor = {
                         type = "range",
-                        name = "Mount Zoom Distance (Yards)",
-                        desc = "Distance to zoom out when mounted and NOT in combat.",
+                        name = L["MOUNT_ZOOM_FACTOR"] .. " (Yards)",
+                        desc = L["MOUNT_ZOOM_FACTOR_DESC"],
                         min = 1.0, 
                         max = defaults.MAX_POSSIBLE_DISTANCE or 39,
                         step = 1.0,
@@ -206,6 +209,8 @@ function Config:SetupOptions()
                         order = 3.3,
                         disabled = function() return not GetOption("autoMountZoom") end,
                     },
+
+                    -- === DELAY ===
                     dismountDelay = {
                         type = "range",
                         name = L["DISMOUNT_DELAY"],
@@ -214,6 +219,7 @@ function Config:SetupOptions()
                         get = function() return GetOption("dismountDelay") end,
                         set = function(_, val) SetOption("dismountDelay", val) end,
                         order = 4,
+                        -- Увімкнено, якщо активний або Combat Zoom, або Mount Zoom
                         disabled = function() return not (GetOption("autoCombatZoom") or GetOption("autoMountZoom")) end,
                     },
                 },
@@ -241,7 +247,6 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("cameraIndirectVisibility", val) end,
                         order = 2,
                     },
-                    -- Додано resampleAlwaysSharpen
                     resampleAlwaysSharpen = {
                         type = "toggle",
                         name = L["RESAMPLE_ALWAYS_SHARPEN"],
@@ -252,21 +257,23 @@ function Config:SetupOptions()
                     },
                     softTargetInteract = {
                         type = "toggle",
-                        name = "Soft Target Interact Icons",
-                        desc = "Shows interaction icons over game objects (mailbox, herbs, etc).",
+                        name = L["SOFT_TARGET_INTERACT"],
+                        desc = L["SOFT_TARGET_INTERACT_DESC"],
                         get = function() return GetOption("softTargetInteract") end,
                         set = function(_, val) SetOption("softTargetInteract", val) end,
                         order = 4,
                     },
+                    
+                    -- *** Tools ***
                     toolsHeader = {
                         type = "header",
-                        name = "Tools",
+                        name = L["TOOLS_HEADER"],
                         order = 10,
                     },
                     clearTrackerBtn = {
                         type = "execute",
-                        name = "Untrack All Quests",
-                        desc = "Instantly removes all quests from the objective tracker (fixes clutter).",
+                        name = L["UNTRACK_QUESTS_BUTTON"],
+                        desc = L["UNTRACK_QUESTS_DESC"],
                         func = function() ns.Functions:ClearAllQuestTracking() end,
                         order = 11,
                         width = "full",
