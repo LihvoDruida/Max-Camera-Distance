@@ -224,6 +224,14 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("resampleAlwaysSharpen", val) end,
                         order = 3,
                     },
+                    softTargetInteract = {
+                        type = "toggle",
+                        name = "Soft Target Interact Icons", -- Можна додати в локалізацію як L["SOFT_TARGET_ICONS"]
+                        desc = "Shows interaction icons over game objects (mailbox, herbs, etc).",
+                        get = function() return GetOption("softTargetInteract") end,
+                        set = function(_, val) SetOption("softTargetInteract", val) end,
+                        order = 4,
+                    },
                 },
             },
 

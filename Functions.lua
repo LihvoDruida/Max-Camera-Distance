@@ -110,6 +110,7 @@ function Functions:AdjustCamera()
     UpdateCVar("cameraPitchMoveSpeed", db.cameraPitchMoveSpeed)
     UpdateCVar("cameraIndirectVisibility", db.cameraIndirectVisibility and 1 or 0)
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
+    UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
 
     Functions:logMessage("info", string.format("Camera adjusted to %.1f yards (Limit: %.1f)", targetYards, db.maxZoomFactor))
 end
@@ -194,6 +195,8 @@ function Functions:OnCVarUpdate(_, cvarName, value)
         db.cameraIndirectVisibility = (numValue == 1)
     elseif cvarName == "resampleAlwaysSharpen" then
         db.resampleAlwaysSharpen = (numValue == 1)
+    elseif cvarName == "SoftTargetIconGameObject" then
+        db.softTargetInteract = (numValue == 1)
     end
 end
 
