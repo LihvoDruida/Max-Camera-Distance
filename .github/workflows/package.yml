@@ -8,17 +8,56 @@ on:
       - "!**-beta**"
 
 permissions:
-  contents: write # Потрібно для створення релізів на GitHub
+  contents: write
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-22.04
+
+    outputs:
+      changeLogText: ${{ steps.readChanglog.outputs.text }}
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Fetch all tags (required for next steps)
+        run: git fetch --tags --force
+
+      - name: Get Latest Tag or use TOC version
+        id: get_latest_tag
+        run: |
+          # Отримуємо версію з .toc
+          TOC_VERSION=$(grep -oP '^## Version: \K.*' Max_Camera_Distance.toc | cut -d '.' -f1,2)
+          TOC_FALLBACK="v${TOC_VERSION}"
+
+          TAGS=$(git tag -l)
+          if [ -z "$TAGS" ]; then
+            LATEST_TAG="$TOC_FALLBACK"
+            echo "⚠️ Теги не знайдено, використовується версія з TOC: $LATEST_TAG"
+          else
+            LATEST_TAG=$(git describe --tags --abbrev=0)
+            echo "🧷 Знайдено останній тег: $LATEST_TAG"
+          fi
+
+          echo "FINAL_VERSION=$LATEST_TAG" >> $GITHUB_ENV
+          echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+      - name: Print Debug Info
+        run: |
+          echo "GitHub Ref: ${{ github.ref }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Використана версія: $FINAL_VERSION"
+
+      - name: Update Version in .toc Files
+        run: |
+          find . -type f -name "*.toc" | while read toc_file; do
+            echo "Оновлення версії в файлі: $toc_file"
+            sed -i "s/^## Version: .*/## Version: ${FINAL_VERSION}/" "$toc_file"
+            echo "✅ Версія в $toc_file оновлено до ${FINAL_VERSION}"
+          done
 
       # Генеруємо changelog тільки для поточного тега
       - name: Generate CHANGELOG.md
@@ -32,20 +71,15 @@ jobs:
       # Перевіряємо, чи файл створився (для дебагу)
       - name: Verify Changelog
         run: cat CHANGELOG.md
-
-      # Packager сам робить заміну версії в .toc, архівує та завантажує
       - name: Create and Upload Package
-        uses: BigWigsMods/packager@v2
-        with:
-          # -c вказує використати наш згенерований changelog замість стандартного
-          args: -c CHANGELOG.md
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
-          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }} # Для створення релізу на GitHub
-          # WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }} # Якщо ви використовуєте Wago.io
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+        uses: BigWigsMods/packager@v2
 
       - name: Add Summary
-        run: echo "## ✅ Release ${{ github.ref_name }} Published" >> $GITHUB_STEP_SUMMARY
+        run: |
+          echo "## ✅ CI завершено успішно" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify Discord on Failure
         if: failure()
