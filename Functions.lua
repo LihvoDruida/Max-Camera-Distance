@@ -21,11 +21,11 @@ local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
 
 -- Змінні стану
 local currentZoomState = "none" -- "combat", "mount", "none"
-local lastStateUpdate = 0
-local stateCooldown = 0.5 
+-- Видалено lastStateUpdate, бо він блокував перемикання форм
 local SETTING_CATEGORY_NAME = "Max Camera Distance"
 
 local isInternalUpdate = false
+local updateTimerHandle = nil -- Для таймера оновлення (Debounce)
 
 -- *** СПИСКИ ФОРМ ТА БАФІВ (LOOKUP TABLES) ***
 
@@ -66,6 +66,10 @@ local TRAVEL_BUFF_IDS = {
     
     -- === DRUID (Special) ===
     [1850] = true, -- Dash (Optional)
+    -- === DRUID (Backup) ===
+    -- Іноді форма змінюється пізніше за баф, тому перевіряємо і його
+    [783]    = true,
+    [165962] = true,
 }
 
 -- *** Виведення повідомлень ***
@@ -76,7 +80,6 @@ end
 -- *** Логування ***
 function Functions:logMessage(level, message)
     if not (ns.Database and ns.Database.db and ns.Database.db.profile and ns.Database.db.profile.enableDebugLogging) then return end
-    
     local db = ns.Database.db.profile
     if not (db.debugLevel and db.debugLevel[level]) then return end
 
@@ -86,58 +89,41 @@ function Functions:logMessage(level, message)
     elseif level == "warning" then color, prefix = "|cffffff00", "[W]"
     elseif level == "info" then color, prefix = "|cff00ff00", "[I]"
     end
-
     DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff0070deMCD|r %s: %s%s|r", prefix, color, message))
 end
 
--- *** Зміна CVAR (Внутрішня функція) ***
+-- *** Зміна CVAR ***
 local function UpdateCVar(key, value)
     local strValue = tostring(value)
     local currentValue = C_CVar.GetCVar(key)
-    
     if currentValue ~= strValue then
-        -- Вмикаємо захист: це зміна від аддона, а не від гравця
         isInternalUpdate = true
-        
-        local success = pcall(C_CVar.SetCVar, key, value)
-        
-        -- Вимикаємо захист після зміни
+        pcall(C_CVar.SetCVar, key, value)
         isInternalUpdate = false
-        
-        if success then
-            Functions:logMessage("info", "Updated " .. key .. " to " .. strValue)
-        else
-            Functions:logMessage("error", "Failed to set CVar: " .. key)
-        end
+        if Functions.logMessage then Functions:logMessage("info", "Updated " .. key .. " to " .. strValue) end
     end
 end
 
--- !!! ДОПОМІЖНА ФУНКЦІЯ: Перевірка "швидкої форми" !!!
+-- *** IsInTravelForm (Покращено) ***
 local function IsInTravelForm()
-    -- 1. Якщо гравець на звичайному маунті - це завжди Travel
+    -- 1. Звичайний маунт
     if IsMounted() then return true end
     
-    -- 2. Перевірка ФОРМ (Shapeshift) - Druid, Shaman, Rogue Stealth
+    -- 2. Форми (Shapeshift)
     local formIndex = GetShapeshiftForm()
     if formIndex and formIndex > 0 then
-        -- GetShapeshiftFormInfo повертає spellID 4-м аргументом
         local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
-        if spellID and TRAVEL_FORM_IDS[spellID] then 
-            return true 
-        end
+        if spellID and TRAVEL_FORM_IDS[spellID] then return true end
     end
     
-    -- 3. Перевірка АУР (Buffs) - Paladin Divine Steed, Evoker Soar
-    -- Ця операція трохи важча, тому виконуємо її останньою
+    -- 3. Аури (Buffs) - Страховка для Друїдів та Паладинів
     if IS_RETAIL then
-        -- Оптимізований метод для Retail (11.0+)
         for i = 1, 40 do
             local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
-            if not aura then break end -- Кінець списку
+            if not aura then break end
             if TRAVEL_BUFF_IDS[aura.spellId] then return true end
         end
     else
-        -- Класичний метод для Era/Cata
         for i = 1, 40 do
             local _, _, _, _, _, _, _, _, _, spellID = UnitBuff("player", i)
             if not spellID then break end
@@ -148,79 +134,77 @@ local function IsInTravelForm()
     return false
 end
 
--- !!! ПЕРЕПИСАНА ФУНКЦІЯ: Розумний Зум (Бій + Маунт) !!!
+-- *** UpdateSmartZoomState (Виправлено: Debounce замість Throttle) ***
 function Functions:UpdateSmartZoomState(event)
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
     
-    -- Якщо обидві функції вимкнені — виходимо
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
-    local currentTime = GetTime()
-    if (currentTime - lastStateUpdate) < 0.1 then return end
-    lastStateUpdate = currentTime
+    -- !!! ЗМІНА: Замість блокування (return) ми перезапускаємо таймер.
+    -- Це гарантує, що ми обробимо останню подію в ланцюжку (наприклад Cat -> Flight).
+    if updateTimerHandle then C_Timer.CancelTimer(updateTimerHandle) end
 
-    -- 1. Визначаємо поточний стан (ПРІОРИТЕТИ)
-    local newState = "none"
-    local targetYards = db.minZoomFactor or 28.5
-    
-    local inCombat = UnitAffectingCombat("player")
-    local inInstance, instanceType = IsInInstance()
-    local forceCombatMode = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
-
-    -- ПРІОРИТЕТ 1: Бій (Combat) - Найвищий пріоритет
-    if db.autoCombatZoom and (inCombat or forceCombatMode) then
-        newState = "combat"
-        targetYards = db.maxZoomFactor -- Combat Max (він же загальний Max)
+    updateTimerHandle = C_Timer.After(0.05, function()
+        local newState = "none"
+        local targetYards = db.minZoomFactor or 28.5
         
-    -- ПРІОРИТЕТ 2: Маунт / Подорож (Mount) - Середній пріоритет
-    -- Працює тільки якщо ми НЕ в бою
-    elseif db.autoMountZoom and IsInTravelForm() then
-        newState = "mount"
-        targetYards = db.mountZoomFactor
-        
-    -- ПРІОРИТЕТ 3: Спокій (None) - Низький пріоритет
-    else
-        newState = "none"
-        -- targetYards вже встановлено на minZoomFactor
-    end
+        local inCombat = UnitAffectingCombat("player")
+        local inInstance, instanceType = IsInInstance()
+        local forceCombatMode = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
 
-    -- 2. Якщо стан не змінився — нічого не робимо
-    if newState == currentZoomState then return end
-
-    -- 3. Логіка затримки (Dismount Delay)
-    -- Затримка потрібна, коли ми виходимо зі стану "далеко" в стан "близько"
-    local isZoomingOut = (newState == "combat") or (newState == "mount")
-    local delay = isZoomingOut and 0 or (db.dismountDelay or 0)
-
-    -- Оновлюємо змінну стану
-    currentZoomState = newState
-
-    C_Timer.After(delay, function()
-        -- Повторна перевірка стану після затримки
-        local reCheckCombat = UnitAffectingCombat("player") or forceCombatMode
-        local reCheckMount = IsInTravelForm()
-        
-        local validatedState = "none"
-        if db.autoCombatZoom and reCheckCombat then validatedState = "combat"
-        elseif db.autoMountZoom and reCheckMount then validatedState = "mount"
-        end
-
-        if validatedState == newState then
-             -- Переконуємось, що ліміт CVar дозволяє цей зум
-             local requiredLimit = math.max(targetYards, db.maxZoomFactor)
-             local limitFactor = requiredLimit / CONVERSION_RATIO
-             UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
-
-             if LibCamera then
-                 LibCamera:SetZoomUsingCVar(targetYards, 0.5)
-             end
-             
-             Functions:logMessage("info", string.format("Smart Zoom [%s]: %.1f yards", newState, targetYards))
+        -- 1. ПРІОРИТЕТ 1: Бій
+        if db.autoCombatZoom and (inCombat or forceCombatMode) then
+            newState = "combat"
+            targetYards = db.maxZoomFactor
+            
+        -- 2. ПРІОРИТЕТ 2: Маунт
+        elseif db.autoMountZoom and IsInTravelForm() then
+            newState = "mount"
+            targetYards = db.mountZoomFactor or 39 -- Фолбек, якщо mountZoomFactor не задано
+            
+        -- 3. ПРІОРИТЕТ 3: Спокій
         else
-            Functions:logMessage("debug", "State changed during delay, skipping zoom.")
-            currentZoomState = validatedState
+            newState = "none"
         end
+
+        -- Якщо стан не змінився — виходимо
+        if newState == currentZoomState then return end
+
+        -- Логіка затримки (тільки якщо повертаємось у "спокій")
+        -- Якщо ми заходимо в бій або сідаємо на маунта — зум миттєвий.
+        -- Якщо виходимо (dismount) — затримка.
+        local isRestoring = (newState == "none")
+        local delay = isRestoring and (db.dismountDelay or 0) or 0
+
+        currentZoomState = newState
+
+        C_Timer.After(delay, function()
+            -- Фінальна перевірка після затримки (чи стан все ще актуальний?)
+            local reCheckCombat = UnitAffectingCombat("player") or forceCombatMode
+            local reCheckMount = IsInTravelForm()
+            
+            local validatedState = "none"
+            if db.autoCombatZoom and reCheckCombat then validatedState = "combat"
+            elseif db.autoMountZoom and reCheckMount then validatedState = "mount"
+            end
+
+            if validatedState == newState then
+                 -- Застосовуємо зум
+                 local requiredLimit = math.max(targetYards, db.maxZoomFactor)
+                 local limitFactor = requiredLimit / CONVERSION_RATIO
+                 UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
+
+                 if LibCamera then
+                     LibCamera:SetZoomUsingCVar(targetYards, 0.5)
+                 end
+                 
+                 Functions:logMessage("info", string.format("Smart Zoom [%s]: %.1f yards", newState, targetYards))
+            else
+                currentZoomState = validatedState
+                Functions:logMessage("debug", "State changed during delay, skipping zoom.")
+            end
+        end)
     end)
 end
 
@@ -229,15 +213,11 @@ function Functions:AdjustCamera()
     local db = ns.Database.db.profile
     local LibCamera = LibStub("LibCamera-1.0", true)
 
-    -- 1. Спочатку завжди розблокуємо МАКСИМАЛЬНИЙ ліміт гри (CVar)
     local limitFactor = db.maxZoomFactor / CONVERSION_RATIO
     UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
 
-    -- 2. Викликаємо нашу нову логіку, щоб вона сама вирішила, який зум ставити
-    -- Передаємо "manual_update", щоб функція знала, що це примусовий виклик
     Functions:UpdateSmartZoomState("manual_update")
 
-    -- 3. Інші налаштування
     UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
     UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
@@ -249,11 +229,9 @@ function Functions:AdjustCamera()
     Functions:logMessage("info", "Settings applied manually.")
 end
 
--- *** Обробка CVAR_UPDATE (Синхронізація зворотнього боку) ***
+-- *** Обробка CVAR_UPDATE ***
 function Functions:OnCVarUpdate(_, cvarName, value)
-    -- !!! БЛОКУВАННЯ !!!
     if isInternalUpdate then return end
-
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
     
@@ -288,8 +266,6 @@ function Functions:ClearAllQuestTracking()
         Functions:SendMessage("Quest tracker is already empty.")
         return
     end
-
-    -- Видаляємо у зворотньому порядку, щоб не порушити індексацію
     for i = numWatches, 1, -1 do
         local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
         if questID then
@@ -302,12 +278,7 @@ end
 -- *** Slash-команди ***
 function Functions:SlashCmdHandler(msg)
     local command = strlower(msg or "")
-    
-    local settings = {
-        max = IS_RETAIL and 39 or 50,
-        avg = 20,
-        min = 5
-    }
+    local settings = { max = IS_RETAIL and 39 or 50, avg = 20, min = 5 }
 
     if not (ns.Database and ns.Database.db) then 
         Functions:SendMessage(L["DB_NOT_READY"] or "Database not ready.")
@@ -321,15 +292,11 @@ function Functions:SlashCmdHandler(msg)
         db.maxZoomFactor = yards
         Functions:AdjustCamera()
         Functions:SendMessage(string.format("Zoom set to %s (%.1f yards)", command, yards))
-        
     elseif command == "config" then
         if Settings and Settings.OpenToCategory then
             local categoryID = Settings.GetCategoryID and Settings.GetCategoryID(SETTING_CATEGORY_NAME)
-            if categoryID then
-                 Settings.OpenToCategory(categoryID)
-            else
-                 Settings.OpenToCategory(SETTING_CATEGORY_NAME)
-            end
+            if categoryID then Settings.OpenToCategory(categoryID)
+            else Settings.OpenToCategory(SETTING_CATEGORY_NAME) end
         else
             Functions:SendMessage("Error: Settings API not available.")
         end

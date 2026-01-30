@@ -31,8 +31,8 @@ local function IsPlayerReady()
 end
 
 local function IsSafeToAdjustCamera()
-    -- Для налаштувань CVar нам треба бути не в бою, 
-    -- АЛЕ для нашого SmartZoom ми повинні працювати завжди (LibCamera дозволяє зум у бою)
+    -- Ми дозволяємо роботу LibCamera навіть у бою, 
+    -- тому головна умова - наявність гравця у світі
     return IsPlayerReady()
 end
 
@@ -56,45 +56,50 @@ local eventHandlers = {
 
     PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
         if IsSafeToAdjustCamera() and ns.Functions then
-            SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions, event)
+            SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions)
         end
     end,
 
     -- *** ПОДІЇ СТАНУ (Бій, Маунт, Форма) ***
     -- Всі вони викликають UpdateSmartZoomState
+    
+    -- Вхід у бій
     PLAYER_REGEN_DISABLED = function(event)
         if ns.Functions then
             SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-CombatEnter", ns.Functions, event)
         end
     end,
 
+    -- Вихід з бою
     PLAYER_REGEN_ENABLED = function(event)
         if ns.Functions then
             SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-CombatLeave", ns.Functions, event)
         end
     end,
     
-    -- Нові події для маунтів і форм
+    -- Маунти (Сідаємо/Злазимо)
     PLAYER_MOUNT_DISPLAY_CHANGED = function(event)
         if ns.Functions then
             SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-Mount", ns.Functions, event)
         end
     end,
 
+    -- Зміна форми (Друїд, Шаман, Рога, Прист тощо)
+    -- Це критично для вашої проблеми з Друїдом!
     UPDATE_SHAPESHIFT_FORM = function(event)
         if ns.Functions then
             SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-Shapeshift", ns.Functions, event)
         end
     end,
     
-    -- Опціонально: для Dragonriding (Retail)
+    -- Опціонально: Зміни талантів (може впливати на Dragonriding)
     TRAIT_CONFIG_UPDATED = function(event)
         if ns.Functions then
             SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-Traits", ns.Functions, event)
         end
     end,
 
-    -- Синхронізація налаштувань
+    -- Синхронізація налаштувань, якщо гру змінює інший аддон або консоль
     CVAR_UPDATE = function(event, cvarName, value)
         if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then
             if ns.Functions then
@@ -108,6 +113,7 @@ local eventHandlers = {
 frame:SetScript("OnEvent", function(self, event, ...)
     local handler = eventHandlers[event]
     if handler then
+        -- LogEvent(event, ...) -- Розкоментувати для дебагу подій
         handler(event, ...)
     end
 end)
