@@ -126,11 +126,14 @@ function Functions:UpdateSmartZoomState(event)
     -- Якщо функції вимкнені, просто виходимо
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
+    -- Якщо це ручний виклик (зміна налаштувань), скидаємо поточний стан, щоб змусити оновлення
+    local isManual = (event == "manual_update")
+    
     if updateTimerHandle then C_Timer.CancelTimer(updateTimerHandle) end
 
     updateTimerHandle = C_Timer.After(0.05, function()
         local newState = "none"
-        local targetYards = db.minZoomFactor or 28.5
+        local targetYards = db.minZoomFactor or 28.5 -- За замовчуванням: Normal
         
         local inCombat = UnitAffectingCombat("player")
         local inInstance, instanceType = IsInInstance()
@@ -139,20 +142,21 @@ function Functions:UpdateSmartZoomState(event)
         -- 1. Бій
         if db.autoCombatZoom and (inCombat or forceCombatMode) then
             newState = "combat"
-            targetYards = db.maxZoomFactor
+            targetYards = db.maxZoomFactor -- Combat Max
         -- 2. Маунт
         elseif db.autoMountZoom and IsInTravelForm() then
             newState = "mount"
             targetYards = db.mountZoomFactor or 39
-        -- 3. Спокій
+        -- 3. Спокій (вже встановлено вище)
         else
             newState = "none"
         end
 
-        if newState == currentZoomState then return end
+        if not isManual and newState == currentZoomState then return end
 
         local isRestoring = (newState == "none")
-        local delay = isRestoring and (db.dismountDelay or 0) or 0
+        -- Якщо ручне оновлення - затримка 0
+        local delay = (not isManual and isRestoring) and (db.dismountDelay or 0) or 0
 
         currentZoomState = newState
 
@@ -165,13 +169,13 @@ function Functions:UpdateSmartZoomState(event)
             elseif db.autoMountZoom and reCheckMount then validatedState = "mount"
             end
 
-            if validatedState == newState then
+            -- Якщо стан підтвердився АБО це ручне оновлення (ми довіряємо початковій перевірці)
+            if validatedState == newState or isManual then
                  local requiredLimit = math.max(targetYards, db.maxZoomFactor)
                  local limitFactor = requiredLimit / CONVERSION_RATIO
                  UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
 
                  if LibCamera then
-                     -- ВИКОРИСТОВУЄМО ПЛАВНІСТЬ З НАЛАШТУВАНЬ
                      LibCamera:SetZoomUsingCVar(targetYards, db.zoomTransitionTime or 0.5)
                  end
                  
