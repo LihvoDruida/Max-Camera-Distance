@@ -95,7 +95,6 @@ function Config:SetupOptions()
                 args = {
                     maxZoomFactor = {
                         type = "range",
-                        -- Додаємо (Yards) до назви для ясності, якщо цього немає в локалізації
                         name = L["MAX_ZOOM_FACTOR"] .. " (Yards)",
                         desc = L["MAX_ZOOM_FACTOR_DESC"],
                         min = 1.0,
@@ -215,6 +214,15 @@ function Config:SetupOptions()
                         get = function() return GetOption("cameraIndirectVisibility") end,
                         set = function(_, val) SetOption("cameraIndirectVisibility", val) end,
                         order = 2,
+                    },
+                    -- Додано resampleAlwaysSharpen
+                    resampleAlwaysSharpen = {
+                        type = "toggle",
+                        name = L["RESAMPLE_ALWAYS_SHARPEN"],
+                        desc = L["RESAMPLE_ALWAYS_SHARPEN_DESC"],
+                        get = function() return GetOption("resampleAlwaysSharpen") end,
+                        set = function(_, val) SetOption("resampleAlwaysSharpen", val) end,
+                        order = 3,
                     },
                 },
             },

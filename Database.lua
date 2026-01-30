@@ -16,6 +16,8 @@ end
 
 local yawMoveSpeed = GetCVarDefault("cameraYawMoveSpeed", 180)
 local pitchMoveSpeed = GetCVarDefault("cameraPitchMoveSpeed", 180)
+-- !!! НОВЕ: Отримуємо поточне значення resampleAlwaysSharpen (0 або 1)
+local resampleSharpenDefault = GetCVarDefault("resampleAlwaysSharpen", 0)
 
 -- *** КОНСТАНТИ (YARDS) ***
 -- Retail: 39 ярдів = 2.6 factor (39 / 2.6 = 15)
@@ -46,7 +48,8 @@ Database.DEFAULTS = {
     REDUCE_UNEXPECTED_MOVEMENT = false,
     CAMERA_INDIRECT_VISIBILITY = true,
     AUTO_COMBAT_ZOOM = false,
-    ENABLE_DEBUG_LOGGING = false
+    ENABLE_DEBUG_LOGGING = false,
+    RESAMPLE_ALWAYS_SHARPEN = (resampleSharpenDefault == 1)
 }
 
 Database.DEFAULT_DEBUG_LEVEL = {
@@ -69,6 +72,7 @@ function Database:InitDB()
         autoCombatZoom = Database.DEFAULTS.AUTO_COMBAT_ZOOM,
         reduceUnexpectedMovement = Database.DEFAULTS.REDUCE_UNEXPECTED_MOVEMENT,
         cameraIndirectVisibility = Database.DEFAULTS.CAMERA_INDIRECT_VISIBILITY,
+        resampleAlwaysSharpen = Database.DEFAULTS.RESAMPLE_ALWAYS_SHARPEN,
         
         enableDebugLogging = Database.DEFAULTS.ENABLE_DEBUG_LOGGING,
         debugLevel = CopyTable(Database.DEFAULT_DEBUG_LEVEL)

@@ -109,6 +109,7 @@ function Functions:AdjustCamera()
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
     UpdateCVar("cameraPitchMoveSpeed", db.cameraPitchMoveSpeed)
     UpdateCVar("cameraIndirectVisibility", db.cameraIndirectVisibility and 1 or 0)
+    UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
 
     Functions:logMessage("info", string.format("Camera adjusted to %.1f yards (Limit: %.1f)", targetYards, db.maxZoomFactor))
 end
@@ -144,14 +145,13 @@ function Functions:UpdateCameraOnCombat(event)
             
             if currentCombatState == effectiveCombatState then
                 -- !!! ВИПРАВЛЕННЯ ЛОГІКИ !!!
-                -- Ми НЕ змінюємо CVar limit до targetYards. Ми залишаємо CVar на максимумі (щоб гравець міг сам віддалити потім).
-                -- Ми змінюємо лише поточну позицію камери через LibCamera.
+                -- Ми НЕ змінюємо CVar limit до targetYards. Ми залишаємо CVar на максимумі.
                 
-                -- Переконуємось, що ліміт стоїть на Максимумі (на випадок, якщо щось збилось)
+                -- Переконуємось, що ліміт стоїть на Максимумі
                 local maxFactor = db.maxZoomFactor / CONVERSION_RATIO
                 UpdateCVar("cameraDistanceMaxZoomFactor", maxFactor)
 
-                -- Зумимо камеру до потрібної точки (ближче або далі)
+                -- Зумимо камеру до потрібної точки
                 if LibCamera then
                     LibCamera:SetZoomUsingCVar(targetYards, 0.5)
                 end
@@ -176,7 +176,7 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then
         local yards = numValue * CONVERSION_RATIO
         
-        -- Оновлюємо базу тільки якщо це РЕАЛЬНА зміна від гравця (через консоль/інші аддони)
+        -- Оновлюємо базу тільки якщо це РЕАЛЬНА зміна від гравця
         if math.abs(db.maxZoomFactor - yards) > 0.1 then
             db.maxZoomFactor = yards
             Functions:logMessage("info", string.format("DB synced from CVar: %.1f factor -> %.1f yards", numValue, yards))
@@ -192,6 +192,8 @@ function Functions:OnCVarUpdate(_, cvarName, value)
         db.reduceUnexpectedMovement = (numValue == 1)
     elseif cvarName == "cameraIndirectVisibility" then
         db.cameraIndirectVisibility = (numValue == 1)
+    elseif cvarName == "resampleAlwaysSharpen" then
+        db.resampleAlwaysSharpen = (numValue == 1)
     end
 end
 
