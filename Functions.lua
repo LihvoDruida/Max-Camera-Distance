@@ -200,6 +200,26 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     end
 end
 
+function Functions:ClearAllQuestTracking()
+    -- Отримуємо кількість відстежуваних квестів
+    local numWatches = C_QuestLog.GetNumQuestWatches()
+    
+    if numWatches == 0 then
+        Functions:SendMessage("Quest tracker is already empty.")
+        return
+    end
+
+    -- Проходимося у зворотному порядку (безпечніше при видаленні зі списку)
+    for i = numWatches, 1, -1 do
+        local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+        if questID then
+            C_QuestLog.RemoveQuestWatch(questID)
+        end
+    end
+
+    Functions:SendMessage("Stopped tracking " .. numWatches .. " quests.")
+end
+
 -- *** Slash-команди ***
 function Functions:SlashCmdHandler(msg)
     local command = strlower(msg or "")

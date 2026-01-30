@@ -226,11 +226,24 @@ function Config:SetupOptions()
                     },
                     softTargetInteract = {
                         type = "toggle",
-                        name = "Soft Target Interact Icons", -- Можна додати в локалізацію як L["SOFT_TARGET_ICONS"]
+                        name = "Soft Target Interact Icons",
                         desc = "Shows interaction icons over game objects (mailbox, herbs, etc).",
                         get = function() return GetOption("softTargetInteract") end,
                         set = function(_, val) SetOption("softTargetInteract", val) end,
                         order = 4,
+                    },
+                    toolsHeader = {
+                        type = "header",
+                        name = "Tools",
+                        order = 10,
+                    },
+                    clearTrackerBtn = {
+                        type = "execute",
+                        name = "Untrack All Quests",
+                        desc = "Instantly removes all quests from the objective tracker (fixes clutter).",
+                        func = function() ns.Functions:ClearAllQuestTracking() end,
+                        order = 11,
+                        width = "full",
                     },
                 },
             },
