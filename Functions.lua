@@ -21,53 +21,40 @@ local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
 
 -- Змінні стану
 local currentZoomState = "none" -- "combat", "mount", "none"
--- Видалено lastStateUpdate, бо він блокував перемикання форм
 local SETTING_CATEGORY_NAME = "Max Camera Distance"
 
 local isInternalUpdate = false
 local updateTimerHandle = nil -- Для таймера оновлення (Debounce)
 
--- *** СПИСКИ ФОРМ ТА БАФІВ (LOOKUP TABLES) ***
+-- *** СПИСКИ ФОРМ ТА БАФІВ ***
 
--- 1. Форми (Shapeshift Forms) - перевіряються через GetShapeshiftForm
 local TRAVEL_FORM_IDS = {
     -- === DRUID ===
-    [783]    = true, -- Travel Form (Retail & Classic Base)
-    [1066]   = true, -- Aquatic Form (Classic/Cata)
-    [33943]  = true, -- Flight Form (Classic/Cata)
-    [40120]  = true, -- Swift Flight Form (Classic/Cata)
+    [783]    = true, -- Travel Form
+    [1066]   = true, -- Aquatic Form
+    [33943]  = true, -- Flight Form
+    [40120]  = true, -- Swift Flight Form
     [165962] = true, -- Flight Form (Retail)
-    [210053] = true, -- Stag Form (Retail)
+    [210053] = true, -- Stag Form
     [29166]  = true, -- Innervate/Old Flight logic
-    -- [24858]  = true, -- Moonkin Form (Base)
-    -- [197625] = true, -- Moonkin Form (Retail Glyph)
     
     -- === SHAMAN ===
     [2645]   = true, -- Ghost Wolf
     
     -- === MONK ===
-    [125565] = true, -- Zen Flight (Retail)
+    [125565] = true, -- Zen Flight
 }
 
--- 2. Аури (Buffs) - перевіряються через UnitBuff/C_UnitAuras
--- Потрібно для Паладинів, Драктирів та деяких проків
 local TRAVEL_BUFF_IDS = {
     -- === PALADIN ===
-    [221883] = true, -- Divine Steed (Retail)
-    [254474] = true, -- Divine Steed (Legion/BFA variants)
+    [221883] = true, -- Divine Steed
+    [254474] = true, -- Divine Steed
     
-    -- === EVOKER (Dracthyr) ===
-    [369536] = true, -- Soar (Buff state)
-    [359618] = true, -- Soar (Alternative)
-
-    -- === DEMON HUNTER ===
-    -- [162264] = true, -- Metamorphosis (Havoc) - Розкоментуйте, якщо хочете зум у метаморфозі
-    -- [187827] = true, -- Metamorphosis (Vengeance)
+    -- === EVOKER ===
+    [369536] = true, -- Soar
+    [359618] = true, -- Soar
     
-    -- === DRUID (Special) ===
-    [1850] = true, -- Dash (Optional)
     -- === DRUID (Backup) ===
-    -- Іноді форма змінюється пізніше за баф, тому перевіряємо і його
     [783]    = true,
     [165962] = true,
 }
@@ -104,19 +91,16 @@ local function UpdateCVar(key, value)
     end
 end
 
--- *** IsInTravelForm (Покращено) ***
+-- *** IsInTravelForm ***
 local function IsInTravelForm()
-    -- 1. Звичайний маунт
     if IsMounted() then return true end
     
-    -- 2. Форми (Shapeshift)
     local formIndex = GetShapeshiftForm()
     if formIndex and formIndex > 0 then
         local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
         if spellID and TRAVEL_FORM_IDS[spellID] then return true end
     end
     
-    -- 3. Аури (Buffs) - Страховка для Друїдів та Паладинів
     if IS_RETAIL then
         for i = 1, 40 do
             local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
@@ -134,15 +118,14 @@ local function IsInTravelForm()
     return false
 end
 
--- *** UpdateSmartZoomState (Виправлено: Debounce замість Throttle) ***
+-- *** UpdateSmartZoomState ***
 function Functions:UpdateSmartZoomState(event)
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
     
+    -- Якщо функції вимкнені, просто виходимо
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
-    -- !!! ЗМІНА: Замість блокування (return) ми перезапускаємо таймер.
-    -- Це гарантує, що ми обробимо останню подію в ланцюжку (наприклад Cat -> Flight).
     if updateTimerHandle then C_Timer.CancelTimer(updateTimerHandle) end
 
     updateTimerHandle = C_Timer.After(0.05, function()
@@ -153,34 +136,27 @@ function Functions:UpdateSmartZoomState(event)
         local inInstance, instanceType = IsInInstance()
         local forceCombatMode = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
 
-        -- 1. ПРІОРИТЕТ 1: Бій
+        -- 1. Бій
         if db.autoCombatZoom and (inCombat or forceCombatMode) then
             newState = "combat"
             targetYards = db.maxZoomFactor
-            
-        -- 2. ПРІОРИТЕТ 2: Маунт
+        -- 2. Маунт
         elseif db.autoMountZoom and IsInTravelForm() then
             newState = "mount"
-            targetYards = db.mountZoomFactor or 39 -- Фолбек, якщо mountZoomFactor не задано
-            
-        -- 3. ПРІОРИТЕТ 3: Спокій
+            targetYards = db.mountZoomFactor or 39
+        -- 3. Спокій
         else
             newState = "none"
         end
 
-        -- Якщо стан не змінився — виходимо
         if newState == currentZoomState then return end
 
-        -- Логіка затримки (тільки якщо повертаємось у "спокій")
-        -- Якщо ми заходимо в бій або сідаємо на маунта — зум миттєвий.
-        -- Якщо виходимо (dismount) — затримка.
         local isRestoring = (newState == "none")
         local delay = isRestoring and (db.dismountDelay or 0) or 0
 
         currentZoomState = newState
 
         C_Timer.After(delay, function()
-            -- Фінальна перевірка після затримки (чи стан все ще актуальний?)
             local reCheckCombat = UnitAffectingCombat("player") or forceCombatMode
             local reCheckMount = IsInTravelForm()
             
@@ -190,13 +166,13 @@ function Functions:UpdateSmartZoomState(event)
             end
 
             if validatedState == newState then
-                 -- Застосовуємо зум
                  local requiredLimit = math.max(targetYards, db.maxZoomFactor)
                  local limitFactor = requiredLimit / CONVERSION_RATIO
                  UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
 
                  if LibCamera then
-                     LibCamera:SetZoomUsingCVar(targetYards, 0.5)
+                     -- ВИКОРИСТОВУЄМО ПЛАВНІСТЬ З НАЛАШТУВАНЬ
+                     LibCamera:SetZoomUsingCVar(targetYards, db.zoomTransitionTime or 0.5)
                  end
                  
                  Functions:logMessage("info", string.format("Smart Zoom [%s]: %.1f yards", newState, targetYards))
@@ -213,11 +189,24 @@ function Functions:AdjustCamera()
     local db = ns.Database.db.profile
     local LibCamera = LibStub("LibCamera-1.0", true)
 
+    -- 1. Завжди ставимо ліміт
     local limitFactor = db.maxZoomFactor / CONVERSION_RATIO
     UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
 
-    Functions:UpdateSmartZoomState("manual_update")
+    -- 2. Спроба "Розумного зуму"
+    -- Якщо розумні функції увімкнені, вони самі вирішать, куди зумити
+    if db.autoCombatZoom or db.autoMountZoom then
+        Functions:UpdateSmartZoomState("manual_update")
+    else
+        -- !!! ВИПРАВЛЕНО: Якщо розумні функції ВИМКНЕНІ, просто застосовуємо Max Zoom
+        -- Це потрібно, щоб працював звичайний слайдер в меню
+        if LibCamera then
+            LibCamera:SetZoomUsingCVar(db.maxZoomFactor, db.zoomTransitionTime or 0.5)
+        end
+        Functions:logMessage("info", "Smart zoom disabled, applying max distance.")
+    end
 
+    -- 3. Інші налаштування
     UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
     UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
@@ -225,8 +214,6 @@ function Functions:AdjustCamera()
     UpdateCVar("cameraIndirectVisibility", db.cameraIndirectVisibility and 1 or 0)
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
-
-    Functions:logMessage("info", "Settings applied manually.")
 end
 
 -- *** Обробка CVAR_UPDATE ***
@@ -263,7 +250,8 @@ end
 function Functions:ClearAllQuestTracking()
     local numWatches = C_QuestLog.GetNumQuestWatches()
     if numWatches == 0 then
-        Functions:SendMessage("Quest tracker is already empty.")
+        -- ВИКОРИСТОВУЄМО ЛОКАЛІЗАЦІЮ
+        Functions:SendMessage(L["QUEST_TRACKER_EMPTY"] or "Quest tracker is already empty.")
         return
     end
     for i = numWatches, 1, -1 do
@@ -272,7 +260,8 @@ function Functions:ClearAllQuestTracking()
             C_QuestLog.RemoveQuestWatch(questID)
         end
     end
-    Functions:SendMessage("Stopped tracking " .. numWatches .. " quests.")
+    -- ВИКОРИСТОВУЄМО ЛОКАЛІЗАЦІЮ
+    Functions:SendMessage(string.format(L["QUEST_TRACKER_CLEARED"] or "Stopped tracking %d quests.", numWatches))
 end
 
 -- *** Slash-команди ***
@@ -291,7 +280,9 @@ function Functions:SlashCmdHandler(msg)
         local yards = settings[command]
         db.maxZoomFactor = yards
         Functions:AdjustCamera()
-        Functions:SendMessage(string.format("Zoom set to %s (%.1f yards)", command, yards))
+        -- ВИКОРИСТОВУЄМО ЛОКАЛІЗАЦІЮ
+        local msgFormat = L["ZOOM_SET_MESSAGE"] or "Zoom set to %s (%.1f yards)"
+        Functions:SendMessage(string.format(msgFormat, command, yards))
     elseif command == "config" then
         if Settings and Settings.OpenToCategory then
             local categoryID = Settings.GetCategoryID and Settings.GetCategoryID(SETTING_CATEGORY_NAME)
@@ -301,6 +292,6 @@ function Functions:SlashCmdHandler(msg)
             Functions:SendMessage("Error: Settings API not available.")
         end
     else
-        Functions:SendMessage("Usage: /mcd max | avg | min | config")
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd max | avg | min | config")
     end
 end

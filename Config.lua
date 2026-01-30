@@ -103,7 +103,17 @@ function Config:SetupOptions()
                         get = function() return GetOption("maxZoomFactor") end,
                         set = function(_, val) SetOption("maxZoomFactor", val) end,
                         order = 1,
+                        -- Вимикаємо цей слайдер, якщо увімкнено Combat Zoom, бо він перекриває налаштування
                         disabled = function() return GetOption("autoCombatZoom") end, 
+                    },
+                    zoomTransition = {
+                        type = "range",
+                        name = L["ZOOM_TRANSITION"] or "Transition Smoothness",
+                        desc = L["ZOOM_TRANSITION_DESC"] or "Time to zoom to target.",
+                        min = 0, max = 2.0, step = 0.1,
+                        get = function() return GetOption("zoomTransitionTime") end,
+                        set = function(_, val) SetOption("zoomTransitionTime", val) end,
+                        order = 2,
                     },
                     moveViewDistance = {
                         type = "range",
@@ -112,7 +122,7 @@ function Config:SetupOptions()
                         min = 10000, max = 50000, step = 1000,
                         get = function() return GetOption("moveViewDistance") end,
                         set = function(_, val) SetOption("moveViewDistance", val) end,
-                        order = 2,
+                        order = 3,
                     },
                     yawSpeed = {
                         type = "range",
@@ -121,7 +131,7 @@ function Config:SetupOptions()
                         min = 0, max = 360, step = 10,
                         get = function() return GetOption("cameraYawMoveSpeed") end,
                         set = function(_, val) SetOption("cameraYawMoveSpeed", val) end,
-                        order = 3,
+                        order = 4,
                     },
                     pitchSpeed = {
                         type = "range",
@@ -130,15 +140,15 @@ function Config:SetupOptions()
                         min = 0, max = 360, step = 10,
                         get = function() return GetOption("cameraPitchMoveSpeed") end,
                         set = function(_, val) SetOption("cameraPitchMoveSpeed", val) end,
-                        order = 4,
+                        order = 5,
                     },
                 },
             },
 
-            -- *** Combat / Smart Zoom Settings ***
-            combatSettings = {
+            -- *** Smart Zoom Settings (Combat & Mount) ***
+            smartSettings = {
                 type = "group",
-                name = L["COMBAT_SETTINGS"],
+                name = L["COMBAT_SETTINGS"], -- "Smart Zoom System"
                 inline = false,
                 order = 3,
                 args = {
@@ -147,14 +157,20 @@ function Config:SetupOptions()
                         name = L["COMBAT_SETTINGS_WARNING"],
                         order = 0,
                     },
-                    -- === COMBAT ===
+                    
+                    -- === COMBAT SECTION ===
+                    combatHeader = {
+                        type = "header",
+                        name = "Combat",
+                        order = 10,
+                    },
                     autoCombatZoom = {
                         type = "toggle",
                         name = L["AUTO_ZOOM_COMBAT"],
                         desc = L["AUTO_ZOOM_COMBAT_DESC"],
                         get = function() return GetOption("autoCombatZoom") end,
                         set = function(_, val) SetOption("autoCombatZoom", val) end,
-                        order = 1,
+                        order = 11,
                         width = "full",
                     },
                     combatMaxZoom = {
@@ -166,7 +182,7 @@ function Config:SetupOptions()
                         step = 1.0,
                         get = function() return GetOption("maxZoomFactor") end,
                         set = function(_, val) SetOption("maxZoomFactor", val) end,
-                        order = 2,
+                        order = 12,
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
                     combatMinZoom = {
@@ -178,15 +194,15 @@ function Config:SetupOptions()
                         step = 1.0,
                         get = function() return GetOption("minZoomFactor") end,
                         set = function(_, val) SetOption("minZoomFactor", val) end,
-                        order = 3,
+                        order = 13,
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
                     
-                    -- === MOUNT ===
+                    -- === MOUNT SECTION ===
                     mountHeader = {
                         type = "header",
                         name = L["MOUNT_SETTINGS_HEADER"],
-                        order = 3.1,
+                        order = 20,
                     },
                     autoMountZoom = {
                         type = "toggle",
@@ -194,7 +210,7 @@ function Config:SetupOptions()
                         desc = L["AUTO_MOUNT_ZOOM_DESC"],
                         get = function() return GetOption("autoMountZoom") end,
                         set = function(_, val) SetOption("autoMountZoom", val) end,
-                        order = 3.2,
+                        order = 21,
                         width = "full",
                     },
                     mountZoomFactor = {
@@ -206,11 +222,16 @@ function Config:SetupOptions()
                         step = 1.0,
                         get = function() return GetOption("mountZoomFactor") end,
                         set = function(_, val) SetOption("mountZoomFactor", val) end,
-                        order = 3.3,
+                        order = 22,
                         disabled = function() return not GetOption("autoMountZoom") end,
                     },
 
-                    -- === DELAY ===
+                    -- === DELAY SECTION ===
+                    delayHeader = {
+                        type = "header",
+                        name = "Transition Delay",
+                        order = 30,
+                    },
                     dismountDelay = {
                         type = "range",
                         name = L["DISMOUNT_DELAY"],
@@ -218,8 +239,7 @@ function Config:SetupOptions()
                         min = 0, max = 10, step = 0.5,
                         get = function() return GetOption("dismountDelay") end,
                         set = function(_, val) SetOption("dismountDelay", val) end,
-                        order = 4,
-                        -- Увімкнено, якщо активний або Combat Zoom, або Mount Zoom
+                        order = 31,
                         disabled = function() return not (GetOption("autoCombatZoom") or GetOption("autoMountZoom")) end,
                     },
                 },
@@ -263,29 +283,31 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("softTargetInteract", val) end,
                         order = 4,
                     },
-                    
-                    -- *** Tools ***
-                    toolsHeader = {
-                        type = "header",
-                        name = L["TOOLS_HEADER"],
-                        order = 10,
-                    },
-                    clearTrackerBtn = {
+                },
+            },
+            
+            -- *** Tools & Utilities ***
+            toolsSettings = {
+                type = "group",
+                name = L["TOOLS_HEADER"],
+                order = 5,
+                args = {
+                     clearTrackerBtn = {
                         type = "execute",
                         name = L["UNTRACK_QUESTS_BUTTON"],
                         desc = L["UNTRACK_QUESTS_DESC"],
                         func = function() ns.Functions:ClearAllQuestTracking() end,
-                        order = 11,
+                        order = 1,
                         width = "full",
                     },
-                },
+                }
             },
 
             -- *** Debug ***
             debugSettings = {
                 type = "group",
                 name = L["DEBUG_SETTINGS"],
-                order = 5,
+                order = 6,
                 args = {
                     enableDebug = {
                         type = "toggle",

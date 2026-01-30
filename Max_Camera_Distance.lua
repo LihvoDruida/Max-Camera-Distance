@@ -85,7 +85,6 @@ local eventHandlers = {
     end,
 
     -- Зміна форми (Друїд, Шаман, Рога, Прист тощо)
-    -- Це критично для вашої проблеми з Друїдом!
     UPDATE_SHAPESHIFT_FORM = function(event)
         if ns.Functions then
             SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-Shapeshift", ns.Functions, event)

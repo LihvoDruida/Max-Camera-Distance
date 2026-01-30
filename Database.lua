@@ -32,13 +32,13 @@ Database.DEFAULTS = {
     -- Тепер тут зберігаємо ЯРДИ
     ZOOM_DISTANCE = MAX_YARDS,
     -- "Мінімальна" дистанція для Smart Zoom (наприклад, коли виходиш з бою).
-    -- Встановили 28.5 (стандарт гри), щоб поза боєм камера була звичною.
     MIN_ZOOM_DISTANCE = BLIZZARD_DEFAULT_YARDS,
     
     YAW_MOVE_SPEED = yawMoveSpeed,
     PITCH_MOVE_SPEED = pitchMoveSpeed,
     DISMOUNT_DELAY = 0,
     MOVE_VIEW_DISTANCE = 30000,
+    ZOOM_TRANSITION_TIME = 0.5,
 
     -- Константи для слайдерів у Config
     MAX_POSSIBLE_DISTANCE = MAX_YARDS,
@@ -64,13 +64,14 @@ function Database:InitDB()
     if not self or type(self) ~= "table" then self = Database end
 
     local defaultProfile = {
-        maxZoomFactor = Database.DEFAULTS.ZOOM_DISTANCE, -- Зберігаємо 39 або 50
+        maxZoomFactor = Database.DEFAULTS.ZOOM_DISTANCE,
         minZoomFactor = Database.DEFAULTS.MIN_ZOOM_DISTANCE,
         
         moveViewDistance = Database.DEFAULTS.MOVE_VIEW_DISTANCE,
         cameraYawMoveSpeed = Database.DEFAULTS.YAW_MOVE_SPEED,
         cameraPitchMoveSpeed = Database.DEFAULTS.PITCH_MOVE_SPEED,
         dismountDelay = Database.DEFAULTS.DISMOUNT_DELAY,
+        zoomTransitionTime = Database.DEFAULTS.ZOOM_TRANSITION_TIME,
 
         autoCombatZoom = Database.DEFAULTS.AUTO_COMBAT_ZOOM,
         autoMountZoom = Database.DEFAULTS.AUTO_MOUNT_ZOOM,
@@ -116,7 +117,6 @@ function Database:OnProfileUpdate(reason)
 end
 
 -- *** Helper: Отримати значення для CVar ***
--- Ця функція перетворює ваші ярди (39) у фактор CVar (2.6)
 function Database:GetCVarFactor(yards)
     return yards / Database.DEFAULTS.CONVERSION_RATIO
 end

@@ -12,6 +12,9 @@ L["MAX_ZOOM_FACTOR_DESC"] = "Set the absolute maximum allowed camera distance (i
 L["MOVE_VIEW_DISTANCE"] = "Zoom Speed"
 L["MOVE_VIEW_DISTANCE_DESC"] = "Adjusts how fast the camera zooms in and out when using the scroll wheel or hotkeys."
 
+L["ZOOM_TRANSITION"] = "Transition Smoothness"
+L["ZOOM_TRANSITION_DESC"] = "Time in seconds to smoothly transition between camera distances (Combat/Mount/Normal). Higher values mean slower, smoother movement."
+
 L["YAW_MOVE_SPEED"] = "Horizontal Rotation Speed"
 L["YAW_MOVE_SPEED_DESC"] = "Adjust the speed of the camera's horizontal movement (Yaw) when turning with the mouse."
 
@@ -64,11 +67,15 @@ L["TOOLS_HEADER"] = "Tools & Utilities"
 
 L["UNTRACK_QUESTS_BUTTON"] = "Untrack All Quests"
 L["UNTRACK_QUESTS_DESC"] = "Instantly removes all quests from the objective tracker (right side of screen) to reduce clutter and improve FPS."
+L["QUEST_TRACKER_EMPTY"] = "Quest tracker is already empty."
+L["QUEST_TRACKER_CLEARED"] = "Stopped tracking %d quests."
 
 -- *** Messages & UI ***
 L["SETTINGS_CHANGED"] = "Camera settings have been updated."
 L["SETTINGS_RESET"] = "Profile has been reset to default values."
 L["DB_NOT_READY"] = "Database not initialized yet."
+L["CMD_USAGE"] = "Usage: /mcd max | avg | min | config"
+L["ZOOM_SET_MESSAGE"] = "Zoom set to %s (%.1f yards)"
 
 L["WARNING_TEXT"] = "This addon extends the camera distance limit beyond default UI slider to improve visibility during raids, dungeons, and PvP."
 
