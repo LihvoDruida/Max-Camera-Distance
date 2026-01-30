@@ -1,4 +1,4 @@
-package-as: Max_Camera_Distance
+#package-as: Max_Camera_Distance
 enable-nolib-creation: no
 
 manual-changelog:
