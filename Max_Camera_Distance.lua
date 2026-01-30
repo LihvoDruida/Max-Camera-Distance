@@ -19,8 +19,6 @@ end
 -- *** Безпечний виклик (pcall) ***
 local function SafeCall(func, name, ...)
     if type(func) ~= "function" then return end
-    -- "..." тут передає аргументи у функцію. 
-    -- Для методів (:) першим аргументом має бути таблиця (self).
     local ok, err = pcall(func, ...)
     if not ok then
         print(string.format("|cffff0000%s Error in %s:|r %s", addonName, name, tostring(err)))
@@ -33,7 +31,9 @@ local function IsPlayerReady()
 end
 
 local function IsSafeToAdjustCamera()
-    return not InCombatLockdown() and IsPlayerReady()
+    -- Для налаштувань CVar нам треба бути не в бою, 
+    -- АЛЕ для нашого SmartZoom ми повинні працювати завжди (LibCamera дозволяє зум у бою)
+    return IsPlayerReady()
 end
 
 -- *** Обробники подій ***
@@ -41,13 +41,12 @@ local eventHandlers = {
     ADDON_LOADED = function(event, loadedAddon)
         if loadedAddon ~= addonName then return end 
 
-        -- !!! ВИПРАВЛЕННЯ ТУТ !!!
-        -- Ми передаємо ns.Database третім аргументом. Він стає 'self' всередині InitDB.
+        -- Ініціалізація БД
         if ns.Database and ns.Database.InitDB then 
             SafeCall(ns.Database.InitDB, "InitDB", ns.Database) 
         end
         
-        -- Те саме для Config
+        -- Ініціалізація Config
         if ns.Config and ns.Config.SetupOptions then 
             SafeCall(ns.Config.SetupOptions, "SetupOptions", ns.Config) 
         end
@@ -57,41 +56,52 @@ local eventHandlers = {
 
     PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
         if IsSafeToAdjustCamera() and ns.Functions then
-            -- Передаємо ns.Functions як self
             SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions, event)
         end
     end,
 
+    -- *** ПОДІЇ СТАНУ (Бій, Маунт, Форма) ***
+    -- Всі вони викликають UpdateSmartZoomState
     PLAYER_REGEN_DISABLED = function(event)
         if ns.Functions then
-            SafeCall(ns.Functions.UpdateCameraOnCombat, "EnterCombat", ns.Functions, event)
+            SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-CombatEnter", ns.Functions, event)
         end
     end,
 
     PLAYER_REGEN_ENABLED = function(event)
-        if IsSafeToAdjustCamera() and ns.Functions then
-            SafeCall(ns.Functions.UpdateCameraOnCombat, "LeaveCombat", ns.Functions, event)
+        if ns.Functions then
+            SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-CombatLeave", ns.Functions, event)
+        end
+    end,
+    
+    -- Нові події для маунтів і форм
+    PLAYER_MOUNT_DISPLAY_CHANGED = function(event)
+        if ns.Functions then
+            SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-Mount", ns.Functions, event)
         end
     end,
 
+    UPDATE_SHAPESHIFT_FORM = function(event)
+        if ns.Functions then
+            SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-Shapeshift", ns.Functions, event)
+        end
+    end,
+    
+    -- Опціонально: для Dragonriding (Retail)
+    TRAIT_CONFIG_UPDATED = function(event)
+        if ns.Functions then
+            SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-Traits", ns.Functions, event)
+        end
+    end,
+
+    -- Синхронізація налаштувань
     CVAR_UPDATE = function(event, cvarName, value)
         if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then
-            if IsSafeToAdjustCamera() and ns.Functions then
+            if ns.Functions then
                 SafeCall(ns.Functions.OnCVarUpdate, "OnCVarUpdate", ns.Functions, event, cvarName, value)
             end
         end
     end,
-    
-    UNIT_AURA = function(event, unit, updateInfo)
-        if unit ~= "player" then return end
-        
-        local isFullUpdate = updateInfo == nil or updateInfo.isFullUpdate
-        if isFullUpdate or (updateInfo.addedAuras or updateInfo.removedAuras) then
-             if IsPlayerReady() and ns.Functions then
-                SafeCall(ns.Functions.UpdateCameraOnCombat, "UnitAura", ns.Functions, event, unit)
-            end
-        end
-    end
 }
 
 -- *** Головний обробник ***
@@ -111,7 +121,6 @@ end
 SLASH_MAXCAMDIST1 = "/mcd"
 SlashCmdList["MAXCAMDIST"] = function(msg)
     if ns.Functions and ns.Functions.SlashCmdHandler then
-        -- Тут теж передаємо ns.Functions
         SafeCall(ns.Functions.SlashCmdHandler, "SlashCmd", ns.Functions, msg)
     else
         print(addonName .. ": Handler not found.")

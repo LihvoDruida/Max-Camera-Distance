@@ -48,6 +48,8 @@ Database.DEFAULTS = {
     REDUCE_UNEXPECTED_MOVEMENT = false,
     CAMERA_INDIRECT_VISIBILITY = true,
     AUTO_COMBAT_ZOOM = false,
+    AUTO_MOUNT_ZOOM = false,
+    MOUNT_ZOOM_FACTOR = MAX_YARDS,
     ENABLE_DEBUG_LOGGING = false,
     RESAMPLE_ALWAYS_SHARPEN = (resampleSharpenDefault == 1),
     SOFT_TARGET_INTERACT = (softTargetDefault == 1)
@@ -71,11 +73,13 @@ function Database:InitDB()
         dismountDelay = Database.DEFAULTS.DISMOUNT_DELAY,
 
         autoCombatZoom = Database.DEFAULTS.AUTO_COMBAT_ZOOM,
+        autoMountZoom = Database.DEFAULTS.AUTO_MOUNT_ZOOM,
+        mountZoomFactor = Database.DEFAULTS.MOUNT_ZOOM_FACTOR,
         reduceUnexpectedMovement = Database.DEFAULTS.REDUCE_UNEXPECTED_MOVEMENT,
         cameraIndirectVisibility = Database.DEFAULTS.CAMERA_INDIRECT_VISIBILITY,
         resampleAlwaysSharpen = Database.DEFAULTS.RESAMPLE_ALWAYS_SHARPEN,
         softTargetInteract = Database.DEFAULTS.SOFT_TARGET_INTERACT,
-        
+
         enableDebugLogging = Database.DEFAULTS.ENABLE_DEBUG_LOGGING,
         debugLevel = CopyTable(Database.DEFAULT_DEBUG_LEVEL)
     }

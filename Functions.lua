@@ -10,15 +10,18 @@ local C_Timer = C_Timer
 local UnitAffectingCombat = UnitAffectingCombat
 local IsInInstance = IsInInstance
 local GetTime = GetTime
+local IsMounted = IsMounted
+local GetShapeshiftForm = GetShapeshiftForm
+local GetShapeshiftFormInfo = GetShapeshiftFormInfo
 
 -- *** КОНСТАНТИ КОНВЕРТАЦІЇ ***
 local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
 
 -- Змінні стану
-local wasInCombat = false
-local lastCombatUpdate = 0
-local combatCooldown = 1.0 
+local currentZoomState = "none" -- "combat", "mount", "none"
+local lastStateUpdate = 0
+local stateCooldown = 0.5 
 local SETTING_CATEGORY_NAME = "Max Camera Distance"
 
 -- !!! ВАЖЛИВО: Прапорець для запобігання конфліктам !!!
@@ -68,42 +71,114 @@ local function UpdateCVar(key, value)
     end
 end
 
+-- !!! НОВА ДОПОМІЖНА ФУНКЦІЯ: Перевірка "швидкої форми" (Друїд/Шаман)
+local function IsInTravelForm()
+    if IsMounted() then return true end
+    
+    local formIndex = GetShapeshiftForm()
+    if formIndex and formIndex > 0 then
+        -- Отримуємо інформацію про форму
+        local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
+        if spellID then
+            -- Druid Travel (783), Flight (29166), Moonkin (24858 - optional), Ghost Wolf (2645)
+            -- Додавайте сюди ID форм, які ви вважаєте "подорожніми"
+            if spellID == 783 or spellID == 165962 or spellID == 2645 or spellID == 29166 then return true end 
+        end
+    end
+    return false
+end
+
+-- !!! ПЕРЕПИСАНА ФУНКЦІЯ: Розумний Зум (Бій + Маунт) !!!
+-- Вона замінює стару UpdateCameraOnCombat
+function Functions:UpdateSmartZoomState(event)
+    if not (ns.Database and ns.Database.db) then return end
+    local db = ns.Database.db.profile
+    
+    -- Якщо обидві функції вимкнені — виходимо
+    if not db.autoCombatZoom and not db.autoMountZoom then return end
+
+    local currentTime = GetTime()
+    if (currentTime - lastStateUpdate) < 0.1 then return end
+    lastStateUpdate = currentTime
+
+    -- 1. Визначаємо поточний стан (ПРІОРИТЕТИ)
+    local newState = "none"
+    local targetYards = db.minZoomFactor or 28.5
+    
+    local inCombat = UnitAffectingCombat("player")
+    local inInstance, instanceType = IsInInstance()
+    local forceCombatMode = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
+
+    -- ПРІОРИТЕТ 1: Бій (Combat)
+    if db.autoCombatZoom and (inCombat or forceCombatMode) then
+        newState = "combat"
+        targetYards = db.maxZoomFactor -- Combat Max (він же загальний Max)
+        
+    -- ПРІОРИТЕТ 2: Маунт / Подорож (Mount)
+    -- Працює тільки якщо ми НЕ в бою
+    elseif db.autoMountZoom and IsInTravelForm() then
+        newState = "mount"
+        targetYards = db.mountZoomFactor
+        
+    -- ПРІОРИТЕТ 3: Спокій (None)
+    else
+        newState = "none"
+        -- targetYards вже встановлено на minZoomFactor
+    end
+
+    -- 2. Якщо стан не змінився — нічого не робимо
+    if newState == currentZoomState then return end
+
+    -- 3. Логіка затримки (Dismount Delay)
+    local isZoomingOut = (newState == "combat") or (newState == "mount")
+    local delay = isZoomingOut and 0 or (db.dismountDelay or 0)
+
+    -- Оновлюємо змінну стану, щоб не спамити
+    currentZoomState = newState
+
+    C_Timer.After(delay, function()
+        -- Повторна перевірка стану після затримки
+        local reCheckCombat = UnitAffectingCombat("player") or forceCombatMode
+        local reCheckMount = IsInTravelForm()
+        
+        local validatedState = "none"
+        if db.autoCombatZoom and reCheckCombat then validatedState = "combat"
+        elseif db.autoMountZoom and reCheckMount then validatedState = "mount"
+        end
+
+        if validatedState == newState then
+             -- Переконуємось, що ліміт CVar дозволяє цей зум
+             -- Якщо ми в бою/маунті - ліміт має бути Max. Якщо в мирі - може бути меншим (але краще тримати max)
+             local requiredLimit = math.max(targetYards, db.maxZoomFactor)
+             local limitFactor = requiredLimit / CONVERSION_RATIO
+             UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
+
+             if LibCamera then
+                 LibCamera:SetZoomUsingCVar(targetYards, 0.5)
+             end
+             
+             Functions:logMessage("info", string.format("Smart Zoom [%s]: %.1f yards", newState, targetYards))
+        else
+            Functions:logMessage("debug", "State changed during delay, skipping zoom.")
+            currentZoomState = validatedState
+        end
+    end)
+end
+
 function Functions:AdjustCamera()
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
     local LibCamera = LibStub("LibCamera-1.0", true)
 
     -- 1. Спочатку завжди розблокуємо МАКСИМАЛЬНИЙ ліміт гри (CVar)
-    -- Нам потрібно, щоб "стеля" завжди була високою, інакше в бою камера вперлася б у старий ліміт.
     local limitFactor = db.maxZoomFactor / CONVERSION_RATIO
     UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
 
-    -- 2. Визначаємо, куди саме зараз треба зумити камеру (Target Yards)
-    local targetYards = db.maxZoomFactor -- За замовчуванням - максимум
+    -- 2. Викликаємо нашу нову логіку, щоб вона сама вирішила, який зум ставити
+    -- Передаємо "manual_update", щоб функція знала, що це примусовий виклик
+    Functions:UpdateSmartZoomState("manual_update")
 
-    -- Якщо увімкнено "Розумний Зум"
-    if db.autoCombatZoom then
-        local inCombat = UnitAffectingCombat("player")
-        
-        -- Також перевіряємо, чи ми в інстансі (де часто краще мати бойовий зум завжди)
-        local inInstance, instanceType = IsInInstance()
-        local forceCombatMode = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
-        
-        if inCombat or forceCombatMode then
-            targetYards = db.maxZoomFactor
-        else
-            -- Якщо ми в мирі (і налаштовуємо аддон), використовуємо Min
-            targetYards = db.minZoomFactor or 28.5
-        end
-    end
-
-    -- 3. Застосовуємо зум через LibCamera
-    if LibCamera then
-        -- Використовуємо 0.5 сек для плавності, або швидше, якщо це просто оновлення налаштувань
-        LibCamera:SetZoomUsingCVar(targetYards, 0.5)
-    end
-
-    -- 4. Інші налаштування (швидкість, рух тощо)
+    -- 3. Інші налаштування
     UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
     UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
@@ -112,61 +187,12 @@ function Functions:AdjustCamera()
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
 
-    Functions:logMessage("info", string.format("Camera adjusted to %.1f yards (Limit: %.1f)", targetYards, db.maxZoomFactor))
-end
-
--- *** Оновлення камери при бою ***
-function Functions:UpdateCameraOnCombat(event)
-    if not (ns.Database and ns.Database.db) then return end
-    local db = ns.Database.db.profile
-    
-    if not db.autoCombatZoom then return end
-
-    local currentTime = GetTime()
-    if (currentTime - lastCombatUpdate) < combatCooldown then return end
-    lastCombatUpdate = currentTime
-
-    local realCombatState = UnitAffectingCombat("player")
-    local inInstance, instanceType = IsInInstance()
-    local forceCombatMode = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
-    local effectiveCombatState = realCombatState or forceCombatMode
-
-    if effectiveCombatState ~= wasInCombat then
-        wasInCombat = effectiveCombatState
-        
-        -- Цільова дистанція (в ярдах)
-        -- Якщо minZoomFactor не задано (nil), беремо 28.5 як страховку
-        local safeMin = db.minZoomFactor or 28.5
-        local targetYards = effectiveCombatState and db.maxZoomFactor or safeMin
-        
-        local delay = effectiveCombatState and 0 or (db.dismountDelay or 0)
-
-        C_Timer.After(delay, function()
-            local currentCombatState = UnitAffectingCombat("player") or forceCombatMode
-            
-            if currentCombatState == effectiveCombatState then
-                -- !!! ВИПРАВЛЕННЯ ЛОГІКИ !!!
-                -- Ми НЕ змінюємо CVar limit до targetYards. Ми залишаємо CVar на максимумі.
-                
-                -- Переконуємось, що ліміт стоїть на Максимумі
-                local maxFactor = db.maxZoomFactor / CONVERSION_RATIO
-                UpdateCVar("cameraDistanceMaxZoomFactor", maxFactor)
-
-                -- Зумимо камеру до потрібної точки
-                if LibCamera then
-                    LibCamera:SetZoomUsingCVar(targetYards, 0.5)
-                end
-                
-                Functions:logMessage("info", string.format("Combat zoom: %.1f yards", targetYards))
-            end
-        end)
-    end
+    Functions:logMessage("info", "Settings applied manually.")
 end
 
 -- *** Обробка CVAR_UPDATE (Синхронізація зворотнього боку) ***
 function Functions:OnCVarUpdate(_, cvarName, value)
     -- !!! БЛОКУВАННЯ !!!
-    -- Якщо ми самі змінюємо CVar через код (UpdateCVar), ігноруємо цю подію.
     if isInternalUpdate then return end
 
     if not (ns.Database and ns.Database.db) then return end
@@ -176,13 +202,10 @@ function Functions:OnCVarUpdate(_, cvarName, value)
 
     if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then
         local yards = numValue * CONVERSION_RATIO
-        
-        -- Оновлюємо базу тільки якщо це РЕАЛЬНА зміна від гравця
         if math.abs(db.maxZoomFactor - yards) > 0.1 then
             db.maxZoomFactor = yards
             Functions:logMessage("info", string.format("DB synced from CVar: %.1f factor -> %.1f yards", numValue, yards))
         end
-
     elseif cvarName == "cameraDistanceMoveSpeed" then
         db.moveViewDistance = numValue
     elseif cvarName == "cameraYawMoveSpeed" then
@@ -201,22 +224,18 @@ function Functions:OnCVarUpdate(_, cvarName, value)
 end
 
 function Functions:ClearAllQuestTracking()
-    -- Отримуємо кількість відстежуваних квестів
     local numWatches = C_QuestLog.GetNumQuestWatches()
-    
     if numWatches == 0 then
         Functions:SendMessage("Quest tracker is already empty.")
         return
     end
 
-    -- Проходимося у зворотному порядку (безпечніше при видаленні зі списку)
     for i = numWatches, 1, -1 do
         local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
         if questID then
             C_QuestLog.RemoveQuestWatch(questID)
         end
     end
-
     Functions:SendMessage("Stopped tracking " .. numWatches .. " quests.")
 end
 
