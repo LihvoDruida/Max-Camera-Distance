@@ -1,0 +1,82 @@
+name: 🐛 Bug Report
+description: Create a report to help us improve the addon.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+        Please verify that you are using the latest version of the addon before submitting.
+
+  - type: dropdown
+    id: game_version
+    attributes:
+      label: Game Version
+      description: Which version of World of Warcraft are you playing?
+      options:
+        - Retail (Midnight 12.x)
+        - Mists of Pandaria Classic
+        - WoW Anniversary (TBC 2.5.5)
+    validations:
+      required: true
+
+  - type: input
+    id: addon_version
+    attributes:
+      label: Addon Version
+      description: Which version of Max Camera Distance are you using? (e.g., v6.1)
+      placeholder: v6.1
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+      placeholder: When I switch forms as a Druid, the camera does not zoom out...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Please list the steps required to see the issue.
+      placeholder: |
+        1. Login to the game.
+        2. Type command '/mcd max'.
+        3. Enter combat / Mount up.
+        4. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: The camera should automatically zoom out to 39 yards.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Lua Error Logs
+      description: Please copy and paste any Lua errors here.
+      render: lua
+      placeholder: |
+        Message: Interface/AddOns/Max_Camera_Distance/Functions.lua:111: table index is secret
+        Stack: ...
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Troubleshooting Checklist
+      options:
+        - label: I have updated the addon to the latest available version.
+          required: true
+        - label: I have disabled other addons to verify this is not a conflict.
+          required: false
