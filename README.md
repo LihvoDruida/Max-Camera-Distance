@@ -1,33 +1,52 @@
-## Max Camera Distance Addon
+# Max Camera Distance
 
-The Max Camera Distance addon is designed to enhance the World of Warcraft gameplay experience by allowing players to adjust their camera settings beyond the default limits. With this addon, players can customize their maximum zoom factor and move view distance according to their preferences, providing a more personalized gaming experience.
+[![CurseForge](https://img.shields.io/badge/Download-CurseForge-orange?style=for-the-badge&logo=curseforge)](https://www.curseforge.com/wow/addons/max-camera-distance)
+[![Latest Version](https://img.shields.io/github/v/tag/LihvoDruida/Max-Camera-Distance?style=for-the-badge&label=Version&color=blue)](https://github.com/LihvoDruida/Max-Camera-Distance/releases)
 
-### Features
+**Max Camera Distance** is the ultimate camera utility for World of Warcraft. It unlocks the hidden potential of the game engine, allowing you to zoom out further than the standard UI slider permits, giving you a massive advantage in raids, dungeons, and PvP.
 
-- **Customizable Settings:** Adjust the maximum zoom factor and move view distance to your liking.
-- **Easy-to-Use Interface:** Intuitive options menu accessible in-game for convenient customization.
-- **Real-Time Updates:** Changes take effect immediately, ensuring seamless gameplay adjustments.
-- **Localization Support:** The addon supports multiple languages for a broader player base.
+Whether you are a Raider needing to see boss mechanics, a PvP player watching for flankers, or an Explorer enjoying the view, this addon handles it all automatically.
 
-### Installation Instructions
+## 🎥 Preview
 
-To install the Max Camera Distance addon, follow these steps:
+| Overview | Settings & Demo |
+| :---: | :---: |
+| [![Video 1](https://img.youtube.com/vi/9HRe4jD02z4/0.jpg)](https://www.youtube.com/watch?v=9HRe4jD02z4) | [![Video 2](https://img.youtube.com/vi/qP_kdOdMhIk/0.jpg)](https://www.youtube.com/watch?v=qP_kdOdMhIk) |
 
-1. **Download:** Click the "Download" button or clone the repository to your local machine.
-2. **Extract Files:** If downloaded as a ZIP file, extract the contents to your World of Warcraft "Interface/AddOns" folder.
-3. **Enable Addon:** Launch World of Warcraft, log in, and enable the Max Camera Distance addon from the AddOns menu.
-4. **Customize Settings:** Access the addon settings in-game and tailor your camera preferences.
+## 🚀 Key Features
 
-### Contribution Guidelines
+### 🧠 Smart Zoom System (Context-Aware)
+The addon intelligently changes your camera distance based on what you are doing:
+* **Combat Mode:** Automatically zooms out to the absolute maximum when you enter combat for better situational awareness.
+* **Mount & Travel Mode:** Detects when you mount up or use travel forms (Druid Flight/Travel form, Shaman Ghost Wolf, Evoker Soar, etc.) and adjusts the camera for travel.
+* **Peace Mode:** Returns to a closer, more immersive "Normal" distance when you leave combat or dismount.
+* **Smooth Transitions:** No jarring jumps! The camera smoothly glides between distances. You can customize the transition speed in options.
 
-Contributions to the Max Camera Distance addon are welcome! If you'd like to contribute, please follow these guidelines:
+### ⚙️ Advanced Camera Control
+* **Break the Limit:** Extends camera distance beyond default limits (up to 39 yards in Retail / 50 yards in Classic).
+* **Unexpected Movement Protection:** Minimizes the annoying camera "jumps" when your character collides with walls or terrain (Smart Pivot).
+* **Terrain Collision (Indirect Visibility)::** Option to allow the camera to clip through objects for a consistent view.
+* **Zoom Speed:** Customize how fast the mouse wheel zooms in and out.
 
-- Fork the repository and create a new branch for your feature or bug fix.
-- Make your changes and submit a pull request with a clear description of your modifications.
-- Ensure your code adheres to the addon's coding standards and practices.
+### 🛠️ Quality of Life & Performance
+* **Always Sharpen (FSR):** Forces the game to apply FidelityFX sharpness for a crisper image, even without upscaling enabled.
+* **Soft Target Icons:** Enables interaction icons over NPCs, portals, and objects.
+* **Quest Tracker Cleaner:** Includes a button to instantly untrack all quests to reduce UI clutter and boost FPS in raids.
 
-### Bug Reporting
+## 💻 Commands
 
-If you encounter any issues or bugs while using the Max Camera Distance addon, please open a new issue on GitHub. Provide detailed information about the problem, including steps to reproduce it and any error messages received.
+* `/mcd config` - Open the configuration panel (GUI).
+* `/mcd max` - Instantly set camera to maximum distance.
+* `/mcd avg` - Set camera to a balanced average distance.
+* `/mcd min` - Set camera to minimum distance.
 
-Thank you for using Max Camera Distance! Enjoy your enhanced World of Warcraft gameplay experience.
+## ✅ Compatibility
+
+Fully compatible with:
+* **Retail:** Midnight (12.x) - *Safe for Raids (Private Aura crash fixed!)*
+* **Classic:** Mists of Pandaria Classic
+* **Anniversary:** The Burning Crusade (TBC)
+
+## 🐞 Bug Reporting
+
+Found a bug or have a suggestion? Please submit a ticket via our [GitHub Issues](https://github.com/LihvoDruida/Max-Camera-Distance/issues) or leave a comment on [CurseForge](https://www.curseforge.com/wow/addons/max-camera-distance).
