@@ -1,0 +1,14 @@
+title: "[Q&A]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the FAQ or search previous discussions before asking!
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What do you need help with?
+      placeholder: How do I change the transition speed for mounting?
+    validations:
+      required: true
