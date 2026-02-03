@@ -210,7 +210,7 @@ function Functions:AdjustCamera()
     local limitFactor = db.maxZoomFactor / CONVERSION_RATIO
     UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
 
-    if db.autoCombatZoom or db.autoMountZoom then
+    if db.autoCombatZoom and db.autoMountZoom or db.autoCombatZoom then
         Functions:UpdateSmartZoomState("manual_update")
     else
         if LibCamera then
