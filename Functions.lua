@@ -26,43 +26,67 @@ local SETTING_CATEGORY_NAME = "Max Camera Distance"
 local isInternalUpdate = false
 local updateTimerHandle = nil -- Для таймера оновлення (Debounce)
 
--- *** СПИСКИ ФОРМ ТА БАФІВ ***
+-- ================= TRAVEL / FLIGHT FORMS & BUFFS (ALL VERSIONS) =================
+-- Used for checking shapeshift forms and buffs (UNIT_AURA)
+-- Covers Classic → TBC → WotLK → Retail → Shadowlands → Dragonflight
+
 local TRAVEL_FORM_IDS = {
-    -- === DRUID (Classic -> Retail) ===
-    [783]    = true, -- Travel Form (Ground)
-    [1066]   = true, -- Aquatic Form
-    [33943]  = true, -- Flight Form (Classic/TBC/WotLK)
-    [40120]  = true, -- Swift Flight Form (Classic/TBC/WotLK)
-    [165962] = true, -- Flight Form (Retail - All in one)
-    [210053] = true, -- Stag Form (Glyph/Book)
-    
+    -- === DRUID ===
+    [783]    = true,  -- Travel Form (Classic/Retail - Ground / Cheetah)
+    [1066]   = true,  -- Aquatic Form (Classic/Era)
+    [276012] = true,  -- Aquatic Form (Retail - Passive buff in water)
+    [33943]  = true,  -- Flight Form (Classic/TBC/WotLK/Cata)
+    [40120]  = true,  -- Swift Flight Form (Classic/TBC/WotLK/Cata)
+    [165962] = true,  -- Flight Form (Retail - Unified)
+    [210053] = true,  -- Mount Form (Stag/Doe - Retail)
+    [232323] = true,  -- Sentinel Form (Glyph - Owl)
+    [29166]  = true,  -- Innervate (Legacy, sometimes returned as a form)
+
     -- === SHAMAN ===
-    [2645]   = true, -- Ghost Wolf
-    
+    [2645]   = true,  -- Ghost Wolf
+    [292651] = true,  -- Spectral Wolf (Glyph variation)
+
     -- === MONK ===
-    [125565] = true, -- Zen Flight
+    [125565] = true,  -- Zen Flight (Flying Cloud)
+
+    -- === SHADOWLANDS / TOYS ===
+    [310143] = true,  -- Soulshape (Night Fae)
+    [311648] = true,  -- Soulshape variations
 }
 
 local TRAVEL_BUFF_IDS = {
-    -- === EVOKER (Dracthyr Soar / Skyriding) ===
-    -- Це расова здібність польоту (не маунт), тому потрібен ID
-    [369536] = true, -- Soar (General)
-    [359618] = true, -- Soar (Cast/Buff phase)
-    [375087] = true, -- Dragonriding Check (Іноді висить як прихована аура)
+    -- === EVOKER / DRAGONRIDING ===
+    [369536] = true,  -- Soar (General)
+    [359618] = true,  -- Soar (Cast / Lift-off)
+    [375087] = true,  -- Dragonriding check (Hidden aura)
+    [375088] = true,  -- Dragonriding hidden lift-off
+    [462245] = true,  -- Skyriding toggle (TWW / DF zones)
 
-    -- === PALADIN (Divine Steed - "Konyk") ===
-    [221883] = true, -- Divine Steed (Generic)
-    [254474] = true, -- Divine Steed (Protection)
-    [254471] = true, -- Divine Steed (Holy)
-    [254472] = true, -- Divine Steed (Retribution)
-    [254473] = true, -- Divine Steed (Glyph)
+    -- === PALADIN DIVINE STEED ===
+    [221883] = true,  -- Generic / Retail/BFA+
+    [254471] = true,  -- Holy
+    [254472] = true,  -- Protection
+    [254473] = true,  -- Retribution
+    [254474] = true,  -- Glyph of the Trusted Steed
+    [221885] = true,  -- Valorous (Legion)
+    [221886] = true,  -- Golden / Prot (Legion)
+    [221887] = true,  -- Vengeful / Ret (Legion)
 
-    -- === WORGEN ===
-    [87840]  = true, -- Running Wild (Біг на чотирьох лапах)
+    -- === Worgen racial ===
+    [87840]  = true,  -- Running Wild
 
-    -- === DRUID (Backup for Buffs) ===
-    [783]    = true, -- Travel Form aura
-    [165962] = true, -- Flight Form aura
+    -- === Tauren racial ===
+    [392376] = true,  -- Plainsrunning (SoD / Classic)
+
+    -- === DRUID backup auras ===
+    [783]    = true,  -- Travel Form aura
+    [165962] = true,  -- Flight Form aura
+    [276029] = true,  -- Aquatic Form passive buff
+    [232323] = true,  -- Sentinel Form (Glyph Owl)
+
+    -- === SHAMAN backup auras ===
+    [2645]   = true,  -- Ghost Wolf
+    [292651] = true,  -- Spectral Wolf (Glyph)
 }
 
 -- *** Виведення повідомлень ***
