@@ -27,16 +27,14 @@ local isInternalUpdate = false
 local updateTimerHandle = nil -- Для таймера оновлення (Debounce)
 
 -- *** СПИСКИ ФОРМ ТА БАФІВ ***
-
 local TRAVEL_FORM_IDS = {
-    -- === DRUID ===
-    [783]    = true, -- Travel Form
+    -- === DRUID (Classic -> Retail) ===
+    [783]    = true, -- Travel Form (Ground)
     [1066]   = true, -- Aquatic Form
-    [33943]  = true, -- Flight Form
-    [40120]  = true, -- Swift Flight Form
-    [165962] = true, -- Flight Form (Retail)
-    [210053] = true, -- Stag Form
-    [29166]  = true, -- Innervate/Old Flight logic
+    [33943]  = true, -- Flight Form (Classic/TBC/WotLK)
+    [40120]  = true, -- Swift Flight Form (Classic/TBC/WotLK)
+    [165962] = true, -- Flight Form (Retail - All in one)
+    [210053] = true, -- Stag Form (Glyph/Book)
     
     -- === SHAMAN ===
     [2645]   = true, -- Ghost Wolf
@@ -46,17 +44,25 @@ local TRAVEL_FORM_IDS = {
 }
 
 local TRAVEL_BUFF_IDS = {
-    -- === PALADIN ===
-    [221883] = true, -- Divine Steed
-    [254474] = true, -- Divine Steed
-    
-    -- === EVOKER ===
-    [369536] = true, -- Soar
-    [359618] = true, -- Soar
-    
-    -- === DRUID (Backup) ===
-    [783]    = true,
-    [165962] = true,
+    -- === EVOKER (Dracthyr Soar / Skyriding) ===
+    -- Це расова здібність польоту (не маунт), тому потрібен ID
+    [369536] = true, -- Soar (General)
+    [359618] = true, -- Soar (Cast/Buff phase)
+    [375087] = true, -- Dragonriding Check (Іноді висить як прихована аура)
+
+    -- === PALADIN (Divine Steed - "Konyk") ===
+    [221883] = true, -- Divine Steed (Generic)
+    [254474] = true, -- Divine Steed (Protection)
+    [254471] = true, -- Divine Steed (Holy)
+    [254472] = true, -- Divine Steed (Retribution)
+    [254473] = true, -- Divine Steed (Glyph)
+
+    -- === WORGEN ===
+    [87840]  = true, -- Running Wild (Біг на чотирьох лапах)
+
+    -- === DRUID (Backup for Buffs) ===
+    [783]    = true, -- Travel Form aura
+    [165962] = true, -- Flight Form aura
 }
 
 -- *** Виведення повідомлень ***
