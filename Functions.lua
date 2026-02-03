@@ -3,6 +3,7 @@ ns.Functions = {}
 local Functions = ns.Functions
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName) or {}
 local LibCamera = LibStub("LibCamera-1.0", true)
+local ACD = LibStub("AceConfigDialog-3.0")
 
 -- Кешування API
 local C_CVar = C_CVar
@@ -299,7 +300,6 @@ end
 
 function Functions:SlashCmdHandler(msg)
     local command = strlower(msg or "")
-    local settings = { max = IS_RETAIL and 39 or 50, avg = 20, min = 5 }
 
     if not (ns.Database and ns.Database.db) then 
         Functions:SendMessage(L["DB_NOT_READY"] or "Database not ready.")
@@ -308,21 +308,32 @@ function Functions:SlashCmdHandler(msg)
     
     local db = ns.Database.db.profile
 
-    if settings[command] then
-        local yards = settings[command]
-        db.maxZoomFactor = yards
-        Functions:AdjustCamera()
-        local msgFormat = L["ZOOM_SET_MESSAGE"] or "Zoom set to %s (%.1f yards)"
-        Functions:SendMessage(string.format(msgFormat, command, yards))
-    elseif command == "config" then
-        if Settings and Settings.OpenToCategory then
-            local categoryID = Settings.GetCategoryID and Settings.GetCategoryID(SETTING_CATEGORY_NAME)
-            if categoryID then Settings.OpenToCategory(categoryID)
-            else Settings.OpenToCategory(SETTING_CATEGORY_NAME) end
+    if command == "config" then
+        -- Відкриття налаштувань через AceConfigDialog
+        if ACD then
+            ACD:Open(addonName) 
         else
-            Functions:SendMessage("Error: Settings API not available.")
+            Functions:SendMessage("Error: AceConfigDialog not found. Cannot open settings.")
         end
+
+    elseif command == "autozoom" then
+        -- Перемикач Combat Zoom
+        db.autoCombatZoom = not db.autoCombatZoom
+        Functions:AdjustCamera() -- Застосовуємо зміни одразу
+        
+        local state = db.autoCombatZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
+        Functions:SendMessage("Auto Combat Zoom: " .. state)
+
+    elseif command == "automount" then
+        -- Перемикач Mount Zoom
+        db.autoMountZoom = not db.autoMountZoom
+        Functions:AdjustCamera() -- Застосовуємо зміни одразу
+        
+        local state = db.autoMountZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
+        Functions:SendMessage("Auto Mount Zoom: " .. state)
+
     else
-        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd max | avg | min | config")
+        -- Оновлена довідка
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount")
     end
 end
