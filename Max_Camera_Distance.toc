@@ -8,6 +8,7 @@
 ## Version: v6.1
 ## Author: melles1991
 ## DefaultState: Enabled
+## OptionalDeps: Ace3
 ## SavedVariables: MaxCameraDistanceDB
 ## LoadSavedVariablesFirst: true
 ## Category-enUS: Camera

@@ -7,6 +7,7 @@
 ## IconTexture: Interface\AddOns\Max_Camera_Distance\assets\logo
 ## Version: v6.1
 ## Author: melles1991
+## OptionalDeps: Ace3
 ## DefaultState: Enabled
 ## SavedVariables: MaxCameraDistanceDB
 ## LoadSavedVariablesFirst: true
