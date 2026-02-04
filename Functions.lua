@@ -10,7 +10,6 @@ local C_CVar = C_CVar
 local C_Timer = C_Timer
 local UnitAffectingCombat = UnitAffectingCombat
 local IsInInstance = IsInInstance
-local GetTime = GetTime
 local IsMounted = IsMounted
 local GetShapeshiftForm = GetShapeshiftForm
 local GetShapeshiftFormInfo = GetShapeshiftFormInfo
@@ -23,9 +22,13 @@ local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
 -- Змінні стану
 local currentZoomState = "none" -- "combat", "mount", "none"
 local SETTING_CATEGORY_NAME = "Max Camera Distance"
+local ZOOM_STATE_NONE   = "none"
+local ZOOM_STATE_MOUNT  = "mount"
+local ZOOM_STATE_COMBAT = "combat"
+
+local transitionTimer = nil
 
 local isInternalUpdate = false
-local updateTimerHandle = nil -- Для таймера оновлення (Debounce)
 
 -- ================= TRAVEL / FLIGHT FORMS & BUFFS (ALL VERSIONS) =================
 -- Used for checking shapeshift forms and buffs (UNIT_AURA)
@@ -163,68 +166,88 @@ local function IsInTravelForm()
     return false
 end
 
+local function CancelTransition()
+    if transitionTimer then
+        C_Timer.CancelTimer(transitionTimer)
+        transitionTimer = nil
+    end
+end
 
--- *** UpdateSmartZoomState ***
+local function ApplyZoomTransition(targetYards, transitionTime)
+    local targetFactor  = targetYards / CONVERSION_RATIO
+    local currentFactor = tonumber(C_CVar.GetCVar("cameraDistanceMaxZoomFactor")) or 0
+
+    if targetFactor < currentFactor then
+        if LibCamera then
+            LibCamera:SetZoomUsingCVar(targetYards, transitionTime)
+        end
+
+        transitionTimer = C_Timer.After(transitionTime + 0.05, function()
+            UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
+        end)
+    else
+        UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
+
+        if LibCamera then
+            LibCamera:SetZoomUsingCVar(targetYards, transitionTime)
+        end
+    end
+end
+
 function Functions:UpdateSmartZoomState(event)
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
-    
+
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
-    local isManual = (event == "manual_update")
-    
-    if updateTimerHandle then C_Timer.CancelTimer(updateTimerHandle) end
+    local inCombat = UnitAffectingCombat("player")
+    local inInstance, instanceType = IsInInstance()
+    local forceCombat = inInstance and (
+        instanceType == "party" or
+        instanceType == "raid"  or
+        instanceType == "arena" or
+        instanceType == "pvp"
+    )
 
-    updateTimerHandle = C_Timer.After(0.05, function()
-        local newState = "none"
-        local targetYards = db.minZoomFactor or 28.5
-        
-        local inCombat = UnitAffectingCombat("player")
-        local inInstance, instanceType = IsInInstance()
-        local forceCombatMode = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
+    local isMounted = IsInTravelForm()
 
-        if db.autoCombatZoom and (inCombat or forceCombatMode) then
-            newState = "combat"
-            targetYards = db.maxZoomFactor
-        elseif db.autoMountZoom and IsInTravelForm() then
-            newState = "mount"
-            targetYards = db.mountZoomFactor or 39
-        else
-            newState = "none"
-        end
+    local newState = ZOOM_STATE_NONE
+    local targetYards = db.minZoomFactor or 15
 
-        if not isManual and newState == currentZoomState then return end
+    if db.autoCombatZoom and (inCombat or forceCombat) then
+        newState = ZOOM_STATE_COMBAT
+        targetYards = db.maxZoomFactor
+    elseif db.autoMountZoom and isMounted then
+        newState = ZOOM_STATE_MOUNT
+        targetYards = db.mountZoomFactor
+    end
 
-        local isRestoring = (newState == "none")
-        local delay = (not isManual and isRestoring) and (db.dismountDelay or 0) or 0
+    if newState == currentZoomState and event ~= "manual_update" then
+        return
+    end
 
-        currentZoomState = newState
+    CancelTransition()
+    currentZoomState = newState
 
-        C_Timer.After(delay, function()
-            local reCheckCombat = UnitAffectingCombat("player") or forceCombatMode
-            local reCheckMount = IsInTravelForm()
-            
-            local validatedState = "none"
-            if db.autoCombatZoom and reCheckCombat then validatedState = "combat"
-            elseif db.autoMountZoom and reCheckMount then validatedState = "mount"
-            end
+    local transitionTime = db.zoomTransitionTime or 0.5
 
-            if validatedState == newState or isManual then
-                 local requiredLimit = math.max(targetYards, db.maxZoomFactor)
-                 local limitFactor = requiredLimit / CONVERSION_RATIO
-                 UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
-
-                 if LibCamera then
-                     LibCamera:SetZoomUsingCVar(targetYards, db.zoomTransitionTime or 0.5)
-                 end
-                 
-                 Functions:logMessage("info", string.format("Smart Zoom [%s]: %.1f yards", newState, targetYards))
-            else
-                currentZoomState = validatedState
-                Functions:logMessage("debug", "State changed during delay, skipping zoom.")
-            end
+    if newState == ZOOM_STATE_NONE and event ~= "manual_update" then
+        local delay = db.dismountDelay or 0
+        transitionTimer = C_Timer.After(delay, function()
+            ApplyZoomTransition(targetYards, transitionTime)
         end)
-    end)
+    else
+        ApplyZoomTransition(targetYards, transitionTime)
+    end
+
+    Functions:logMessage(
+        "info",
+        string.format(
+            "Smart Zoom → %s (%.1f yards)",
+            newState,
+            targetYards
+        )
+    )
 end
 
 function Functions:AdjustCamera()
@@ -232,17 +255,24 @@ function Functions:AdjustCamera()
     local db = ns.Database.db.profile
     local LibCamera = LibStub("LibCamera-1.0", true)
 
-    local limitFactor = db.maxZoomFactor / CONVERSION_RATIO
-    UpdateCVar("cameraDistanceMaxZoomFactor", limitFactor)
-
     if db.autoCombatZoom and db.autoMountZoom or db.autoCombatZoom then
         Functions:UpdateSmartZoomState("manual_update")
-    else
-        if LibCamera then
-            LibCamera:SetZoomUsingCVar(db.maxZoomFactor, db.zoomTransitionTime or 0.5)
-        end
-        Functions:logMessage("info", "Smart zoom disabled, applying max distance.")
+
+        UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
+        UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
+        return
     end
+
+    local targetYards  = db.maxZoomFactor
+    local targetFactor = targetYards / CONVERSION_RATIO
+
+    UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
+
+    if LibCamera then
+        LibCamera:SetZoomUsingCVar(targetYards, db.zoomTransitionTime or 0.5)
+    end
+
+    Functions:logMessage("info", "Smart zoom disabled, applying fixed max distance.")
 
     UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
     UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
@@ -253,16 +283,23 @@ function Functions:AdjustCamera()
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
 end
 
+
 function Functions:OnCVarUpdate(_, cvarName, value)
     if isInternalUpdate then return end
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
-    
+
+    if (cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax") then
+        if db.autoCombatZoom or db.autoMountZoom then 
+            return 
+        end
+    end
+
     local numValue = tonumber(value) or 0
 
     if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then
         local yards = numValue * CONVERSION_RATIO
-        if math.abs(db.maxZoomFactor - yards) > 0.1 then
+        if yards > 1 and math.abs(db.maxZoomFactor - yards) > 0.1 then
             db.maxZoomFactor = yards
             Functions:logMessage("info", string.format("DB synced from CVar: %.1f factor -> %.1f yards", numValue, yards))
         end
