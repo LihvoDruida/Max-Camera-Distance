@@ -285,20 +285,49 @@ function Config:SetupOptions()
                     },
                 },
             },
-            
-            -- *** Tools & Utilities ***
-            toolsSettings = {
+            extraFeatures = {
                 type = "group",
-                name = L["TOOLS_HEADER"],
+                name = L["EXTRA_FEATURES"],
                 order = 5,
                 args = {
-                     clearTrackerBtn = {
+                    clearTrackerBtn = {
                         type = "execute",
                         name = L["UNTRACK_QUESTS_BUTTON"],
                         desc = L["UNTRACK_QUESTS_DESC"],
                         func = function() ns.Functions:ClearAllQuestTracking() end,
-                        order = 1,
+                        order = 0.5,
                         width = "full",
+                    },
+                    actionCamHeader = {
+                        type = "header",
+                        name = "Action Cam",
+                        order = 1,
+                    },
+                    descActionCam = {
+                        type = "description",
+                        name = "Cinematic camera effects provided by Blizzard's hidden settings.",
+                        order = 2,
+                    },
+                    enableDynamicPitch = {
+                        type = "toggle",
+                        name = "Dynamic Pitch",
+                        desc = "Adjusts camera angle based on movement (test_cameraDynamicPitch).",
+                        get = function() return GetOption("actionCamPitch") end,
+                        set = function(_, val) SetOption("actionCamPitch", val) end,
+                        order = 4,
+                    },
+                    afkHeader = {
+                        type = "header",
+                        name = "AFK Mode",
+                        order = 10,
+                    },
+                    enableAFK = {
+                        type = "toggle",
+                        name = "Enable AFK Rotation",
+                        desc = "Automatically zooms out and rotates the camera when you go AFK.",
+                        get = function() return GetOption("afkMode") end,
+                        set = function(_, val) SetOption("afkMode", val) end,
+                        order = 11,
                     },
                 }
             },

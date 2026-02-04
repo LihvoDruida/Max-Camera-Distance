@@ -5,7 +5,9 @@ local L = LibStub("AceLocale-3.0"):GetLocale(addonName) or {}
 local LibCamera = LibStub("LibCamera-1.0", true)
 local ACD = LibStub("AceConfigDialog-3.0")
 
--- Кешування API
+-- ============================================================================
+-- 1. API CACHE & CONSTANTS
+-- ============================================================================
 local C_CVar = C_CVar
 local C_Timer = C_Timer
 local UnitAffectingCombat = UnitAffectingCombat
@@ -13,92 +15,49 @@ local IsInInstance = IsInInstance
 local IsMounted = IsMounted
 local GetShapeshiftForm = GetShapeshiftForm
 local GetShapeshiftFormInfo = GetShapeshiftFormInfo
--- UnitBuff видалено з локальних змінних, бо його немає в Retail
+local UnitIsAFK = UnitIsAFK
+local MoveViewRightStart = MoveViewRightStart
+local MoveViewRightStop = MoveViewRightStop
 
--- *** КОНСТАНТИ КОНВЕРТАЦІЇ ***
 local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
 
--- Змінні стану
-local currentZoomState = "none" -- "combat", "mount", "none"
-local SETTING_CATEGORY_NAME = "Max Camera Distance"
+-- ============================================================================
+-- 2. STATE VARIABLES
+-- ============================================================================
+local currentZoomState = "none"
 local ZOOM_STATE_NONE   = "none"
 local ZOOM_STATE_MOUNT  = "mount"
 local ZOOM_STATE_COMBAT = "combat"
 
 local transitionTimer = nil
-
 local isInternalUpdate = false
 
--- ================= TRAVEL / FLIGHT FORMS & BUFFS (ALL VERSIONS) =================
--- Used for checking shapeshift forms and buffs (UNIT_AURA)
--- Covers Classic → TBC → WotLK → Retail → Shadowlands → Dragonflight
+local wasAFK = false
+local savedYawSpeed = 180
 
+local AFK_YAW_SPEED = 4
+
+-- ============================================================================
+-- 3. DATA TABLES
+-- ============================================================================
 local TRAVEL_FORM_IDS = {
-    -- === DRUID ===
-    [783]    = true,  -- Travel Form (Classic/Retail - Ground / Cheetah)
-    [1066]   = true,  -- Aquatic Form (Classic/Era)
-    [276012] = true,  -- Aquatic Form (Retail - Passive buff in water)
-    [33943]  = true,  -- Flight Form (Classic/TBC/WotLK/Cata)
-    [40120]  = true,  -- Swift Flight Form (Classic/TBC/WotLK/Cata)
-    [165962] = true,  -- Flight Form (Retail - Unified)
-    [210053] = true,  -- Mount Form (Stag/Doe - Retail)
-    [232323] = true,  -- Sentinel Form (Glyph - Owl)
-    [29166]  = true,  -- Innervate (Legacy, sometimes returned as a form)
-
-    -- === SHAMAN ===
-    [2645]   = true,  -- Ghost Wolf
-    [292651] = true,  -- Spectral Wolf (Glyph variation)
-
-    -- === MONK ===
-    [125565] = true,  -- Zen Flight (Flying Cloud)
-
-    -- === SHADOWLANDS / TOYS ===
-    [310143] = true,  -- Soulshape (Night Fae)
-    [311648] = true,  -- Soulshape variations
+    [783]=true, [1066]=true, [276012]=true, [33943]=true, [40120]=true, 
+    [165962]=true, [210053]=true, [232323]=true, [29166]=true,
+    [2645]=true, [292651]=true, [125565]=true, [310143]=true, [311648]=true
 }
 
 local TRAVEL_BUFF_IDS = {
-    -- === EVOKER / DRAGONRIDING ===
-    [369536] = true,  -- Soar (General)
-    [359618] = true,  -- Soar (Cast / Lift-off)
-    [375087] = true,  -- Dragonriding check (Hidden aura)
-    [375088] = true,  -- Dragonriding hidden lift-off
-    [462245] = true,  -- Skyriding toggle (TWW / DF zones)
-
-    -- === PALADIN DIVINE STEED ===
-    [221883] = true,  -- Generic / Retail/BFA+
-    [254471] = true,  -- Holy
-    [254472] = true,  -- Protection
-    [254473] = true,  -- Retribution
-    [254474] = true,  -- Glyph of the Trusted Steed
-    [221885] = true,  -- Valorous (Legion)
-    [221886] = true,  -- Golden / Prot (Legion)
-    [221887] = true,  -- Vengeful / Ret (Legion)
-
-    -- === Worgen racial ===
-    [87840]  = true,  -- Running Wild
-
-    -- === Tauren racial ===
-    [392376] = true,  -- Plainsrunning (SoD / Classic)
-
-    -- === DRUID backup auras ===
-    [783]    = true,  -- Travel Form aura
-    [165962] = true,  -- Flight Form aura
-    [276029] = true,  -- Aquatic Form passive buff
-    [232323] = true,  -- Sentinel Form (Glyph Owl)
-
-    -- === SHAMAN backup auras ===
-    [2645]   = true,  -- Ghost Wolf
-    [292651] = true,  -- Spectral Wolf (Glyph)
+    [369536]=true, [359618]=true, [375087]=true, [375088]=true, [462245]=true,
+    [221883]=true, [254471]=true, [254472]=true, [254473]=true, [254474]=true,
+    [221885]=true, [221886]=true, [221887]=true, [87840]=true, [392376]=true,
+    [783]=true, [165962]=true, [276029]=true, [232323]=true, [2645]=true, [292651]=true
 }
 
--- *** Виведення повідомлень ***
-function Functions:SendMessage(message)
-    print("|cff0070deMax Camera Distance|r: " .. tostring(message))
-end
+-- ============================================================================
+-- 4. UTILITY FUNCTIONS
+-- ============================================================================
 
--- *** Логування ***
 function Functions:logMessage(level, message)
     if not (ns.Database and ns.Database.db and ns.Database.db.profile and ns.Database.db.profile.enableDebugLogging) then return end
     local db = ns.Database.db.profile
@@ -113,7 +72,10 @@ function Functions:logMessage(level, message)
     DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff0070deMCD|r %s: %s%s|r", prefix, color, message))
 end
 
--- *** Зміна CVAR ***
+function Functions:SendMessage(message)
+    print("|cff0070deMax Camera Distance|r: " .. tostring(message))
+end
+
 local function UpdateCVar(key, value)
     local strValue = tostring(value)
     local currentValue = C_CVar.GetCVar(key)
@@ -121,48 +83,30 @@ local function UpdateCVar(key, value)
         isInternalUpdate = true
         pcall(C_CVar.SetCVar, key, value)
         isInternalUpdate = false
-        if Functions.logMessage then Functions:logMessage("info", "Updated " .. key .. " to " .. strValue) end
     end
 end
 
 local function IsInTravelForm()
-    -- 1. Звичайний маунт
-    if IsMounted() then
-        return true
-    end
-
-    -- 2. Shapeshift-форми (друїд, шаман, монах)
+    if IsMounted() then return true end
     local formIndex = GetShapeshiftForm()
     if formIndex and formIndex > 0 then
         local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
-        if spellID and TRAVEL_FORM_IDS[spellID] then
-            return true
-        end
+        if spellID and TRAVEL_FORM_IDS[spellID] then return true end
     end
-
-    -- 3. Бафи / аури
     if IS_RETAIL then
-        -- ✅ Retail-safe метод (10.x / 11.x)
-        -- Без unitID, без перебору, без private aura проблем
         for spellID in pairs(TRAVEL_BUFF_IDS) do
-            if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then
-                return true
-            end
+            if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then return true end
         end
     else
-        -- ✅ Classic метод
         local UnitBuff = _G.UnitBuff
         if UnitBuff then
             for i = 1, 40 do
                 local _, _, _, _, _, _, _, _, _, spellID = UnitBuff("player", i)
                 if not spellID then break end
-                if TRAVEL_BUFF_IDS[spellID] then
-                    return true
-                end
+                if TRAVEL_BUFF_IDS[spellID] then return true end
             end
         end
     end
-
     return false
 end
 
@@ -187,10 +131,24 @@ local function ApplyZoomTransition(targetYards, transitionTime)
         end)
     else
         UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
-
         if LibCamera then
             LibCamera:SetZoomUsingCVar(targetYards, transitionTime)
         end
+    end
+end
+
+-- ============================================================================
+-- 5. CORE LOGIC
+-- ============================================================================
+
+function Functions:UpdateActionCam()
+    if not (ns.Database and ns.Database.db) then return end
+    local db = ns.Database.db.profile
+
+    if db.actionCamPitch then
+        UpdateCVar("test_cameraDynamicPitch", 1)
+    else
+        UpdateCVar("test_cameraDynamicPitch", 0)
     end
 end
 
@@ -202,22 +160,17 @@ function Functions:UpdateSmartZoomState(event)
 
     local inCombat = UnitAffectingCombat("player")
     local inInstance, instanceType = IsInInstance()
-    local forceCombat = inInstance and (
-        instanceType == "party" or
-        instanceType == "raid"  or
-        instanceType == "arena" or
-        instanceType == "pvp"
-    )
-
+    local forceCombat = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
     local isMounted = IsInTravelForm()
 
     local newState = ZOOM_STATE_NONE
     local targetYards
-        if db.autoCombatZoom then
-             targetYards = db.minZoomFactor
-        else
-             targetYards = db.maxZoomFactor
-        end
+    
+    if db.autoCombatZoom then
+         targetYards = db.minZoomFactor or 15
+    else
+         targetYards = db.maxZoomFactor or 39
+    end
 
     if db.autoCombatZoom and (inCombat or forceCombat) then
         newState = ZOOM_STATE_COMBAT
@@ -245,36 +198,31 @@ function Functions:UpdateSmartZoomState(event)
         ApplyZoomTransition(targetYards, transitionTime)
     end
 
-    Functions:logMessage(
-        "info",
-        string.format(
-            "Smart Zoom → %s (%.1f yards)",
-            newState,
-            targetYards
-        )
-    )
+    Functions:logMessage("info", string.format("Smart Zoom → %s (%.1f yards)", newState, targetYards))
 end
 
 function Functions:AdjustCamera()
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
     local LibCamera = LibStub("LibCamera-1.0", true)
-
-    if db.autoCombatZoom and db.autoMountZoom or db.autoCombatZoom then
+    
+    Functions:UpdateActionCam()
+    
+    if db.autoCombatZoom or db.autoMountZoom then
         Functions:UpdateSmartZoomState("manual_update")
     else
+        local targetYards = ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE
+        local targetFactor = targetYards / CONVERSION_RATIO
 
-    local targetYards = db.maxZoomFactor
-    local targetFactor = targetYards / CONVERSION_RATIO
+        UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
 
-    UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
+        if LibCamera then
+            LibCamera:SetZoomUsingCVar(db.maxZoomFactor, db.zoomTransitionTime or 0.5)
+        end
 
-    if LibCamera then
-        LibCamera:SetZoomUsingCVar(targetYards, db.zoomTransitionTime or 0.5)
+        Functions:logMessage("info", "Smart zoom disabled, applying fixed max distance.")
     end
-
-    Functions:logMessage("info", "Smart zoom disabled, applying fixed max distance.")
-    end
+    
     UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
     UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
@@ -284,14 +232,13 @@ function Functions:AdjustCamera()
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
 end
 
-
 function Functions:OnCVarUpdate(_, cvarName, value)
     if isInternalUpdate then return end
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
 
     if (cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax") then
-        if db.autoCombatZoom and db.autoMountZoom then 
+        if db.autoCombatZoom or db.autoMountZoom then 
             return 
         end
     end
@@ -321,6 +268,49 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     end
 end
 
+-- ============================================================================
+-- 6. AFK HANDLER (SIMPLIFIED - ROTATION ONLY)
+-- ============================================================================
+
+function Functions:OnPlayerFlagsChanged()
+    if not (ns.Database and ns.Database.db) then return end
+    local db = ns.Database.db.profile
+
+    if not db.afkMode then return end
+
+    local isAFK = UnitIsAFK("player")
+    local LibCamera = LibStub("LibCamera-1.0", true)
+
+    if isAFK and not wasAFK then
+        wasAFK = true
+        Functions:logMessage("info", "Entering AFK Mode...")
+
+        savedYawSpeed = tonumber(C_CVar.GetCVar("cameraYawMoveSpeed")) or 180
+        
+        C_CVar.SetCVar("cameraYawMoveSpeed", AFK_YAW_SPEED) 
+
+        MoveViewRightStart()
+        
+        local maxYards = ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE
+        if LibCamera then
+            LibCamera:SetZoomUsingCVar(maxYards, 4.0) 
+        end
+        
+        UIParent:Hide()
+        
+    elseif not isAFK and wasAFK then
+        wasAFK = false
+        Functions:logMessage("info", "Exiting AFK Mode.")
+        
+        MoveViewRightStop()
+        
+        C_CVar.SetCVar("cameraYawMoveSpeed", savedYawSpeed)
+        
+        Functions:AdjustCamera()
+        UIParent:Show()
+    end
+end
+
 function Functions:ClearAllQuestTracking()
     local numWatches = C_QuestLog.GetNumQuestWatches()
     if numWatches == 0 then
@@ -336,6 +326,10 @@ function Functions:ClearAllQuestTracking()
     Functions:SendMessage(string.format(L["QUEST_TRACKER_CLEARED"] or "Stopped tracking %d quests.", numWatches))
 end
 
+-- ============================================================================
+-- 7. SLASH COMMANDS
+-- ============================================================================
+
 function Functions:SlashCmdHandler(msg)
     local command = strlower(msg or "")
 
@@ -347,7 +341,6 @@ function Functions:SlashCmdHandler(msg)
     local db = ns.Database.db.profile
 
     if command == "config" then
-        -- Відкриття налаштувань через AceConfigDialog
         if ACD then
             ACD:Open(addonName) 
         else
@@ -355,23 +348,18 @@ function Functions:SlashCmdHandler(msg)
         end
 
     elseif command == "autozoom" then
-        -- Перемикач Combat Zoom
         db.autoCombatZoom = not db.autoCombatZoom
-        Functions:AdjustCamera() -- Застосовуємо зміни одразу
-        
+        Functions:AdjustCamera()
         local state = db.autoCombatZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
         Functions:SendMessage("Auto Combat Zoom: " .. state)
 
     elseif command == "automount" then
-        -- Перемикач Mount Zoom
         db.autoMountZoom = not db.autoMountZoom
-        Functions:AdjustCamera() -- Застосовуємо зміни одразу
-        
+        Functions:AdjustCamera()
         local state = db.autoMountZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
         Functions:SendMessage("Auto Mount Zoom: " .. state)
 
     else
-        -- Оновлена довідка
         Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount")
     end
 end

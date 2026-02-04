@@ -63,7 +63,7 @@ L["SOFT_TARGET_INTERACT"] = "Soft Target Interact Icons"
 L["SOFT_TARGET_INTERACT_DESC"] = "Displays interaction icons over game objects (mailboxes, herbs, portals, NPCs) for easier targeting."
 
 -- *** Tools Section ***
-L["TOOLS_HEADER"] = "Tools & Utilities"
+L["EXTRA_FEATURES"] = "Extra Features"
 
 L["UNTRACK_QUESTS_BUTTON"] = "Untrack All Quests"
 L["UNTRACK_QUESTS_DESC"] = "Instantly removes all quests from the objective tracker (right side of screen) to reduce clutter and improve FPS."

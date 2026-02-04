@@ -98,6 +98,12 @@ local eventHandlers = {
         end
     end,
 
+    PLAYER_FLAGS_CHANGED = function(event)
+        if ns.Functions and ns.Functions.OnPlayerFlagsChanged then
+            SafeCall(ns.Functions.OnPlayerFlagsChanged, "OnPlayerFlagsChanged", ns.Functions)
+        end
+    end,
+
     -- Синхронізація налаштувань, якщо гру змінює інший аддон або консоль
     CVAR_UPDATE = function(event, cvarName, value)
         if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then

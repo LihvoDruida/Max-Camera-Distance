@@ -52,7 +52,9 @@ Database.DEFAULTS = {
     MOUNT_ZOOM_FACTOR = MAX_YARDS,
     ENABLE_DEBUG_LOGGING = false,
     RESAMPLE_ALWAYS_SHARPEN = (resampleSharpenDefault == 1),
-    SOFT_TARGET_INTERACT = (softTargetDefault == 1)
+    SOFT_TARGET_INTERACT = (softTargetDefault == 1),
+    ACTION_CAM_PITCH = false,
+    AFK_MODE = false
 }
 
 Database.DEFAULT_DEBUG_LEVEL = {
@@ -80,7 +82,9 @@ function Database:InitDB()
         cameraIndirectVisibility = Database.DEFAULTS.CAMERA_INDIRECT_VISIBILITY,
         resampleAlwaysSharpen = Database.DEFAULTS.RESAMPLE_ALWAYS_SHARPEN,
         softTargetInteract = Database.DEFAULTS.SOFT_TARGET_INTERACT,
-
+        actionCamPitch = Database.DEFAULTS.ACTION_CAM_PITCH,
+        afkMode = Database.DEFAULTS.AFK_MODE,
+        
         enableDebugLogging = Database.DEFAULTS.ENABLE_DEBUG_LOGGING,
         debugLevel = CopyTable(Database.DEFAULT_DEBUG_LEVEL)
     }
