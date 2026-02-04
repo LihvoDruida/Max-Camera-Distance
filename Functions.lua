@@ -212,7 +212,12 @@ function Functions:UpdateSmartZoomState(event)
     local isMounted = IsInTravelForm()
 
     local newState = ZOOM_STATE_NONE
-    local targetYards = db.minZoomFactor or 15
+    local targetYards
+        if db.autoCombatZoom then
+             targetYards = db.minZoomFactor
+        else
+             targetYards = db.maxZoomFactor
+        end
 
     if db.autoCombatZoom and (inCombat or forceCombat) then
         newState = ZOOM_STATE_COMBAT
@@ -257,13 +262,9 @@ function Functions:AdjustCamera()
 
     if db.autoCombatZoom and db.autoMountZoom or db.autoCombatZoom then
         Functions:UpdateSmartZoomState("manual_update")
+    else
 
-        UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
-        UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
-        return
-    end
-
-    local targetYards  = db.maxZoomFactor
+    local targetYards = db.maxZoomFactor
     local targetFactor = targetYards / CONVERSION_RATIO
 
     UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
@@ -273,7 +274,7 @@ function Functions:AdjustCamera()
     end
 
     Functions:logMessage("info", "Smart zoom disabled, applying fixed max distance.")
-
+    end
     UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
     UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
@@ -290,7 +291,7 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     local db = ns.Database.db.profile
 
     if (cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax") then
-        if db.autoCombatZoom or db.autoMountZoom then 
+        if db.autoCombatZoom and db.autoMountZoom then 
             return 
         end
     end
