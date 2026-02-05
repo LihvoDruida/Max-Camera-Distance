@@ -3,7 +3,7 @@ ns.Functions = {}
 local Functions = ns.Functions
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName) or {}
 local LibCamera = LibStub("LibCamera-1.0", true)
-local LibMountInfo = LibStub("LibMountInfo-1.0", true) -- Спробуємо завантажити LibMountInfo
+local LibMountInfo = LibStub("LibMountInfo-1.0", true)
 local ACD = LibStub("AceConfigDialog-3.0")
 
 -- ============================================================================
@@ -52,14 +52,12 @@ local shoulderHandlerFrame = CreateFrame("Frame")
 -- ============================================================================
 -- 3. DATA TABLES (FALLBACK)
 -- ============================================================================
--- Використовується тільки якщо немає LibMountInfo або для форм Друїда/Шамана
 local TRAVEL_FORM_IDS = {
     [783]=true, [1066]=true, [276012]=true, [33943]=true, [40120]=true, 
     [165962]=true, [210053]=true, [232323]=true, [29166]=true,
     [2645]=true, [292651]=true, [125565]=true, [310143]=true, [311648]=true
 }
 
--- Buffs Backup (якщо LibMountInfo не впорається або для специфічних станів)
 local TRAVEL_BUFF_IDS = {
     [369536]=true, [359618]=true, [375087]=true, [375088]=true, [462245]=true,
     [221883]=true, [254471]=true, [254472]=true, [254473]=true, [254474]=true,
@@ -110,15 +108,12 @@ local function UpdateCVar(key, value)
 end
 
 function Functions:IsSkyriding()
-
     if IsMounted() and LibMountInfo then
         return LibMountInfo:IsSkyriding()
     end
 
     if IS_RETAIL then
-        -- Skyriding Mode (Switch Flight Style)
         if C_UnitAuras.GetPlayerAuraBySpellID(404464) then return true end
-        -- Steady Flight Mode (Switch Flight Style)
         if C_UnitAuras.GetPlayerAuraBySpellID(404468) then return false end
     end
     return true
@@ -203,7 +198,7 @@ end
 
 updateFrame:SetScript("OnUpdate", function()
     if updatePending then
-        updatePending = true
+        updatePending = false
         Functions:UpdateSmartZoomState("auto_update")
     end
 end)
@@ -283,8 +278,6 @@ function Functions:UpdateSmartZoomState(event)
     local inCombat = UnitAffectingCombat("player")
     local inInstance, instanceType = IsInInstance()
     local forceCombat = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
-    
-    -- Використовуємо нашу нову розумну функцію
     local isMounted = IsInTravelForm()
 
     local newState = ZOOM_STATE_NONE
@@ -325,16 +318,19 @@ function Functions:UpdateSmartZoomState(event)
     Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"], newState, targetYards))
 end
 
-function Functions:AdjustCamera()
+function Functions:AdjustCamera(forceNow)
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
     local LibCamera = LibStub("LibCamera-1.0", true)
     
     Functions:UpdateActionCam()
     
-    -- Замість прямого виклику, ми "просимо" оновлення через троттлер
     if db.autoCombatZoom or db.autoMountZoom then
-        Functions:RequestUpdate() 
+        if forceNow then
+            Functions:UpdateSmartZoomState("manual_update")
+        else
+            Functions:RequestUpdate()
+        end
     else
         local targetYards = ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE
         local targetFactor = targetYards / CONVERSION_RATIO
@@ -438,7 +434,7 @@ function Functions:OnPlayerFlagsChanged()
         
         safeExitFrame:Hide()
         
-        Functions:AdjustCamera()
+        Functions:AdjustCamera(true) -- Force update when returning from AFK
     end
 end
 
@@ -480,13 +476,13 @@ function Functions:SlashCmdHandler(msg)
 
     elseif command == "autozoom" then
         db.autoCombatZoom = not db.autoCombatZoom
-        Functions:AdjustCamera()
+        Functions:AdjustCamera(true) -- Force update
         local state = db.autoCombatZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
         Functions:SendMessage("Auto Combat Zoom: " .. state)
 
     elseif command == "automount" then
         db.autoMountZoom = not db.autoMountZoom
-        Functions:AdjustCamera()
+        Functions:AdjustCamera(true) -- Force update
         local state = db.autoMountZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
         Functions:SendMessage("Auto Mount Zoom: " .. state)
 

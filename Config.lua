@@ -12,7 +12,7 @@ local function SetOption(key, value)
     if ns.Database and ns.Database.db then
         ns.Database.db.profile[key] = value
         if ns.Functions and ns.Functions.AdjustCamera then
-            ns.Functions:AdjustCamera()
+            ns.Functions:AdjustCamera(true)
         end
     end
 end
