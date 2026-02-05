@@ -1,10 +1,11 @@
-local addonName = "Max_Camera_Distance"
+local addonName = ...
 local L = LibStub("AceLocale-3.0"):NewLocale(addonName, "enUS", true, true)
 
 if not L then return end
 
 -- *** General Settings ***
 L["GENERAL_SETTINGS"] = "General Settings"
+L["VERSION_PREFIX"] = "Version: "
 
 L["MAX_ZOOM_FACTOR"] = "Max Camera Distance"
 L["MAX_ZOOM_FACTOR_DESC"] = "Set the absolute maximum allowed camera distance (in yards) for the game client."
@@ -23,7 +24,7 @@ L["PITCH_MOVE_SPEED_DESC"] = "Adjust the speed of the camera's vertical movement
 
 -- *** Smart Zoom Settings (Combat & Mount) ***
 L["COMBAT_SETTINGS"] = "Smart Zoom System"
-L["COMBAT_SETTINGS_WARNING"] = "|cff0070deThis system automatically adjusts camera distance based on your current state.\nPriority: Combat > Mount > Normal.|r"
+L["COMBAT_SETTINGS_WARNING"] = "|cffffd100System Logic:|r Automatically adjusts camera distance based on your state.\n\n|cffffd100Priority:|r |cffff5555Combat|r  >  |cff66ccffMount|r  >  |cffffffffNormal|r"
 
 -- Combat
 L["AUTO_ZOOM_COMBAT"] = "Enable Smart Combat Zoom"
@@ -62,13 +63,27 @@ L["INDIRECT_VISIBILITY_DESC"] = "Controls how the camera interacts with the envi
 L["SOFT_TARGET_INTERACT"] = "Soft Target Interact Icons"
 L["SOFT_TARGET_INTERACT_DESC"] = "Displays interaction icons over game objects (mailboxes, herbs, portals, NPCs) for easier targeting."
 
--- *** Tools Section ***
+-- *** Extra Features (ActionCam & AFK) ***
 L["EXTRA_FEATURES"] = "Extra Features"
 
 L["UNTRACK_QUESTS_BUTTON"] = "Untrack All Quests"
 L["UNTRACK_QUESTS_DESC"] = "Instantly removes all quests from the objective tracker (right side of screen) to reduce clutter and improve FPS."
 L["QUEST_TRACKER_EMPTY"] = "Quest tracker is already empty."
 L["QUEST_TRACKER_CLEARED"] = "Stopped tracking %d quests."
+
+-- Action Cam
+L["ACTION_CAM_HEADER"] = "Action Cam"
+L["ACTION_CAM_DESC"] = "Enables Blizzard's hidden ActionCam settings for a modern RPG camera feel."
+L["ACTION_CAM_SHOULDER_NAME"] = "Over Shoulder View"
+L["ACTION_CAM_SHOULDER_DESC"] = "Offsets the camera slightly to the side (test_cameraOverShoulder). Features 'Smart Offset' which centers the camera when zooming in close."
+L["ACTION_CAM_PITCH_NAME"] = "Dynamic Pitch"
+L["ACTION_CAM_PITCH_DESC"] = "Adjusts camera angle based on movement (test_cameraDynamicPitch)."
+
+-- AFK Mode
+L["AFK_MODE_HEADER"] = "AFK Mode"
+L["AFK_MODE_DESC_SAFE"] = "|cff00ff00Safe Mode:|r If the UI is hidden, pressing |cffffd100ESC|r will immediately restore it and exit AFK mode."
+L["AFK_MODE_ENABLE"] = "Enable AFK Rotation"
+L["AFK_MODE_ENABLE_DESC"] = "Automatically zooms out and rotates the camera when you go AFK. Hides UI for cinematic effect."
 
 -- *** Messages & UI ***
 L["SETTINGS_CHANGED"] = "Camera settings have been updated."
@@ -84,6 +99,11 @@ L["RELOAD_BUTTON_DESC"] = "Reloads the user interface to apply critical changes.
 
 L["RESET_BUTTON"] = "Reset Defaults"
 L["RESET_BUTTON_DESC"] = "Resets all settings in this profile to their default values."
+
+-- *** Hook / System Messages ***
+L["HOOK_DISABLED_BY_ADDON"] = "|cffff0000Disabled by MaxCameraDistance|r"
+L["HOOK_MOUSE_SPEED_DESC"] = "Mouse speed is now controlled separately (Horizontal/Vertical) in the addon settings:"
+L["HOOK_MOUSE_SPEED_PATH"] = "/mcd config -> General Settings"
 
 -- *** Debug Settings ***
 L["DEBUG_SETTINGS"] = "Debug Settings"
