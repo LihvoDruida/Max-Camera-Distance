@@ -18,6 +18,7 @@ local GetShapeshiftFormInfo = GetShapeshiftFormInfo
 local UnitIsAFK = UnitIsAFK
 local MoveViewRightStart = MoveViewRightStart
 local MoveViewRightStop = MoveViewRightStop
+local GetCameraZoom = GetCameraZoom
 
 local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
@@ -33,10 +34,14 @@ local ZOOM_STATE_COMBAT = "combat"
 local transitionTimer = nil
 local isInternalUpdate = false
 
+-- AFK Variables
 local wasAFK = false
 local savedYawSpeed = 180
-
 local AFK_YAW_SPEED = 4
+
+-- FRAMES
+local safeExitFrame = CreateFrame("Frame", "MCD_SafeExitFrame", UIParent)
+local shoulderHandlerFrame = CreateFrame("Frame")
 
 -- ============================================================================
 -- 3. DATA TABLES
@@ -79,11 +84,21 @@ end
 local function UpdateCVar(key, value)
     local strValue = tostring(value)
     local currentValue = C_CVar.GetCVar(key)
-    if currentValue ~= strValue then
-        isInternalUpdate = true
-        pcall(C_CVar.SetCVar, key, value)
-        isInternalUpdate = false
+
+    if not currentValue then return end
+
+    if type(value) == "number" then
+        local numCurrent = tonumber(currentValue)
+        if numCurrent and math.abs(numCurrent - value) < 0.005 then
+            return 
+        end
+    elseif currentValue == strValue then
+        return
     end
+
+    isInternalUpdate = true
+    pcall(C_CVar.SetCVar, key, value)
+    isInternalUpdate = false
 end
 
 local function IsInTravelForm()
@@ -138,17 +153,72 @@ local function ApplyZoomTransition(targetYards, transitionTime)
 end
 
 -- ============================================================================
--- 5. CORE LOGIC
+-- 5. DYNAMIC FEATURES
+-- ============================================================================
+tinsert(UISpecialFrames, safeExitFrame:GetName())
+safeExitFrame:Hide() 
+
+safeExitFrame:SetScript("OnHide", function()
+    if wasAFK then
+        Functions:OnPlayerFlagsChanged()
+    end
+end)
+
+local function GetShoulderOffsetZoomFactor(zoomLevel)
+    local startOffset = 5.0
+    local endOffset = 2.0
+
+    if zoomLevel < endOffset then
+        return 0
+    elseif zoomLevel > startOffset then
+        return 1
+    else
+        return (zoomLevel - endOffset) / (startOffset - endOffset)
+    end
+end
+
+-- C. SHOULDER HANDLER SCRIPT
+shoulderHandlerFrame.lastZoom = -1
+shoulderHandlerFrame:SetScript("OnUpdate", function(self, elapsed)
+    local currentZoom = GetCameraZoom()
+
+    if math.abs(self.lastZoom - currentZoom) < 0.01 then return end
+    self.lastZoom = currentZoom
+
+    local factor = GetShoulderOffsetZoomFactor(currentZoom)
+
+    local baseOffset = 1.0 
+    local finalOffset = baseOffset * factor
+
+    UpdateCVar("test_cameraOverShoulder", finalOffset)
+end)
+shoulderHandlerFrame:Hide()
+
+-- ============================================================================
+-- 6. CORE LOGIC
 -- ============================================================================
 
 function Functions:UpdateActionCam()
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
 
+    -- 1. Dynamic Pitch
     if db.actionCamPitch then
         UpdateCVar("test_cameraDynamicPitch", 1)
     else
         UpdateCVar("test_cameraDynamicPitch", 0)
+    end
+
+    if db.actionCamShoulder then
+        if tonumber(GetCVar("CameraKeepCharacterCentered")) == 1 then
+            UpdateCVar("CameraKeepCharacterCentered", 0)
+            Functions:logMessage("warning", "Disabled 'Keep Character Centered' to allow ActionCam Shoulder Offset.")
+        end
+    
+        shoulderHandlerFrame:Show()
+    else
+        shoulderHandlerFrame:Hide()
+        UpdateCVar("test_cameraOverShoulder", 0)
     end
 end
 
@@ -205,9 +275,9 @@ function Functions:AdjustCamera()
     if not (ns.Database and ns.Database.db) then return end
     local db = ns.Database.db.profile
     local LibCamera = LibStub("LibCamera-1.0", true)
-    
+
     Functions:UpdateActionCam()
-    
+
     if db.autoCombatZoom or db.autoMountZoom then
         Functions:UpdateSmartZoomState("manual_update")
     else
@@ -269,7 +339,7 @@ function Functions:OnCVarUpdate(_, cvarName, value)
 end
 
 -- ============================================================================
--- 6. AFK HANDLER (SIMPLIFIED - ROTATION ONLY)
+-- 7. AFK HANDLER (SAFE MODE)
 -- ============================================================================
 
 function Functions:OnPlayerFlagsChanged()
@@ -297,6 +367,8 @@ function Functions:OnPlayerFlagsChanged()
         end
         
         UIParent:Hide()
+
+        safeExitFrame:Show()
         
     elseif not isAFK and wasAFK then
         wasAFK = false
@@ -306,8 +378,10 @@ function Functions:OnPlayerFlagsChanged()
         
         C_CVar.SetCVar("cameraYawMoveSpeed", savedYawSpeed)
         
-        Functions:AdjustCamera()
         UIParent:Show()
+        safeExitFrame:Hide()
+        
+        Functions:AdjustCamera()
     end
 end
 
@@ -327,7 +401,7 @@ function Functions:ClearAllQuestTracking()
 end
 
 -- ============================================================================
--- 7. SLASH COMMANDS
+-- 8. SLASH COMMANDS
 -- ============================================================================
 
 function Functions:SlashCmdHandler(msg)

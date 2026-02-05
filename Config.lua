@@ -308,6 +308,14 @@ function Config:SetupOptions()
                         name = "Cinematic camera effects provided by Blizzard's hidden settings.",
                         order = 2,
                     },
+                    enableShoulder = {
+                        type = "toggle",
+                        name = "Over Shoulder View",
+                        desc = "Offsets the camera slightly to the side (test_cameraOverShoulder).",
+                        get = function() return GetOption("actionCamShoulder") end,
+                        set = function(_, val) SetOption("actionCamShoulder", val) end,
+                        order = 3,
+                    },
                     enableDynamicPitch = {
                         type = "toggle",
                         name = "Dynamic Pitch",

@@ -53,6 +53,7 @@ Database.DEFAULTS = {
     ENABLE_DEBUG_LOGGING = false,
     RESAMPLE_ALWAYS_SHARPEN = (resampleSharpenDefault == 1),
     SOFT_TARGET_INTERACT = (softTargetDefault == 1),
+    ACTION_CAM_SHOULDER = false,
     ACTION_CAM_PITCH = false,
     AFK_MODE = false
 }
@@ -82,6 +83,7 @@ function Database:InitDB()
         cameraIndirectVisibility = Database.DEFAULTS.CAMERA_INDIRECT_VISIBILITY,
         resampleAlwaysSharpen = Database.DEFAULTS.RESAMPLE_ALWAYS_SHARPEN,
         softTargetInteract = Database.DEFAULTS.SOFT_TARGET_INTERACT,
+        actionCamShoulder = Database.DEFAULTS.ACTION_CAM_SHOULDER,
         actionCamPitch = Database.DEFAULTS.ACTION_CAM_PITCH,
         afkMode = Database.DEFAULTS.AFK_MODE,
         
