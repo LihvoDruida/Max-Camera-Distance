@@ -1,22 +1,16 @@
 local addonName, ns = ...
-ns.Config = {} -- Використовуємо namespace
+ns.Config = {}
 local Config = ns.Config
 
--- Імпорт локальних посилань
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 
--- Отримання версії
 local versionNumber = C_AddOns.GetAddOnMetadata(addonName, "Version") or "Dev"
 
--- Допоміжна функція для оновлення
--- Зберігає значення в БД і одразу застосовує зміни
 local function SetOption(key, value)
     if ns.Database and ns.Database.db then
         ns.Database.db.profile[key] = value
-        
-        -- Викликаємо оновлення камери (Functions:AdjustCamera)
         if ns.Functions and ns.Functions.AdjustCamera then
             ns.Functions:AdjustCamera()
         end
@@ -30,13 +24,11 @@ local function GetOption(key)
 end
 
 function Config:SetupOptions()
-    -- Перевірка на наявність БД
     if not ns.Database or not ns.Database.db then
         print(addonName .. ": Database not initialized, cannot setup options.")
         return
     end
     
-    -- Беремо константи з database.lua
     local defaults = ns.Database.DEFAULTS 
 
     local options = {
@@ -80,6 +72,9 @@ function Config:SetupOptions()
                         func = function()
                             ns.Database.db:ResetProfile()
                             print("|cff0070deMCD:|r " .. (L["SETTINGS_RESET"] or "Settings reset."))
+                            if ns.Functions and ns.Functions.AdjustCamera then
+                                ns.Functions:AdjustCamera()
+                            end
                         end,
                         width = "half",
                     },
@@ -103,7 +98,6 @@ function Config:SetupOptions()
                         get = function() return GetOption("maxZoomFactor") end,
                         set = function(_, val) SetOption("maxZoomFactor", val) end,
                         order = 1,
-                        -- Вимикаємо цей слайдер, якщо увімкнено Combat Zoom, бо він перекриває налаштування
                         disabled = function() return GetOption("autoCombatZoom") end, 
                     },
                     zoomTransition = {
@@ -285,11 +279,14 @@ function Config:SetupOptions()
                     },
                 },
             },
+            
+            -- *** Extra Features (ActionCam & AFK) ***
             extraFeatures = {
                 type = "group",
-                name = L["EXTRA_FEATURES"],
+                name = L["EXTRA_FEATURES"] or "Extra Features",
                 order = 5,
                 args = {
+                    -- === Buttons ===
                     clearTrackerBtn = {
                         type = "execute",
                         name = L["UNTRACK_QUESTS_BUTTON"],
@@ -298,6 +295,8 @@ function Config:SetupOptions()
                         order = 0.5,
                         width = "full",
                     },
+
+                    -- === Action Cam Section ===
                     actionCamHeader = {
                         type = "header",
                         name = "Action Cam",
@@ -305,13 +304,13 @@ function Config:SetupOptions()
                     },
                     descActionCam = {
                         type = "description",
-                        name = "Cinematic camera effects provided by Blizzard's hidden settings.",
+                        name = "Cinematic camera effects. \n|cff00ff00Smart Conflict Fix:|r enabling 'Over Shoulder' will automatically disable 'Keep Character Centered' to prevent jitter.",
                         order = 2,
                     },
                     enableShoulder = {
                         type = "toggle",
                         name = "Over Shoulder View",
-                        desc = "Offsets the camera slightly to the side (test_cameraOverShoulder).",
+                        desc = "Offsets the camera to the side. Features 'Smart Offset' which centers the camera when zooming in close.",
                         get = function() return GetOption("actionCamShoulder") end,
                         set = function(_, val) SetOption("actionCamShoulder", val) end,
                         order = 3,
@@ -324,15 +323,22 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("actionCamPitch", val) end,
                         order = 4,
                     },
+
+                    -- === AFK Mode Section ===
                     afkHeader = {
                         type = "header",
                         name = "AFK Mode",
                         order = 10,
                     },
+                    descAFK = {
+                        type = "description",
+                        name = "|cff00ff00Safe Mode:|r If the UI is hidden, pressing |cffffd100ESC|r will immediately restore it and exit AFK mode.",
+                        order = 10.5,
+                    },
                     enableAFK = {
                         type = "toggle",
                         name = "Enable AFK Rotation",
-                        desc = "Automatically zooms out and rotates the camera when you go AFK.",
+                        desc = "Automatically zooms out and rotates the camera when you go AFK. Hides UI for cinematic effect.",
                         get = function() return GetOption("afkMode") end,
                         set = function(_, val) SetOption("afkMode", val) end,
                         order = 11,
@@ -379,9 +385,46 @@ function Config:SetupOptions()
         }
     }
 
-    -- Реєстрація опцій
     AceConfig:RegisterOptionsTable(addonName, options)
-    
-    -- Додавання в налаштування Blizzard
     AceConfigDialog:AddToBlizOptions(addonName, "Max Camera Distance")
+end
+
+-- [[ BLIZZARD SETTINGS HOOK ]]
+-- Hook the Blizzard settings panel to disable the standard "Mouse Look Speed" slider
+-- because it conflicts with your addon's separate Yaw/Pitch settings.
+if SettingsPanel and SettingsPanel.Container and SettingsPanel.Container.SettingsList and SettingsPanel.Container.SettingsList.ScrollBox then
+    
+    hooksecurefunc(SettingsPanel.Container.SettingsList.ScrollBox, "Update", function(self)
+        local headerText = SettingsPanel.Container.SettingsList.Header.Title:GetText()
+        if headerText ~= CONTROLS_LABEL then return end
+
+        local children = { SettingsPanel.Container.SettingsList.ScrollBox.ScrollTarget:GetChildren() }
+
+        for _, child in ipairs(children) do
+            if child.Text and (child.Text:GetText() == MOUSE_LOOK_SPEED) then
+                
+                local slider = child.SliderWithSteppers or child.Slider
+
+                if slider then
+                    if slider.SetEnabled then 
+                        slider:SetEnabled(false) 
+                    elseif slider.SetEnabled_ then 
+                        slider:SetEnabled_(false) 
+                    end
+                    slider.Slider:SetScript("OnEnter", function(s)
+                        GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
+                        GameTooltip:SetText("|cffff0000Disabled by MaxCameraDistance|r")
+                        GameTooltip:AddLine("Mouse speed is now controlled separately (Horizontal/Vertical) in the addon settings:", 1, 1, 1)
+                        GameTooltip:AddLine("/mcd config -> General Settings", 1, 0.82, 0)
+                        GameTooltip:Show()
+                    end)
+
+                    slider.Slider:SetScript("OnLeave", function() 
+                        GameTooltip:Hide() 
+                    end)
+                end
+                break
+            end
+        end
+    end)
 end
