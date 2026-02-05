@@ -60,41 +60,36 @@ local eventHandlers = {
         end
     end,
 
-    -- *** ПОДІЇ СТАНУ (Бій, Маунт, Форма) ***
-    -- Всі вони викликають UpdateSmartZoomState
-    
-    -- Вхід у бій
     PLAYER_REGEN_DISABLED = function(event)
-        if ns.Functions then
-            SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-CombatEnter", ns.Functions, event)
+        if ns.Functions and ns.Functions.RequestUpdate then
+            ns.Functions:RequestUpdate()
         end
     end,
 
     -- Вихід з бою
     PLAYER_REGEN_ENABLED = function(event)
-        if ns.Functions then
-            SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-CombatLeave", ns.Functions, event)
+        if ns.Functions and ns.Functions.RequestUpdate then
+            ns.Functions:RequestUpdate()
         end
     end,
     
     -- Маунти (Сідаємо/Злазимо)
     PLAYER_MOUNT_DISPLAY_CHANGED = function(event)
-        if ns.Functions then
-            SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-Mount", ns.Functions, event)
+        if ns.Functions and ns.Functions.RequestUpdate then
+            ns.Functions:RequestUpdate()
         end
     end,
 
     -- Зміна форми (Друїд, Шаман, Рога, Прист тощо)
     UPDATE_SHAPESHIFT_FORM = function(event)
-        if ns.Functions then
-            SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-Shapeshift", ns.Functions, event)
+        if ns.Functions and ns.Functions.RequestUpdate then
+            ns.Functions:RequestUpdate()
         end
     end,
     
-    -- Опціонально: Зміни талантів (може впливати на Dragonriding)
     TRAIT_CONFIG_UPDATED = function(event)
-        if ns.Functions then
-            SafeCall(ns.Functions.UpdateSmartZoomState, "SmartZoom-Traits", ns.Functions, event)
+        if ns.Functions and ns.Functions.RequestUpdate then
+            ns.Functions:RequestUpdate()
         end
     end,
 

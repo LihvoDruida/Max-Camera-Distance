@@ -11,4 +11,5 @@
 	<Include file="AceLocale-3.0/AceLocale-3.0.xml"/>
 
 	<Script file="LibCamera/LibCamera.lua"/>
+        <Script file="LibMountInfo/LibMountInfo.lua"/>
 </Ui>
