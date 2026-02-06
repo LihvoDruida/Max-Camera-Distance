@@ -36,6 +36,18 @@ L["MAX_COMBAT_ZOOM_FACTOR_DESC"] = "The target camera distance when you are IN c
 L["MIN_COMBAT_ZOOM_FACTOR"] = "Normal Distance"
 L["MIN_COMBAT_ZOOM_FACTOR_DESC"] = "The target camera distance when you are OUT of combat and NOT mounted (Peace mode)."
 
+L["ZONES_HEADER"] = "Combat Zones"
+L["ZONES_DESC"] = "Select zones where the addon will |cff00ff00Force Max Zoom|r upon entering |cffff0000Combat|r.\n|cff888888Uncheck to keep auto control.|r"
+
+L["ZONE_PARTY"] = "Dungeons"
+L["ZONE_RAID"] = "Raids"
+L["ZONE_ARENA"] = "Arenas"
+L["ZONE_BG"] = "Battlegrounds"
+L["ZONE_SCENARIO"] = "Scenarios / Delves"
+L["ZONE_WORLD_DESC"] = "Zooms out for ANY combat in the open world. Warning: can be annoying while questing."
+L["ZONE_WORLD_BOSS"] = "World Bosses / Events"
+L["ZONE_WORLD_BOSS_DESC"] = "Zooms out only during boss encounters in the open world (checking IsEncounterInProgress)."
+
 -- Mount
 L["MOUNT_SETTINGS_HEADER"] = "Mount & Travel Settings"
 L["AUTO_MOUNT_ZOOM"] = "Enable Auto Zoom on Mount"

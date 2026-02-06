@@ -21,6 +21,7 @@ local UnitIsAFK = UnitIsAFK
 local MoveViewRightStart = MoveViewRightStart
 local MoveViewRightStop = MoveViewRightStop
 local GetCameraZoom = GetCameraZoom
+local IsEncounterInProgress = IsEncounterInProgress
 
 local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
@@ -36,7 +37,7 @@ local ZOOM_STATE_COMBAT = "combat"
 local transitionTimer = nil
 local isInternalUpdate = false
 
--- Throttling (Оптимізація подій)
+-- Throttling
 local updatePending = false
 local updateFrame = CreateFrame("Frame")
 
@@ -190,7 +191,7 @@ function Functions:FixSettingsAlpha(ignore)
 end
 
 -- ============================================================================
--- 5. EVENT THROTTLING (OPTIMIZATION)
+-- 5. EVENT THROTTLING
 -- ============================================================================
 function Functions:RequestUpdate()
     updatePending = true
@@ -204,7 +205,33 @@ updateFrame:SetScript("OnUpdate", function()
 end)
 
 -- ============================================================================
--- 6. DYNAMIC FEATURES
+-- 6. LOGIC HELPERS (NEW: ZONE CHECK)
+-- ============================================================================
+local function ShouldActiveCombatZoom()
+    if not (ns.Database and ns.Database.db) then return false end
+    local db = ns.Database.db.profile
+
+    local inInstance, instanceType = IsInInstance()
+    -- instanceType values: "none", "pvp", "arena", "party", "raid", "scenario"
+
+    if inInstance then
+        if instanceType == "party" and db.zoneParty then return true end
+        if instanceType == "raid" and db.zoneRaid then return true end
+        if instanceType == "arena" and db.zoneArena then return true end
+        if instanceType == "pvp" and db.zoneBg then return true end -- Battlegrounds
+        if instanceType == "scenario" and db.zoneScenario then return true end -- Delves, Torghast
+        return false
+    end
+
+    if db.zoneWorldBoss and IsEncounterInProgress() then
+        return true
+    end
+
+    return false
+end
+
+-- ============================================================================
+-- 7. DYNAMIC FEATURES
 -- ============================================================================
 
 tinsert(UISpecialFrames, safeExitFrame:GetName())
@@ -244,7 +271,7 @@ end)
 shoulderHandlerFrame:Hide()
 
 -- ============================================================================
--- 7. CORE LOGIC
+-- 8. CORE LOGIC
 -- ============================================================================
 
 function Functions:UpdateActionCam()
@@ -276,8 +303,6 @@ function Functions:UpdateSmartZoomState(event)
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
     local inCombat = UnitAffectingCombat("player")
-    local inInstance, instanceType = IsInInstance()
-    local forceCombat = inInstance and (instanceType == "party" or instanceType == "raid" or instanceType == "arena" or instanceType == "pvp")
     local isMounted = IsInTravelForm()
 
     local newState = ZOOM_STATE_NONE
@@ -289,9 +314,11 @@ function Functions:UpdateSmartZoomState(event)
          targetYards = db.maxZoomFactor or 39
     end
 
-    if db.autoCombatZoom and (inCombat or forceCombat) then
+    if db.autoCombatZoom and (inCombat or  ShouldActiveCombatZoom()) then
         newState = ZOOM_STATE_COMBAT
         targetYards = db.maxZoomFactor
+        
+    -- 2. MOUNT CHECK
     elseif db.autoMountZoom and isMounted then
         newState = ZOOM_STATE_MOUNT
         targetYards = db.mountZoomFactor
@@ -390,7 +417,7 @@ function Functions:OnCVarUpdate(_, cvarName, value)
 end
 
 -- ============================================================================
--- 8. AFK HANDLER (SAFE MODE)
+-- 9. AFK HANDLER (SAFE MODE)
 -- ============================================================================
 
 function Functions:OnPlayerFlagsChanged()
@@ -407,9 +434,7 @@ function Functions:OnPlayerFlagsChanged()
         Functions:logMessage("info", L["AFK_ENTER_MSG"])
 
         savedYawSpeed = tonumber(C_CVar.GetCVar("cameraYawMoveSpeed")) or 180
-        
         C_CVar.SetCVar("cameraYawMoveSpeed", AFK_YAW_SPEED) 
-
         MoveViewRightStart()
         
         local maxYards = ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE
@@ -419,7 +444,6 @@ function Functions:OnPlayerFlagsChanged()
         
         UIParent:Hide()
         Functions:FixSettingsAlpha(true)
-        
         safeExitFrame:Show() 
         
     elseif not isAFK and wasAFK then
@@ -431,10 +455,9 @@ function Functions:OnPlayerFlagsChanged()
         
         UIParent:Show()
         Functions:FixSettingsAlpha(false)
-        
         safeExitFrame:Hide()
         
-        Functions:AdjustCamera(true) -- Force update when returning from AFK
+        Functions:AdjustCamera(true)
     end
 end
 
@@ -454,7 +477,7 @@ function Functions:ClearAllQuestTracking()
 end
 
 -- ============================================================================
--- 9. SLASH COMMANDS
+-- 10. SLASH COMMANDS
 -- ============================================================================
 
 function Functions:SlashCmdHandler(msg)
@@ -476,13 +499,13 @@ function Functions:SlashCmdHandler(msg)
 
     elseif command == "autozoom" then
         db.autoCombatZoom = not db.autoCombatZoom
-        Functions:AdjustCamera(true) -- Force update
+        Functions:AdjustCamera(true) 
         local state = db.autoCombatZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
         Functions:SendMessage("Auto Combat Zoom: " .. state)
 
     elseif command == "automount" then
         db.autoMountZoom = not db.autoMountZoom
-        Functions:AdjustCamera(true) -- Force update
+        Functions:AdjustCamera(true) 
         local state = db.autoMountZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
         Functions:SendMessage("Auto Mount Zoom: " .. state)
 

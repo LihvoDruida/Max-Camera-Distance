@@ -5,7 +5,7 @@ local Database = ns.Database
 local AceDB = LibStub("AceDB-3.0")
 local C_CVar = C_CVar 
 
--- Отримуємо поточні значення безпечно
+-- [SAFE GET] Fetch current CVar values safely
 local function GetCVarDefault(name, default)
     local success, val = pcall(C_CVar.GetCVar, name)
     if success and val then
@@ -19,9 +19,9 @@ local pitchMoveSpeed = GetCVarDefault("cameraPitchMoveSpeed", 180)
 local resampleSharpenDefault = GetCVarDefault("resampleAlwaysSharpen", 0)
 local softTargetDefault = GetCVarDefault("SoftTargetIconGameObject", 0)
 
--- *** КОНСТАНТИ (YARDS) ***
--- Retail: 39 ярдів = 2.6 factor (39 / 2.6 = 15)
--- Classic: 50 ярдів = 4.0 factor (50 / 4.0 = 12.5)
+-- *** CONSTANTS (YARDS) ***
+-- Retail: 39 yards = 2.6 factor (39 / 2.6 = 15)
+-- Classic: 50 yards = 4.0 factor (50 / 4.0 = 12.5)
 local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 local MAX_YARDS = IS_RETAIL and 39 or 50
 local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
@@ -29,9 +29,9 @@ local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
 local BLIZZARD_DEFAULT_YARDS = 28.5
 
 Database.DEFAULTS = {
-    -- Тепер тут зберігаємо ЯРДИ
+    -- Now storing YARDS directly
     ZOOM_DISTANCE = MAX_YARDS,
-    -- "Мінімальна" дистанція для Smart Zoom (наприклад, коли виходиш з бою).
+    -- "Minimum" distance for Smart Zoom (e.g. when exiting combat)
     MIN_ZOOM_DISTANCE = BLIZZARD_DEFAULT_YARDS,
     
     YAW_MOVE_SPEED = yawMoveSpeed,
@@ -40,11 +40,11 @@ Database.DEFAULTS = {
     MOVE_VIEW_DISTANCE = 30000,
     ZOOM_TRANSITION_TIME = 0.5,
 
-    -- Константи для слайдерів у Config
+    -- Constants for Config sliders
     MAX_POSSIBLE_DISTANCE = MAX_YARDS,
     CONVERSION_RATIO = CONVERSION_RATIO,
 
-    -- Boolean
+    -- [BOOLEANS]
     REDUCE_UNEXPECTED_MOVEMENT = false,
     CAMERA_INDIRECT_VISIBILITY = true,
     AUTO_COMBAT_ZOOM = false,
@@ -55,7 +55,15 @@ Database.DEFAULTS = {
     SOFT_TARGET_INTERACT = (softTargetDefault == 1),
     ACTION_CAM_SHOULDER = false,
     ACTION_CAM_PITCH = false,
-    AFK_MODE = false
+    AFK_MODE = false,
+
+    -- [NEW: ZONE SETTINGS]
+    ZONE_PARTY = true,      -- 5-man Dungeons
+    ZONE_RAID = true,       -- Raids
+    ZONE_ARENA = true,      -- Arenas
+    ZONE_BG = true,         -- Battlegrounds
+    ZONE_SCENARIO = true,   -- Delves / Torghast / Scenarios
+    ZONE_WORLD_BOSS = true, -- World Boss encounters
 }
 
 Database.DEFAULT_DEBUG_LEVEL = {
@@ -63,7 +71,7 @@ Database.DEFAULT_DEBUG_LEVEL = {
 }
 
 function Database:InitDB()
-    -- Запобіжник self
+    -- Safety check
     if not self or type(self) ~= "table" then self = Database end
 
     local defaultProfile = {
@@ -86,6 +94,14 @@ function Database:InitDB()
         actionCamShoulder = Database.DEFAULTS.ACTION_CAM_SHOULDER,
         actionCamPitch = Database.DEFAULTS.ACTION_CAM_PITCH,
         afkMode = Database.DEFAULTS.AFK_MODE,
+
+        -- Zone Combat Settings
+        zoneParty = Database.DEFAULTS.ZONE_PARTY,
+        zoneRaid = Database.DEFAULTS.ZONE_RAID,
+        zoneArena = Database.DEFAULTS.ZONE_ARENA,
+        zoneBg = Database.DEFAULTS.ZONE_BG,
+        zoneScenario = Database.DEFAULTS.ZONE_SCENARIO,
+        zoneWorldBoss = Database.DEFAULTS.ZONE_WORLD_BOSS,
         
         enableDebugLogging = Database.DEFAULTS.ENABLE_DEBUG_LOGGING,
         debugLevel = CopyTable(Database.DEFAULT_DEBUG_LEVEL)
@@ -118,11 +134,11 @@ function Database:OnProfileUpdate(reason)
         ns.Functions:logMessage("info", reason .. ". Re-applying settings...")
     end
     if ns.Functions and ns.Functions.AdjustCamera then
-        ns.Functions:AdjustCamera()
+        ns.Functions:AdjustCamera(true) -- Force update on profile change
     end
 end
 
--- *** Helper: Отримати значення для CVar ***
+-- *** Helper: Get Value for CVar ***
 function Database:GetCVarFactor(yards)
     return yards / Database.DEFAULTS.CONVERSION_RATIO
 end
@@ -132,6 +148,8 @@ function Database:SetZoomFactor(yards)
     local dbObj = (self and self.db) and self or Database
     if dbObj.db and dbObj.db.profile then
         dbObj.db.profile.maxZoomFactor = tonumber(yards) or Database.DEFAULTS.ZOOM_DISTANCE
-        if ns.Functions and ns.Functions.AdjustCamera then ns.Functions:AdjustCamera() end
+        if ns.Functions and ns.Functions.AdjustCamera then 
+            ns.Functions:AdjustCamera(true) 
+        end
     end
 end

@@ -88,6 +88,29 @@ function Config:SetupOptions()
                     desc = { type = "description", name = L["COMBAT_SETTINGS_WARNING"], order = 0 },
                     
                     combatHeader = { type = "header", name = "Combat", order = 10 },
+                    
+zonesGroup = {
+                        type = "group",
+                        name = L["ZONES_HEADER"],
+                        inline = true,
+                        order = 11.5,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                        args = {
+                            zonesDescription = { type = "description", name = L["ZONES_DESC"], order = 0, fontSize = "medium" },
+
+                            br1 = { type = "header", name = "PVP", order = 0.1, width = "full" },
+
+                            zoneArena = { type = "toggle", name = L["ZONE_ARENA"], order = 1, get = function() return GetOption("zoneArena") end, set = function(_, v) SetOption("zoneArena", v) end },
+                            zoneBg = { type = "toggle", name = L["ZONE_BG"], order = 2, get = function() return GetOption("zoneBg") end, set = function(_, v) SetOption("zoneBg", v) end },
+
+                            br2 = { type = "header", name = "PVE", order = 2.1, width = "full" },
+
+                            zoneParty = { type = "toggle", name = L["ZONE_PARTY"], order = 3, get = function() return GetOption("zoneParty") end, set = function(_, v) SetOption("zoneParty", v) end },
+                            zoneRaid = { type = "toggle", name = L["ZONE_RAID"], order = 4, get = function() return GetOption("zoneRaid") end, set = function(_, v) SetOption("zoneRaid", v) end },
+                            zoneScenario = { type = "toggle", name = L["ZONE_SCENARIO"], order = 5, get = function() return GetOption("zoneScenario") end, set = function(_, v) SetOption("zoneScenario", v) end },
+                            zoneWorldBoss = { type = "toggle", name = L["ZONE_WORLD_BOSS"], desc = L["ZONE_WORLD_BOSS_DESC"], order = 6, width = "full", get = function() return GetOption("zoneWorldBoss") end, set = function(_, v) SetOption("zoneWorldBoss", v) end },
+                        }
+                    },
                     autoCombatZoom = { type = "toggle", name = L["AUTO_ZOOM_COMBAT"], desc = L["AUTO_ZOOM_COMBAT_DESC"], get = function() return GetOption("autoCombatZoom") end, set = function(_, val) SetOption("autoCombatZoom", val) end, order = 11, width = "full" },
                     combatMaxZoom = { type = "range", name = L["MAX_COMBAT_ZOOM_FACTOR"] .. " (Yards)", desc = L["MAX_COMBAT_ZOOM_FACTOR_DESC"], min = 1.0, max = defaults.MAX_POSSIBLE_DISTANCE or 39, step = 1.0, get = function() return GetOption("maxZoomFactor") end, set = function(_, val) SetOption("maxZoomFactor", val) end, order = 12, disabled = function() return not GetOption("autoCombatZoom") end },
                     combatMinZoom = { type = "range", name = L["MIN_COMBAT_ZOOM_FACTOR"] .. " (Yards)", desc = L["MIN_COMBAT_ZOOM_FACTOR_DESC"], min = 1.0, max = defaults.MAX_POSSIBLE_DISTANCE or 39, step = 1.0, get = function() return GetOption("minZoomFactor") end, set = function(_, val) SetOption("minZoomFactor", val) end, order = 13, disabled = function() return not GetOption("autoCombatZoom") end },
