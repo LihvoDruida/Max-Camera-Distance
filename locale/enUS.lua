@@ -103,6 +103,7 @@ L["SETTINGS_RESET"] = "Profile has been reset to default values."
 L["DB_NOT_READY"] = "Database not initialized yet."
 L["CMD_USAGE"] = "Usage: /mcd config | autozoom | automount"
 L["ZOOM_SET_MESSAGE"] = "Zoom set to %s (%.1f yards)"
+L["CONFLICT_FIX_MSG"] = "ActionCam: Disabled 'Keep Character Centered' setting to prevent camera jitter."
 
 L["WARNING_TEXT"] = "This addon extends the camera distance limit beyond default UI slider to improve visibility during raids, dungeons, and PvP."
 
