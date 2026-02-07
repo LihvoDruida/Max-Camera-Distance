@@ -6,5 +6,5 @@
     <Script file="Database.lua"/>
     <Script file="Functions.lua"/>
     <Script file="Config.lua"/>    
-    <Script file="Max_Camera_Distance.lua"/>
+    <Script file="Core.lua"/>
 </Ui>

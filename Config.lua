@@ -47,7 +47,7 @@ function Config:SetupOptions()
                 inline = true,
                 args = {
                     warning = { type = "description", name = L["WARNING_TEXT"], fontSize = "medium", order = 1 },
-                    reloadBtn = { order = 2, name = L["RELOAD_BUTTON"], desc = L["RELOAD_BUTTON_DESC"], type = "execute", func = function() C_UI.Reload() end, width = "half" },
+                    reloadBtn = { order = 2, name = L["RELOAD_BUTTON"], desc = L["RELOAD_BUTTON_DESC"], type = "execute", func = function() C_UI.Reload() end, width = "normal" },
                     resetBtn = { 
                         order = 3, 
                         name = L["RESET_BUTTON"], 
@@ -58,12 +58,42 @@ function Config:SetupOptions()
                             print("|cff0070deMCD:|r " .. (L["SETTINGS_RESET"] or "Settings reset."))
                             if ns.Functions and ns.Functions.AdjustCamera then ns.Functions:AdjustCamera() end 
                         end, 
-                        width = "half" 
+                        width = "normal"
+                    },
+                    
+                    minimapButton = {
+                        type = "toggle",
+                        name = "Show Minimap Button", -- Можна замінити на L["SHOW_MINIMAP_BUTTON"]
+                        desc = "Toggles the minimap icon.",
+                        order = 4,
+                        width = "normal",
+                        get = function() 
+                            if ns.Database.db.profile.minimap then
+                                return not ns.Database.db.profile.minimap.hide 
+                            end
+                            return true
+                        end,
+                        set = function(_, val)
+                            if not ns.Database.db.profile.minimap then
+                                ns.Database.db.profile.minimap = { hide = false }
+                            end
+                            ns.Database.db.profile.minimap.hide = not val
+                            
+                            local iconLib = LibStub("LibDBIcon-1.0", true)
+                            if iconLib then
+                                if val then
+                                    iconLib:Show(addonName)
+                                else
+                                    iconLib:Hide(addonName)
+                                end
+                            end
+                        end,
                     },
                 },
             },
 
             -- *** General Settings ***
+-- *** General Settings ***
             generalSettings = {
                 type = "group",
                 name = L["GENERAL_SETTINGS"],

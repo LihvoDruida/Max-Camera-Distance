@@ -44,5 +44,11 @@ externals:
         url: https://repos.wowace.com/wow/ace3/trunk/AceLocale-3.0
 
 
-    Libs/LibMountInfo:
+    libs/LibMountInfo:
         url: https://github.com/LudiusMaximus/LibMountInfo
+
+    libs/LibDataBroker-1.1:
+        url: https://github.com/tekkub/libdatabroker-1-1  
+
+    libs/LibDBIcon-1.0:
+        url: https://repos.wowace.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0
