@@ -13,6 +13,7 @@ local C_CVar = C_CVar
 local C_Timer = C_Timer
 local C_UnitAuras = C_UnitAuras
 local UnitAffectingCombat = UnitAffectingCombat
+local UnitThreatSituation = UnitThreatSituation -- ДОДАНО: Для перевірки агро
 local IsInInstance = IsInInstance
 local IsMounted = IsMounted
 local GetShapeshiftForm = GetShapeshiftForm
@@ -205,7 +206,7 @@ updateFrame:SetScript("OnUpdate", function()
 end)
 
 -- ============================================================================
--- 6. LOGIC HELPERS (NEW: ZONE CHECK)
+-- 6. LOGIC HELPERS (ZONE CHECK)
 -- ============================================================================
 local function ShouldActiveCombatZoom()
     if not (ns.Database and ns.Database.db) then return false end
@@ -223,6 +224,7 @@ local function ShouldActiveCombatZoom()
         return false
     end
 
+    -- Якщо ми у відкритому світі, перевіряємо, чи це бій з босом
     if db.zoneWorldBoss and IsEncounterInProgress() then
         return true
     end
@@ -303,6 +305,10 @@ function Functions:UpdateSmartZoomState(event)
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
     local inCombat = UnitAffectingCombat("player")
+    -- FIX: Додаємо перевірку агро (UnitThreatSituation)
+    -- Якщо повертає не nil, значить ми у когось в таргеті/маємо агро, навіть якщо прапорець бою ще не з'явився
+    local hasThreat = UnitThreatSituation("player")
+    
     local isMounted = IsInTravelForm()
 
     local newState = ZOOM_STATE_NONE
@@ -314,7 +320,11 @@ function Functions:UpdateSmartZoomState(event)
          targetYards = db.maxZoomFactor or 39
     end
 
-    if db.autoCombatZoom and (inCombat or  ShouldActiveCombatZoom()) then
+    -- 1. COMBAT CHECK
+    -- Враховуємо: Бій (API) АБО Агро (API) АБО Примусову зону (Інсти/Рейди)
+    -- Якщо ми в Інсті, ShouldActiveCombatZoom поверне true, і зум спрацює.
+    -- Якщо ми в Світі, ShouldActiveCombatZoom false, але спрацює inCombat або hasThreat.
+    if db.autoCombatZoom and (inCombat or hasThreat or ShouldActiveCombatZoom()) then
         newState = ZOOM_STATE_COMBAT
         targetYards = db.maxZoomFactor
         
