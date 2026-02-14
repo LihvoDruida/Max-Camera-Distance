@@ -13,7 +13,7 @@ local C_CVar = C_CVar
 local C_Timer = C_Timer
 local C_UnitAuras = C_UnitAuras
 local UnitAffectingCombat = UnitAffectingCombat
-local UnitThreatSituation = UnitThreatSituation -- ДОДАНО: Для перевірки агро
+local UnitThreatSituation = UnitThreatSituation
 local IsInInstance = IsInInstance
 local IsMounted = IsMounted
 local GetShapeshiftForm = GetShapeshiftForm
@@ -23,6 +23,12 @@ local MoveViewRightStart = MoveViewRightStart
 local MoveViewRightStop = MoveViewRightStop
 local GetCameraZoom = GetCameraZoom
 local IsEncounterInProgress = IsEncounterInProgress
+
+-- [[ НОВІ ЗМІННІ ДЛЯ ГРУПИ ]]
+local IsInRaid = IsInRaid
+local IsInGroup = IsInGroup
+local GetNumGroupMembers = GetNumGroupMembers
+local GetNumSubgroupMembers = GetNumSubgroupMembers
 
 local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
@@ -206,8 +212,30 @@ updateFrame:SetScript("OnUpdate", function()
 end)
 
 -- ============================================================================
--- 6. LOGIC HELPERS (ZONE CHECK)
+-- 6. LOGIC HELPERS (ZONE & COMBAT CHECK)
 -- ============================================================================
+function Functions:IsGroupInCombat()
+    if IsEncounterInProgress() then return true end
+
+    if UnitAffectingCombat("player") then return true end
+
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            if UnitAffectingCombat("raid"..i) then
+                return true
+            end
+        end
+    elseif IsInGroup() then
+        for i = 1, GetNumSubgroupMembers() do
+            if UnitAffectingCombat("party"..i) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 local function ShouldActiveCombatZoom()
     if not (ns.Database and ns.Database.db) then return false end
     local db = ns.Database.db.profile
@@ -219,12 +247,11 @@ local function ShouldActiveCombatZoom()
         if instanceType == "party" and db.zoneParty then return true end
         if instanceType == "raid" and db.zoneRaid then return true end
         if instanceType == "arena" and db.zoneArena then return true end
-        if instanceType == "pvp" and db.zoneBg then return true end -- Battlegrounds
-        if instanceType == "scenario" and db.zoneScenario then return true end -- Delves, Torghast
+        if instanceType == "pvp" and db.zoneBg then return true end 
+        if instanceType == "scenario" and db.zoneScenario then return true end 
         return false
     end
 
-    -- Якщо ми у відкритому світі, перевіряємо, чи це бій з босом
     if db.zoneWorldBoss and IsEncounterInProgress() then
         return true
     end
@@ -304,11 +331,9 @@ function Functions:UpdateSmartZoomState(event)
 
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
-    local inCombat = UnitAffectingCombat("player")
-    -- FIX: Додаємо перевірку агро (UnitThreatSituation)
-    -- Якщо повертає не nil, значить ми у когось в таргеті/маємо агро, навіть якщо прапорець бою ще не з'явився
-    local hasThreat = UnitThreatSituation("player")
+    local inCombat = Functions:IsGroupInCombat()
     
+    local hasThreat = UnitThreatSituation("player")
     local isMounted = IsInTravelForm()
 
     local newState = ZOOM_STATE_NONE
@@ -321,9 +346,8 @@ function Functions:UpdateSmartZoomState(event)
     end
 
     -- 1. COMBAT CHECK
-    -- Враховуємо: Бій (API) АБО Агро (API) АБО Примусову зону (Інсти/Рейди)
-    -- Якщо ми в Інсті, ShouldActiveCombatZoom поверне true, і зум спрацює.
-    -- Якщо ми в Світі, ShouldActiveCombatZoom false, але спрацює inCombat або hasThreat.
+    -- inCombat тепер повертає true, якщо будь-хто в групі в бою або йде бій з босом.
+    -- Це форсує статус бою незалежно від налаштувань зони, якщо autoCombatZoom увімкнено.
     if db.autoCombatZoom and (inCombat or hasThreat or ShouldActiveCombatZoom()) then
         newState = ZOOM_STATE_COMBAT
         targetYards = db.maxZoomFactor
