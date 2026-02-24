@@ -110,6 +110,24 @@ local eventHandlers = {
         end
     end,
     
+    PLAYER_DEAD = function(event)
+        if ns.Functions and ns.Functions.RequestUpdate then
+            ns.Functions:RequestUpdate()
+        end
+    end,
+
+    PLAYER_ALIVE = function(event)
+        if ns.Functions and ns.Functions.RequestUpdate then
+            ns.Functions:RequestUpdate()
+        end
+    end,
+
+    PLAYER_UNGHOST = function(event)
+        if ns.Functions and ns.Functions.RequestUpdate then
+            ns.Functions:RequestUpdate()
+        end
+    end,
+    
     PLAYER_MOUNT_DISPLAY_CHANGED = function(event)
         if ns.Functions and ns.Functions.RequestUpdate then
             ns.Functions:RequestUpdate()
