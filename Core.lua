@@ -1,24 +1,27 @@
-local addonName, ns = ... -- Використовуємо приватний namespace (ns)
+local addonName, ns = ...
 local frame = CreateFrame("Frame")
 
--- Кешуємо глобальні функції для швидкодії
+-- Version flags
+local IS_RETAIL  = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+local IS_CLASSIC = not IS_RETAIL
+
+-- Cached globals
 local UnitExists = UnitExists
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
-local InCombatLockdown = InCombatLockdown
-local C_CVar = C_CVar 
+local C_Timer = C_Timer
 
--- Бібліотеки для Міні-карти
+-- Minimap libs
 local LDB = LibStub("LibDataBroker-1.1", true)
 local LDBIcon = LibStub("LibDBIcon-1.0", true)
 local ACD = LibStub("AceConfigDialog-3.0")
 
 local ENABLE_LOGGING = false
+local minimapInited = false
 
--- *** Логування ***
+-- Logging
 local function LogEvent(event, ...)
     if not ENABLE_LOGGING then return end
-    local msg = string.format("%s: [%s]", addonName, event)
-    print(msg, ...)
+    print(string.format("%s: [%s]", addonName, event), ...)
 end
 
 local function SafeCall(func, name, ...)
@@ -33,17 +36,21 @@ local function IsPlayerReady()
     return UnitExists("player") and not UnitIsDeadOrGhost("player")
 end
 
-local function IsSafeToAdjustCamera()
-    return IsPlayerReady()
+-- One-liner updater for many events
+local function RequestSmartUpdate()
+    if ns.Functions and ns.Functions.RequestUpdate then
+        ns.Functions:RequestUpdate()
+    end
 end
 
 local function InitMinimapButton()
+    if minimapInited then return end
+    minimapInited = true
+
     if not LDB or not LDBIcon then return end
     if not ns.Database or not ns.Database.db or not ns.Database.db.profile then return end
 
-    if not ns.Database.db.profile.minimap then
-        ns.Database.db.profile.minimap = { hide = false }
-    end
+    ns.Database.db.profile.minimap = ns.Database.db.profile.minimap or { hide = false }
 
     local myIcon = "Interface\\AddOns\\" .. addonName .. "\\assets\\icon"
     local minimapDataObj = LDB:NewDataObject(addonName, {
@@ -70,112 +77,77 @@ local function InitMinimapButton()
     end
 end
 
--- *** Обробники подій ***
-local eventHandlers = {
-    ADDON_LOADED = function(event, loadedAddon)
-        if loadedAddon ~= addonName then return end 
+-- Event handlers
+local eventHandlers = {}
 
-        -- 1. Ініціалізація БД
-        if ns.Database and ns.Database.InitDB then 
-            SafeCall(ns.Database.InitDB, "InitDB", ns.Database) 
-        end
-        
-        -- 2. Ініціалізація Config
-        if ns.Config and ns.Config.SetupOptions then 
-            SafeCall(ns.Config.SetupOptions, "SetupOptions", ns.Config) 
-        end
+eventHandlers.ADDON_LOADED = function(event, loadedAddon)
+    if loadedAddon ~= addonName then return end
 
-        -- 3. Ініціалізація кнопки Міні-карти (NEW)
-        SafeCall(InitMinimapButton, "InitMinimapButton")
-        
-        frame:UnregisterEvent("ADDON_LOADED")
-    end,
+    if ns.Database and ns.Database.InitDB then
+        SafeCall(ns.Database.InitDB, "InitDB", ns.Database)
+    end
 
-    PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
-        if IsSafeToAdjustCamera() and ns.Functions then
-            SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions)
-        end
-    end,
+    if ns.Config and ns.Config.SetupOptions then
+        SafeCall(ns.Config.SetupOptions, "SetupOptions", ns.Config)
+    end
 
-    -- *** ПОДІЇ СТАНУ (Бій, Маунт, Форма) ***
-    PLAYER_REGEN_DISABLED = function(event)
-        if ns.Functions and ns.Functions.RequestUpdate then
-            ns.Functions:RequestUpdate()
-        end
-    end,
+    SafeCall(InitMinimapButton, "InitMinimapButton")
 
-    PLAYER_REGEN_ENABLED = function(event)
-        if ns.Functions and ns.Functions.RequestUpdate then
-            ns.Functions:RequestUpdate()
-        end
-    end,
-    
-    PLAYER_DEAD = function(event)
-        if ns.Functions and ns.Functions.RequestUpdate then
-            ns.Functions:RequestUpdate()
-        end
-    end,
+    frame:UnregisterEvent("ADDON_LOADED")
+end
 
-    PLAYER_ALIVE = function(event)
-        if ns.Functions and ns.Functions.RequestUpdate then
-            ns.Functions:RequestUpdate()
-        end
-    end,
+eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
+    if not IsPlayerReady() then return end
+    if not (ns.Functions and ns.Functions.AdjustCamera) then return end
 
-    PLAYER_UNGHOST = function(event)
-        if ns.Functions and ns.Functions.RequestUpdate then
-            ns.Functions:RequestUpdate()
-        end
-    end,
-    
-    PLAYER_MOUNT_DISPLAY_CHANGED = function(event)
-        if ns.Functions and ns.Functions.RequestUpdate then
-            ns.Functions:RequestUpdate()
-        end
-    end,
+    -- Small defer avoids early-load race on some clients
+    C_Timer.After(0, function()
+        if not IsPlayerReady() then return end
+        SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions)
+    end)
+end
 
-    UPDATE_SHAPESHIFT_FORM = function(event)
-        if ns.Functions and ns.Functions.RequestUpdate then
-            ns.Functions:RequestUpdate()
-        end
-    end,
-    
-    TRAIT_CONFIG_UPDATED = function(event)
-        if ns.Functions and ns.Functions.RequestUpdate then
-            ns.Functions:RequestUpdate()
-        end
-    end,
+-- State events (combat/mount/form/death-res)
+eventHandlers.PLAYER_REGEN_DISABLED = RequestSmartUpdate
+eventHandlers.PLAYER_REGEN_ENABLED  = RequestSmartUpdate
+eventHandlers.PLAYER_DEAD           = RequestSmartUpdate
+eventHandlers.PLAYER_ALIVE          = RequestSmartUpdate
+eventHandlers.PLAYER_UNGHOST        = RequestSmartUpdate
+eventHandlers.PLAYER_MOUNT_DISPLAY_CHANGED = RequestSmartUpdate
+eventHandlers.UPDATE_SHAPESHIFT_FORM = RequestSmartUpdate
 
-    PLAYER_FLAGS_CHANGED = function(event)
-        if ns.Functions and ns.Functions.OnPlayerFlagsChanged then
-            SafeCall(ns.Functions.OnPlayerFlagsChanged, "OnPlayerFlagsChanged", ns.Functions)
-        end
-    end,
+-- Retail-only (talents UI)
+if IS_RETAIL then
+    eventHandlers.TRAIT_CONFIG_UPDATED = RequestSmartUpdate
+end
 
-    CVAR_UPDATE = function(event, cvarName, value)
-        if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then
-            if ns.Functions then
-                SafeCall(ns.Functions.OnCVarUpdate, "OnCVarUpdate", ns.Functions, event, cvarName, value)
-            end
-        end
-    end,
-}
+eventHandlers.PLAYER_FLAGS_CHANGED = function(event)
+    if ns.Functions and ns.Functions.OnPlayerFlagsChanged then
+        SafeCall(ns.Functions.OnPlayerFlagsChanged, "OnPlayerFlagsChanged", ns.Functions)
+    end
+end
 
--- *** Головний обробник ***
+eventHandlers.CVAR_UPDATE = function(event, cvarName, value)
+    if cvarName ~= "cameraDistanceMaxZoomFactor" and cvarName ~= "cameraDistanceMax" then return end
+    if not (ns.Functions and ns.Functions.OnCVarUpdate) then return end
+    SafeCall(ns.Functions.OnCVarUpdate, "OnCVarUpdate", ns.Functions, event, cvarName, value)
+end
+
+-- Main dispatcher
 frame:SetScript("OnEvent", function(self, event, ...)
     local handler = eventHandlers[event]
     if handler then
-        -- LogEvent(event, ...) 
+        -- LogEvent(event, ...)
         handler(event, ...)
     end
 end)
 
--- *** Реєстрація подій ***
+-- Register events
 for event in pairs(eventHandlers) do
     frame:RegisterEvent(event)
 end
 
--- *** Slash команди ***
+-- Slash commands
 SLASH_MAXCAMDIST1 = "/mcd"
 SlashCmdList["MAXCAMDIST"] = function(msg)
     if ns.Functions and ns.Functions.SlashCmdHandler then
