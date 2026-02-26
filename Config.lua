@@ -2,26 +2,79 @@ local addonName, ns = ...
 ns.Config = ns.Config or {}
 local Config = ns.Config
 
--- Libs (guarded where useful)
+-- Libs
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 
--- Version flags
-local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+-- =====================================================================
+-- VERSION / CLIENT DETECTION
+-- =====================================================================
+local build = select(4, GetBuildInfo()) or 0
 
--- Cached globals / APIs (cross-version)
+-- Provided targets:
+-- Retail: 120000, 120001
+-- Classic Era: 20505
+-- Cata Classic: 50502
+local IS_RETAIL  = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE) or (build >= 120000)
+local IS_CATA    = (build >= 50000 and build < 60000) -- 50502
+local IS_ERA     = (build > 0 and build < 30000)      -- 20505-ish
+
+-- Cached globals / APIs
 local type = type
 local print = print
 local tostring = tostring
+local pcall = pcall
 local hooksecurefunc = hooksecurefunc
+local ipairs = ipairs
 
 local ReloadUI = ReloadUI
 local C_UI = C_UI
 local C_AddOns = C_AddOns
 local GetAddOnMetadata = GetAddOnMetadata
+local C_CVar = C_CVar
+local GetCVar = GetCVar
 
--- Prefer C_AddOns on Retail, fallback to classic API
+-- =====================================================================
+-- CVAR FEATURE DETECTION (works cross-version)
+-- =====================================================================
+local function HasCVar(name)
+    -- Prefer C_CVar in modern clients
+    if C_CVar and C_CVar.GetCVar then
+        local ok, val = pcall(C_CVar.GetCVar, name)
+        return ok and val ~= nil
+    end
+    -- Fallback for older clients
+    if type(GetCVar) == "function" then
+        local ok, val = pcall(GetCVar, name)
+        return ok and val ~= nil
+    end
+    return false
+end
+
+local function SupportsFSRSharpen()
+    return IS_RETAIL and HasCVar("resampleAlwaysSharpen")
+end
+
+local function SupportsSoftTargetIcons()
+    -- SoftTargetIconGameObject is Retail-ish
+    return IS_RETAIL and HasCVar("SoftTargetIconGameObject")
+end
+
+local function SupportsActionCam()
+    -- test_camera* CVars exist on Retail; sometimes present on some Classic branches,
+    -- but safest is to show only if at least one exists.
+    return HasCVar("test_cameraOverShoulder") or HasCVar("test_cameraDynamicPitch")
+end
+
+local function SupportsScenarioZone()
+    -- "scenario" instanceType is reliably Retail (Delves, Scenarios)
+    return IS_RETAIL
+end
+
+-- =====================================================================
+-- ADDON VERSION
+-- =====================================================================
 local function GetAddonVersion()
     if C_AddOns and C_AddOns.GetAddOnMetadata then
         return C_AddOns.GetAddOnMetadata(addonName, "Version") or "Dev"
@@ -34,6 +87,9 @@ end
 
 local versionNumber = GetAddonVersion()
 
+-- =====================================================================
+-- SAFE HELPERS
+-- =====================================================================
 local function SafeReload()
     if C_UI and C_UI.Reload then
         C_UI.Reload()
@@ -64,7 +120,6 @@ local function SetOption(key, value)
 
     db[key] = value
 
-    -- Safety: ensure nested tables exist
     if key == "enableDebugLogging" or key == "debugLevel" then
         EnsureDebugLevelTable(db)
     end
@@ -78,22 +133,27 @@ local function GetOption(key)
     return db[key]
 end
 
+-- =====================================================================
+-- OPTIONS
+-- =====================================================================
 function Config:SetupOptions()
     if not ns.Database or not ns.Database.db then return end
     local defaults = ns.Database.DEFAULTS
 
-    local maxDistance = defaults.MAX_POSSIBLE_DISTANCE or 39
+    -- Make sure distance matches the current client
+    local maxDistance = defaults.MAX_POSSIBLE_DISTANCE or (IS_RETAIL and 39 or 50)
 
     local options = {
         name = "Max Camera Distance",
         type = "group",
         args = {
-            -- Header
             header = {
                 order = 0,
                 type = "description",
                 name = function()
-                    return (L["VERSION_PREFIX"] or "Version: ") .. "|cFF87CEFA" .. versionNumber .. "|r"
+                    return (L["VERSION_PREFIX"] or "Version: ")
+                        .. "|cFF87CEFA" .. versionNumber .. "|r"
+                        .. (IS_RETAIL and " |cff00ff00(Retail)|r" or " |cffffd100(Classic)|r")
                 end,
                 fontSize = "medium",
             },
@@ -154,11 +214,7 @@ function Config:SetupOptions()
 
                             local iconLib = LibStub("LibDBIcon-1.0", true)
                             if iconLib then
-                                if val then
-                                    iconLib:Show(addonName)
-                                else
-                                    iconLib:Hide(addonName)
-                                end
+                                if val then iconLib:Show(addonName) else iconLib:Hide(addonName) end
                             end
                         end,
                     },
@@ -282,10 +338,17 @@ function Config:SetupOptions()
                                 get = function() return GetOption("zoneRaid") end,
                                 set = function(_, v) SetOption("zoneRaid", v) end
                             },
-                            zoneScenario = { type = "toggle", name = L["ZONE_SCENARIO"], order = 5,
+
+                            -- Scenario: only show on Retail (Delves/Scenarios)
+                            zoneScenario = {
+                                type = "toggle",
+                                name = L["ZONE_SCENARIO"],
+                                order = 5,
+                                hidden = function() return not SupportsScenarioZone() end,
                                 get = function() return GetOption("zoneScenario") end,
                                 set = function(_, v) SetOption("zoneScenario", v) end
                             },
+
                             zoneWorldBoss = { type = "toggle", name = L["ZONE_WORLD_BOSS"], desc = L["ZONE_WORLD_BOSS_DESC"], order = 6, width = "full",
                                 get = function() return GetOption("zoneWorldBoss") end,
                                 set = function(_, v) SetOption("zoneWorldBoss", v) end
@@ -379,18 +442,23 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("cameraIndirectVisibility", val) end,
                         order = 2
                     },
+
+                    -- Retail-only, and only if CVAR exists
                     resampleAlwaysSharpen = {
                         type = "toggle",
                         name = L["RESAMPLE_ALWAYS_SHARPEN"],
                         desc = L["RESAMPLE_ALWAYS_SHARPEN_DESC"],
+                        hidden = function() return not SupportsFSRSharpen() end,
                         get = function() return GetOption("resampleAlwaysSharpen") end,
                         set = function(_, val) SetOption("resampleAlwaysSharpen", val) end,
                         order = 3
                     },
+
                     softTargetInteract = {
                         type = "toggle",
                         name = L["SOFT_TARGET_INTERACT"],
                         desc = L["SOFT_TARGET_INTERACT_DESC"],
+                        hidden = function() return not SupportsSoftTargetIcons() end,
                         get = function() return GetOption("softTargetInteract") end,
                         set = function(_, val) SetOption("softTargetInteract", val) end,
                         order = 4
@@ -417,12 +485,24 @@ function Config:SetupOptions()
                         width = "full"
                     },
 
-                    actionCamHeader = { type = "header", name = L["ACTION_CAM_HEADER"], order = 1 },
-                    descActionCam = { type = "description", name = L["ACTION_CAM_DESC"], order = 2 },
+                    -- ActionCam: show ONLY if the client has the CVars
+                    actionCamHeader = {
+                        type = "header",
+                        name = L["ACTION_CAM_HEADER"],
+                        order = 1,
+                        hidden = function() return not SupportsActionCam() end,
+                    },
+                    descActionCam = {
+                        type = "description",
+                        name = L["ACTION_CAM_DESC"],
+                        order = 2,
+                        hidden = function() return not SupportsActionCam() end,
+                    },
                     enableShoulder = {
                         type = "toggle",
                         name = L["ACTION_CAM_SHOULDER_NAME"],
                         desc = L["ACTION_CAM_SHOULDER_DESC"],
+                        hidden = function() return not HasCVar("test_cameraOverShoulder") end,
                         get = function() return GetOption("actionCamShoulder") end,
                         set = function(_, val) SetOption("actionCamShoulder", val) end,
                         order = 3
@@ -431,6 +511,7 @@ function Config:SetupOptions()
                         type = "toggle",
                         name = L["ACTION_CAM_PITCH_NAME"],
                         desc = L["ACTION_CAM_PITCH_DESC"],
+                        hidden = function() return not HasCVar("test_cameraDynamicPitch") end,
                         get = function() return GetOption("actionCamPitch") end,
                         set = function(_, val) SetOption("actionCamPitch", val) end,
                         order = 4
@@ -503,18 +584,18 @@ function Config:SetupOptions()
     AceConfigDialog:AddToBlizOptions(addonName, "Max Camera Distance")
 end
 
--- ============================================================================
--- BLIZZARD SETTINGS HOOK (Retail only)
--- ============================================================================
--- Only Retail has the SettingsPanel (Dragonflight+ UI). Classic clients won't run this.
-if IS_RETAIL and SettingsPanel and SettingsPanel.Container and SettingsPanel.Container.SettingsList
-   and SettingsPanel.Container.SettingsList.ScrollBox then
+-- =====================================================================
+-- BLIZZARD SETTINGS HOOK (Retail only, Dragonflight+ UI)
+-- =====================================================================
+if IS_RETAIL
+   and SettingsPanel and SettingsPanel.Container and SettingsPanel.Container.SettingsList
+   and SettingsPanel.Container.SettingsList.ScrollBox
+   and hooksecurefunc then
 
     local MOUSE_LOOK_SPEED = _G.MOUSE_LOOK_SPEED
     local CONTROLS_LABEL = _G.CONTROLS_LABEL
 
     hooksecurefunc(SettingsPanel.Container.SettingsList.ScrollBox, "Update", function(self)
-        -- Defensive: header widgets may change across patches
         local header = SettingsPanel.Container.SettingsList.Header
         if not header or not header.Title or not header.Title.GetText then return end
 
