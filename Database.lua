@@ -1,155 +1,256 @@
 local addonName, ns = ...
-ns.Database = {} 
+ns.Database = ns.Database or {}
 local Database = ns.Database
 
 local AceDB = LibStub("AceDB-3.0")
-local C_CVar = C_CVar 
 
--- [SAFE GET] Fetch current CVar values safely
-local function GetCVarDefault(name, default)
-    local success, val = pcall(C_CVar.GetCVar, name)
-    if success and val then
-        return tonumber(val) or default
-    end
-    return default
-end
+-- ============================================================================
+-- BUILD / CLIENT DETECTION
+-- ============================================================================
+local build = select(4, GetBuildInfo()) or 0
+local IS_RETAIL  = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE) or (build >= 120000)
+local IS_CATA    = (build >= 50000 and build < 60000) -- 50502
+local IS_CLASSIC = not IS_RETAIL
 
-local yawMoveSpeed = GetCVarDefault("cameraYawMoveSpeed", 180)
-local pitchMoveSpeed = GetCVarDefault("cameraPitchMoveSpeed", 180)
-local resampleSharpenDefault = GetCVarDefault("resampleAlwaysSharpen", 0)
-local softTargetDefault = GetCVarDefault("SoftTargetIconGameObject", 0)
-
--- *** CONSTANTS (YARDS) ***
--- Retail: 39 yards = 2.6 factor (39 / 2.6 = 15)
--- Classic: 50 yards = 4.0 factor (50 / 4.0 = 12.5)
-local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+-- Retail: 39 yards max (2.6 factor)
+-- Classic/Cata: commonly 50 yards max (4.0 factor)
 local MAX_YARDS = IS_RETAIL and 39 or 50
 local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
--- 1.9 (Blizzard Default) * 15 = 28.5 Yards
-local BLIZZARD_DEFAULT_YARDS = 28.5
 
+-- ============================================================================
+-- API CACHE
+-- ============================================================================
+local tonumber, tostring, pcall, type, pairs, print = tonumber, tostring, pcall, type, pairs, print
+local C_CVar = C_CVar
+local GetCVar = GetCVar
+
+-- ============================================================================
+-- SAFE CVAR HELPERS
+-- ============================================================================
+local function SafeGetCVar(name)
+    if C_CVar and C_CVar.GetCVar then
+        local ok, val = pcall(C_CVar.GetCVar, name)
+        if ok and val ~= nil then
+            return tonumber(val)
+        end
+    end
+    if type(GetCVar) == "function" then
+        local ok, val = pcall(GetCVar, name)
+        if ok and val ~= nil then
+            return tonumber(val)
+        end
+    end
+    return nil
+end
+
+local function HasCVar(name)
+    if C_CVar and C_CVar.GetCVar then
+        local ok, val = pcall(C_CVar.GetCVar, name)
+        return ok and val ~= nil
+    end
+    if type(GetCVar) == "function" then
+        local ok, val = pcall(GetCVar, name)
+        return ok and val ~= nil
+    end
+    return false
+end
+
+local function CopyTableSafe(src)
+    if type(CopyTable) == "function" then
+        return CopyTable(src)
+    end
+    local t = {}
+    for k, v in pairs(src) do
+        if type(v) == "table" then
+            t[k] = CopyTableSafe(v)
+        else
+            t[k] = v
+        end
+    end
+    return t
+end
+
+-- ============================================================================
+-- REALISTIC "BLIZZARD DEFAULTS"
+-- Notes:
+-- - cameraDistanceMaxZoomFactor: usually ~1.9 retail, ~4.0 classic
+-- - cameraDistanceMoveSpeed: usually around 20 (NOT 30000!)
+-- - cameraYawMoveSpeed / cameraPitchMoveSpeed: read from client if possible
+-- ============================================================================
+local defaultMaxFactor = IS_RETAIL and 1.9 or 4.0
+local BLIZZARD_DEFAULT_YARDS = defaultMaxFactor * CONVERSION_RATIO
+
+local defaultYaw = SafeGetCVar("cameraYawMoveSpeed") or 180
+local defaultPitch = SafeGetCVar("cameraPitchMoveSpeed") or 90
+
+-- In-game CVar is "cameraDistanceMoveSpeed" and is small (e.g. 20)
+local defaultMoveSpeed = SafeGetCVar("cameraDistanceMoveSpeed") or 20
+
+-- Retail-only features: detect by CVars existence
+local supportsSharpen = IS_RETAIL and HasCVar("resampleAlwaysSharpen")
+local supportsSoftTarget = IS_RETAIL and HasCVar("SoftTargetIconGameObject")
+local defaultSharpen = supportsSharpen and (SafeGetCVar("resampleAlwaysSharpen") or 0) or 0
+local defaultSoftTarget = supportsSoftTarget and (SafeGetCVar("SoftTargetIconGameObject") or 0) or 0
+
+-- ============================================================================
+-- PUBLIC CONSTANTS (used by Config/Functions)
+-- ============================================================================
 Database.DEFAULTS = {
-    -- Now storing YARDS directly
-    ZOOM_DISTANCE = MAX_YARDS,
-    -- "Minimum" distance for Smart Zoom (e.g. when exiting combat)
-    MIN_ZOOM_DISTANCE = BLIZZARD_DEFAULT_YARDS,
-    
-    YAW_MOVE_SPEED = yawMoveSpeed,
-    PITCH_MOVE_SPEED = pitchMoveSpeed,
-    DISMOUNT_DELAY = 0,
-    MOVE_VIEW_DISTANCE = 30000,
-    ZOOM_TRANSITION_TIME = 0.5,
-
-    -- Constants for Config sliders
     MAX_POSSIBLE_DISTANCE = MAX_YARDS,
     CONVERSION_RATIO = CONVERSION_RATIO,
-
-    -- [BOOLEANS]
-    REDUCE_UNEXPECTED_MOVEMENT = false,
-    CAMERA_INDIRECT_VISIBILITY = true,
-    AUTO_COMBAT_ZOOM = false,
-    AUTO_MOUNT_ZOOM = false,
-    MOUNT_ZOOM_FACTOR = MAX_YARDS,
-    ENABLE_DEBUG_LOGGING = false,
-    RESAMPLE_ALWAYS_SHARPEN = (resampleSharpenDefault == 1),
-    SOFT_TARGET_INTERACT = (softTargetDefault == 1),
-    ACTION_CAM_SHOULDER = false,
-    ACTION_CAM_PITCH = false,
-    AFK_MODE = false,
-
-    -- [NEW: ZONE SETTINGS]
-    ZONE_PARTY = true,      -- 5-man Dungeons
-    ZONE_RAID = true,       -- Raids
-    ZONE_ARENA = true,      -- Arenas
-    ZONE_BG = true,         -- Battlegrounds
-    ZONE_SCENARIO = true,   -- Delves / Torghast / Scenarios
-    ZONE_WORLD_BOSS = true, -- World Boss encounters
+    -- Feature flags you can reuse in Config/Functions if you want
+    SUPPORTS_SHARPEN = supportsSharpen,
+    SUPPORTS_SOFT_TARGET = supportsSoftTarget,
 }
 
 Database.DEFAULT_DEBUG_LEVEL = {
-    ["error"] = true, ["warning"] = true, ["info"] = false, ["debug"] = false
+    error = true,
+    warning = true,
+    info = false,
+    debug = false
 }
 
-function Database:InitDB()
-    -- Safety check
-    if not self or type(self) ~= "table" then self = Database end
+-- ============================================================================
+-- DEFAULT PROFILE (keys must match Config.lua & Functions.lua!)
+-- ============================================================================
+local function BuildDefaultProfile()
+    local p = {
+        -- Zoom distances stored in YARDS
+        maxZoomFactor = MAX_YARDS,
+        minZoomFactor = BLIZZARD_DEFAULT_YARDS,
 
-    local defaultProfile = {
-        maxZoomFactor = Database.DEFAULTS.ZOOM_DISTANCE,
-        minZoomFactor = Database.DEFAULTS.MIN_ZOOM_DISTANCE,
-        
-        moveViewDistance = Database.DEFAULTS.MOVE_VIEW_DISTANCE,
-        cameraYawMoveSpeed = Database.DEFAULTS.YAW_MOVE_SPEED,
-        cameraPitchMoveSpeed = Database.DEFAULTS.PITCH_MOVE_SPEED,
-        dismountDelay = Database.DEFAULTS.DISMOUNT_DELAY,
-        zoomTransitionTime = Database.DEFAULTS.ZOOM_TRANSITION_TIME,
+        -- Camera CVars
+        moveViewDistance = defaultMoveSpeed,      -- maps to cameraDistanceMoveSpeed
+        cameraYawMoveSpeed = defaultYaw,
+        cameraPitchMoveSpeed = defaultPitch,
 
-        autoCombatZoom = Database.DEFAULTS.AUTO_COMBAT_ZOOM,
-        autoMountZoom = Database.DEFAULTS.AUTO_MOUNT_ZOOM,
-        mountZoomFactor = Database.DEFAULTS.MOUNT_ZOOM_FACTOR,
-        reduceUnexpectedMovement = Database.DEFAULTS.REDUCE_UNEXPECTED_MOVEMENT,
-        cameraIndirectVisibility = Database.DEFAULTS.CAMERA_INDIRECT_VISIBILITY,
-        resampleAlwaysSharpen = Database.DEFAULTS.RESAMPLE_ALWAYS_SHARPEN,
-        softTargetInteract = Database.DEFAULTS.SOFT_TARGET_INTERACT,
-        actionCamShoulder = Database.DEFAULTS.ACTION_CAM_SHOULDER,
-        actionCamPitch = Database.DEFAULTS.ACTION_CAM_PITCH,
-        afkMode = Database.DEFAULTS.AFK_MODE,
+        -- Transitions
+        zoomTransitionTime = 0.5,
+        dismountDelay = 0,
 
-        -- Zone Combat Settings
-        zoneParty = Database.DEFAULTS.ZONE_PARTY,
-        zoneRaid = Database.DEFAULTS.ZONE_RAID,
-        zoneArena = Database.DEFAULTS.ZONE_ARENA,
-        zoneBg = Database.DEFAULTS.ZONE_BG,
-        zoneScenario = Database.DEFAULTS.ZONE_SCENARIO,
-        zoneWorldBoss = Database.DEFAULTS.ZONE_WORLD_BOSS,
-        
-        enableDebugLogging = Database.DEFAULTS.ENABLE_DEBUG_LOGGING,
-        debugLevel = CopyTable(Database.DEFAULT_DEBUG_LEVEL)
+        -- Smart zoom toggles
+        autoCombatZoom = false,
+        autoMountZoom = false,
+        mountZoomFactor = MAX_YARDS,
+
+        -- Advanced
+        reduceUnexpectedMovement = false,
+        cameraIndirectVisibility = true,
+
+        -- Retail-only toggles (still stored safely)
+        resampleAlwaysSharpen = (defaultSharpen == 1),
+        softTargetInteract = (defaultSoftTarget == 1),
+
+        -- ActionCam (may exist on some clients, but ok to store)
+        actionCamShoulder = false,
+        actionCamPitch = false,
+
+        -- AFK
+        afkMode = false,
+
+        -- Zones (scenario is mainly Retail; keep stored but default sensibly)
+        zoneParty = true,
+        zoneRaid = true,
+        zoneArena = true,
+        zoneBg = true,
+        zoneScenario = IS_RETAIL and true or false,
+        zoneWorldBoss = true,
+
+        -- Debug
+        enableDebugLogging = false,
+        debugLevel = CopyTableSafe(Database.DEFAULT_DEBUG_LEVEL),
+
+        -- Minimap (LibDBIcon)
+        minimap = { hide = false },
     }
 
+    -- If a feature doesn't exist on Classic, default it OFF (but keep key)
+    if not supportsSharpen then
+        p.resampleAlwaysSharpen = false
+    end
+    if not supportsSoftTarget then
+        p.softTargetInteract = false
+    end
+
+    return p
+end
+
+-- ============================================================================
+-- MIGRATION (add missing keys only; never overwrite user's settings)
+-- ============================================================================
+function Database:ApplyMigrations(profile)
+    if not profile then return end
+    local defaults = BuildDefaultProfile()
+
+    for k, v in pairs(defaults) do
+        if profile[k] == nil then
+            profile[k] = (type(v) == "table") and CopyTableSafe(v) or v
+        end
+    end
+
+    -- debugLevel table safety
+    if profile.debugLevel == nil then
+        profile.debugLevel = CopyTableSafe(Database.DEFAULT_DEBUG_LEVEL)
+    end
+
+    -- minimap table safety
+    if profile.minimap == nil then
+        profile.minimap = { hide = false }
+    elseif profile.minimap.hide == nil then
+        profile.minimap.hide = false
+    end
+end
+
+-- ============================================================================
+-- INIT DB
+-- ============================================================================
+function Database:InitDB()
+    local defaultProfile = BuildDefaultProfile()
+
     self.db = AceDB:New("MaxCameraDistanceDB", { profile = defaultProfile }, true)
-    
     if not self.db then
-        print(addonName .. ": Database initialization failed.")
+        print(addonName .. ": DB initialization failed.")
         return
     end
 
+    self:ApplyMigrations(self.db.profile)
     self:RegisterProfileCallbacks()
 end
 
 function Database:RegisterProfileCallbacks()
-    if not self or not self.db then return end
-    
-    local updateFunc = function(event)
+    if not self.db then return end
+
+    local function OnUpdate(event)
         Database:OnProfileUpdate(event)
     end
 
-    self.db:RegisterCallback("OnProfileChanged", updateFunc)
-    self.db:RegisterCallback("OnProfileCopied", updateFunc)
-    self.db:RegisterCallback("OnProfileReset", updateFunc)
+    self.db:RegisterCallback("OnProfileChanged", OnUpdate)
+    self.db:RegisterCallback("OnProfileCopied", OnUpdate)
+    self.db:RegisterCallback("OnProfileReset", OnUpdate)
 end
 
 function Database:OnProfileUpdate(reason)
-    if ns.Functions and ns.Functions.logMessage then
-        ns.Functions:logMessage("info", reason .. ". Re-applying settings...")
+    if self.db and self.db.profile then
+        self:ApplyMigrations(self.db.profile)
     end
+
     if ns.Functions and ns.Functions.AdjustCamera then
-        ns.Functions:AdjustCamera(true) -- Force update on profile change
+        ns.Functions:AdjustCamera(true)
     end
 end
 
--- *** Helper: Get Value for CVar ***
+-- ============================================================================
+-- HELPERS
+-- ============================================================================
 function Database:GetCVarFactor(yards)
-    return yards / Database.DEFAULTS.CONVERSION_RATIO
+    return (tonumber(yards) or 0) / (Database.DEFAULTS.CONVERSION_RATIO or CONVERSION_RATIO)
 end
 
--- *** Setters/Getters ***
 function Database:SetZoomFactor(yards)
-    local dbObj = (self and self.db) and self or Database
-    if dbObj.db and dbObj.db.profile then
-        dbObj.db.profile.maxZoomFactor = tonumber(yards) or Database.DEFAULTS.ZOOM_DISTANCE
-        if ns.Functions and ns.Functions.AdjustCamera then 
-            ns.Functions:AdjustCamera(true) 
+    if self.db and self.db.profile then
+        self.db.profile.maxZoomFactor = tonumber(yards) or MAX_YARDS
+        if ns.Functions and ns.Functions.AdjustCamera then
+            ns.Functions:AdjustCamera(true)
         end
     end
 end
