@@ -494,17 +494,24 @@ function Functions:OnPlayerFlagsChanged()
 end
 
 function Functions:ClearAllQuestTracking()
+    if not C_QuestLog or not C_QuestLog.GetNumQuestWatches then
+        Functions:SendMessage("Quest tracking API not available in this client.")
+        return
+    end
+
     local numWatches = C_QuestLog.GetNumQuestWatches()
-    if numWatches == 0 then
+    if not numWatches or numWatches <= 0 then
         Functions:SendMessage(L["QUEST_TRACKER_EMPTY"])
         return
     end
+
     for i = numWatches, 1, -1 do
         local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
         if questID then
             C_QuestLog.RemoveQuestWatch(questID)
         end
     end
+
     Functions:SendMessage(string.format(L["QUEST_TRACKER_CLEARED"], numWatches))
 end
 
