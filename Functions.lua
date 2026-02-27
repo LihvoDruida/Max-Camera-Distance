@@ -98,6 +98,27 @@ function Functions:SendMessage(message)
     print("|cff0070deMax Camera Distance|r: " .. tostring(message))
 end
 
+-- ============================================================================
+-- SAFE HELPERS
+-- ============================================================================
+local function SafeGetCVar(name)
+    if C_CVar and C_CVar.GetCVar then
+        local ok, val = pcall(C_CVar.GetCVar, name)
+        if ok and val ~= nil then
+            return tonumber(val)
+        end
+    end
+
+    if type(GetCVar) == "function" then
+        local ok, val = pcall(GetCVar, name)
+        if ok and val ~= nil then
+            return tonumber(val)
+        end
+    end
+
+    return nil
+end
+
 local function UpdateCVar(key, value)
     local strValue = tostring(value)
     local currentValue = C_CVar.GetCVar(key)
@@ -175,7 +196,7 @@ end
 
 local function ApplyZoomTransition(targetYards, transitionTime)
     local targetFactor  = targetYards / CONVERSION_RATIO
-    local currentFactor = tonumber(C_CVar.GetCVar("cameraDistanceMaxZoomFactor")) or 0
+    local currentFactor = tonumber(SafeGetCVar("cameraDistanceMaxZoomFactor")) or 0
 
     if targetFactor < currentFactor then
         if LibCamera and LibCamera.SetZoomUsingCVar then
@@ -465,8 +486,8 @@ function Functions:OnPlayerFlagsChanged()
         wasAFK = true
         Functions:logMessage("info", L["AFK_ENTER_MSG"])
 
-        savedYawSpeed = tonumber(C_CVar.GetCVar("cameraYawMoveSpeed")) or 180
-        C_CVar.SetCVar("cameraYawMoveSpeed", AFK_YAW_SPEED)
+        savedYawSpeed = tonumber(SafeGetCVar("cameraYawMoveSpeed")) or 180
+        SafeSetCVar("cameraYawMoveSpeed", AFK_YAW_SPEED)
         MoveViewRightStart()
 
         local maxYards = ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE
@@ -483,7 +504,7 @@ function Functions:OnPlayerFlagsChanged()
         Functions:logMessage("info", L["AFK_EXIT_MSG"])
 
         MoveViewRightStop()
-        C_CVar.SetCVar("cameraYawMoveSpeed", savedYawSpeed)
+        SafeSetCVar("cameraYawMoveSpeed", savedYawSpeed)
 
         UIParent:Show()
         Functions:FixSettingsAlpha(false)
