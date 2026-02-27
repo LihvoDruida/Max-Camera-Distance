@@ -1,69 +1,83 @@
 local addonName, ns = ...
-ns.Functions = {}
+ns.Functions = ns.Functions or {}
 local Functions = ns.Functions
 
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName) or {}
-local LibCamera = LibStub("LibCamera-1.0", true)
+
+local LibCamera    = LibStub("LibCamera-1.0", true)
 local LibMountInfo = LibStub("LibMountInfo-1.0", true)
-local ACD = LibStub("AceConfigDialog-3.0")
+local ACD          = LibStub("AceConfigDialog-3.0", true)
 
--- ============================================================================
--- 1. API CACHE & CONSTANTS
--- ============================================================================
-local C_CVar = C_CVar
-local C_Timer = C_Timer
+-- =====================================================================
+-- 1) FAST LOCALS / API
+-- =====================================================================
+local C_CVar      = C_CVar
+local C_Timer     = C_Timer
 local C_UnitAuras = C_UnitAuras
-local GetCVar = GetCVar
 
-local UnitAffectingCombat = UnitAffectingCombat
-local UnitThreatSituation = UnitThreatSituation
-local IsInInstance = IsInInstance
-local IsMounted = IsMounted
-local GetShapeshiftForm = GetShapeshiftForm
+local pcall    = pcall
+local tonumber = tonumber
+local tostring = tostring
+local type     = type
+local pairs    = pairs
+local print    = print
+
+local math_abs = math.abs
+local tinsert  = table.insert
+local strlower = string.lower
+
+local UnitAffectingCombat   = UnitAffectingCombat
+local UnitThreatSituation   = UnitThreatSituation
+local IsInInstance          = IsInInstance
+local IsMounted             = IsMounted
+local GetShapeshiftForm     = GetShapeshiftForm
 local GetShapeshiftFormInfo = GetShapeshiftFormInfo
-local UnitIsAFK = UnitIsAFK
-local MoveViewRightStart = MoveViewRightStart
-local MoveViewRightStop = MoveViewRightStop
-local GetCameraZoom = GetCameraZoom
+local UnitIsAFK             = UnitIsAFK
+local MoveViewRightStart    = MoveViewRightStart
+local MoveViewRightStop     = MoveViewRightStop
+local GetCameraZoom         = GetCameraZoom
 local IsEncounterInProgress = IsEncounterInProgress
 
--- [[ GROUP ]]
-local IsInRaid = IsInRaid
-local IsInGroup = IsInGroup
-local GetNumGroupMembers = GetNumGroupMembers
-local GetNumSubgroupMembers = GetNumSubgroupMembers
+local IsInRaid             = IsInRaid
+local IsInGroup            = IsInGroup
+local GetNumGroupMembers   = GetNumGroupMembers
+local GetNumSubgroupMembers= GetNumSubgroupMembers
 
 local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
 
--- ============================================================================
--- 2. STATE VARIABLES
--- ============================================================================
-local currentZoomState = "none"
+-- =====================================================================
+-- 2) STATE
+-- =====================================================================
 local ZOOM_STATE_NONE   = "none"
 local ZOOM_STATE_MOUNT  = "mount"
 local ZOOM_STATE_COMBAT = "combat"
 
+local currentZoomState = ZOOM_STATE_NONE
+
 local transitionTimer = nil
 local isInternalUpdate = false
 
--- Throttling (optimized)
+-- token that invalidates old delayed transitions (fixes “sticky states”)
+local stateToken = 0
+
+-- Throttling (no permanent OnUpdate)
 local updatePending = false
 local updateFrame = CreateFrame("Frame")
 updateFrame:Hide()
 
--- AFK Variables
+-- AFK
 local wasAFK = false
 local savedYawSpeed = 180
 local AFK_YAW_SPEED = 4
 
--- FRAMES
+-- Frames
 local safeExitFrame = CreateFrame("Frame", "MCD_SafeExitFrame", UIParent)
 local shoulderHandlerFrame = CreateFrame("Frame")
 
--- ============================================================================
--- 3. DATA TABLES (FALLBACK)
--- ============================================================================
+-- =====================================================================
+-- 3) FALLBACK DATA (travel forms / buffs)
+-- =====================================================================
 local TRAVEL_FORM_IDS = {
     [783]=true, [1066]=true, [276012]=true, [33943]=true, [40120]=true,
     [165962]=true, [210053]=true, [232323]=true, [29166]=true,
@@ -77,12 +91,19 @@ local TRAVEL_BUFF_IDS = {
     [783]=true, [165962]=true, [276029]=true, [232323]=true, [2645]=true, [292651]=true
 }
 
--- ============================================================================
--- 4. UTILITY FUNCTIONS
--- ============================================================================
+-- =====================================================================
+-- 4) DB helper
+-- =====================================================================
+local function DB()
+    return (ns.Database and ns.Database.db and ns.Database.db.profile) or nil
+end
+
+-- =====================================================================
+-- 5) LOG
+-- =====================================================================
 function Functions:logMessage(level, message)
-    if not (ns.Database and ns.Database.db and ns.Database.db.profile and ns.Database.db.profile.enableDebugLogging) then return end
-    local db = ns.Database.db.profile
+    local db = DB()
+    if not (db and db.enableDebugLogging) then return end
     if not (db.debugLevel and db.debugLevel[level]) then return end
 
     local color = "|cffffffff"
@@ -91,16 +112,17 @@ function Functions:logMessage(level, message)
     elseif level == "warning" then color, prefix = "|cffffff00", "[W]"
     elseif level == "info" then color, prefix = "|cff00ff00", "[I]"
     end
-    DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff0070deMCD|r %s: %s%s|r", prefix, color, message))
+
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff0070deMCD|r %s: %s%s|r", prefix, color, tostring(message)))
 end
 
 function Functions:SendMessage(message)
     print("|cff0070deMax Camera Distance|r: " .. tostring(message))
 end
 
--- ============================================================================
--- SAFE HELPERS
--- ============================================================================
+-- =====================================================================
+-- 6) SAFE CVAR HELPERS (fix SafeGetCVar nil + cross-client)
+-- =====================================================================
 local function SafeGetCVar(name)
     if C_CVar and C_CVar.GetCVar then
         local ok, val = pcall(C_CVar.GetCVar, name)
@@ -108,29 +130,36 @@ local function SafeGetCVar(name)
             return tonumber(val)
         end
     end
-
-    if type(GetCVar) == "function" then
-        local ok, val = pcall(GetCVar, name)
+    if type(_G.GetCVar) == "function" then
+        local ok, val = pcall(_G.GetCVar, name)
         if ok and val ~= nil then
             return tonumber(val)
         end
     end
-
     return nil
 end
 
+local function SafeSetCVar(name, value)
+    if not (C_CVar and C_CVar.SetCVar) then return false end
+    local ok = pcall(C_CVar.SetCVar, name, value)
+    return ok and true or false
+end
+
 local function UpdateCVar(key, value)
-    local strValue = tostring(value)
+    if not (C_CVar and C_CVar.GetCVar and C_CVar.SetCVar) then return end
+
     local currentValue = C_CVar.GetCVar(key)
-    if not currentValue then return end
+    if currentValue == nil then return end
+
+    local strValue = tostring(value)
 
     if type(value) == "number" then
         local numCurrent = tonumber(currentValue)
-        if numCurrent and math.abs(numCurrent - value) < 0.005 then
+        if numCurrent and math_abs(numCurrent - value) < 0.005 then
             return
         end
-    elseif currentValue == strValue then
-        return
+    else
+        if currentValue == strValue then return end
     end
 
     isInternalUpdate = true
@@ -138,19 +167,19 @@ local function UpdateCVar(key, value)
     isInternalUpdate = false
 end
 
+-- =====================================================================
+-- 7) MOUNT / TRAVEL DETECT
+-- =====================================================================
 function Functions:IsSkyriding()
-    -- Prefer library when mounted
     if IsMounted() and LibMountInfo and LibMountInfo.IsSkyriding then
         return LibMountInfo:IsSkyriding()
     end
 
-    -- Retail fallback via auras (guarded)
     if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         if C_UnitAuras.GetPlayerAuraBySpellID(404464) then return true end
         if C_UnitAuras.GetPlayerAuraBySpellID(404468) then return false end
     end
 
-    -- Safe default: not skyriding
     return false
 end
 
@@ -187,6 +216,9 @@ local function IsInTravelForm()
     return false
 end
 
+-- =====================================================================
+-- 8) TRANSITIONS (fix race conditions)
+-- =====================================================================
 local function CancelTransition()
     if transitionTimer then
         C_Timer.CancelTimer(transitionTimer)
@@ -196,14 +228,18 @@ end
 
 local function ApplyZoomTransition(targetYards, transitionTime)
     local targetFactor  = targetYards / CONVERSION_RATIO
-    local currentFactor = tonumber(SafeGetCVar("cameraDistanceMaxZoomFactor")) or 0
+    local currentFactor = SafeGetCVar("cameraDistanceMaxZoomFactor") or 0
 
+    -- If we are shrinking max factor, do zoom first then lower cap (prevents snap)
     if targetFactor < currentFactor then
         if LibCamera and LibCamera.SetZoomUsingCVar then
             LibCamera:SetZoomUsingCVar(targetYards, transitionTime)
         end
 
-        transitionTimer = C_Timer.After(transitionTime + 0.05, function()
+        local myToken = stateToken
+        transitionTimer = C_Timer.After((transitionTime or 0) + 0.05, function()
+            -- If state changed since scheduling, ignore (prevents “sticky” normal)
+            if myToken ~= stateToken then return end
             UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
         end)
     else
@@ -214,22 +250,9 @@ local function ApplyZoomTransition(targetYards, transitionTime)
     end
 end
 
-function Functions:FixSettingsAlpha(ignore)
-    if GameMenuFrame then GameMenuFrame:SetIgnoreParentAlpha(ignore) end
-    if SettingsPanel then SettingsPanel:SetIgnoreParentAlpha(ignore) end
-
-    local aceGUI = LibStub("AceGUI-3.0", true)
-    if aceGUI then
-        for i = 1, aceGUI:GetNextWidgetNum("Dropdown-Pullout") do
-            local pullout = _G["AceGUI30Pullout" .. i]
-            if pullout then pullout:SetIgnoreParentAlpha(ignore) end
-        end
-    end
-end
-
--- ============================================================================
--- 5. EVENT THROTTLING (optimized: no permanent OnUpdate)
--- ============================================================================
+-- =====================================================================
+-- 9) EVENT THROTTLING
+-- =====================================================================
 function Functions:RequestUpdate()
     if updatePending then return end
     updatePending = true
@@ -246,9 +269,9 @@ updateFrame:SetScript("OnUpdate", function(self)
     Functions:UpdateSmartZoomState("auto_update")
 end)
 
--- ============================================================================
--- 6. LOGIC HELPERS (ZONE & COMBAT CHECK)
--- ============================================================================
+-- =====================================================================
+-- 10) COMBAT DETECT (group-safe)
+-- =====================================================================
 function Functions:IsGroupInCombat()
     if IsEncounterInProgress() then return true end
     if UnitAffectingCombat("player") then return true end
@@ -271,11 +294,10 @@ function Functions:IsGroupInCombat()
 end
 
 local function ShouldActiveCombatZoom()
-    if not (ns.Database and ns.Database.db) then return false end
-    local db = ns.Database.db.profile
+    local db = DB()
+    if not db then return false end
 
     local inInstance, instanceType = IsInInstance()
-    -- "none", "pvp", "arena", "party", "raid", "scenario"
 
     if inInstance then
         if instanceType == "party" and db.zoneParty then return true end
@@ -293,9 +315,9 @@ local function ShouldActiveCombatZoom()
     return false
 end
 
--- ============================================================================
--- 7. DYNAMIC FEATURES
--- ============================================================================
+-- =====================================================================
+-- 11) ACTIONCAM SHOULDER (dynamic shoulder offset)
+-- =====================================================================
 tinsert(UISpecialFrames, safeExitFrame:GetName())
 safeExitFrame:Hide()
 
@@ -319,32 +341,27 @@ local function GetShoulderOffsetZoomFactor(zoomLevel)
 end
 
 shoulderHandlerFrame.lastZoom = -1
-shoulderHandlerFrame:SetScript("OnUpdate", function(self, elapsed)
+shoulderHandlerFrame:SetScript("OnUpdate", function(self)
     local currentZoom = GetCameraZoom()
-    if math.abs(self.lastZoom - currentZoom) < 0.01 then return end
+    if math_abs(self.lastZoom - currentZoom) < 0.01 then return end
     self.lastZoom = currentZoom
 
     local factor = GetShoulderOffsetZoomFactor(currentZoom)
     local baseOffset = 1.0
-    local finalOffset = baseOffset * factor
-
-    UpdateCVar("test_cameraOverShoulder", finalOffset)
+    UpdateCVar("test_cameraOverShoulder", baseOffset * factor)
 end)
 shoulderHandlerFrame:Hide()
 
--- ============================================================================
--- 8. CORE LOGIC
--- ============================================================================
 function Functions:UpdateActionCam()
-    if not (ns.Database and ns.Database.db) then return end
-    local db = ns.Database.db.profile
+    local db = DB()
+    if not db then return end
 
     UpdateCVar("test_cameraDynamicPitch", db.actionCamPitch and 1 or 0)
 
     if db.actionCamShoulder then
-        if tonumber(GetCVar("CameraKeepCharacterCentered")) == 1 then
+        if type(_G.GetCVar) == "function" and tonumber(_G.GetCVar("CameraKeepCharacterCentered")) == 1 then
             UpdateCVar("CameraKeepCharacterCentered", 0)
-            Functions:logMessage("warning", L["CONFLICT_FIX_MSG"])
+            Functions:logMessage("warning", L["CONFLICT_FIX_MSG"] or "ActionCam: Disabled Keep Character Centered to prevent jitter.")
         end
         shoulderHandlerFrame:Show()
     else
@@ -353,57 +370,89 @@ function Functions:UpdateActionCam()
     end
 end
 
-function Functions:UpdateSmartZoomState(event)
-    if not (ns.Database and ns.Database.db) then return end
-    local db = ns.Database.db.profile
-
-    if not db.autoCombatZoom and not db.autoMountZoom then return end
-
+-- =====================================================================
+-- 12) SMART ZOOM CORE (FIXED: no “sticky” state)
+-- =====================================================================
+local function ComputeDesiredState(db)
     local inCombat = Functions:IsGroupInCombat()
     local hasThreat = UnitThreatSituation("player")
     local isMounted = IsInTravelForm()
 
-    local newState = ZOOM_STATE_NONE
-    local targetYards
-
-    if db.autoCombatZoom then
-        targetYards = db.minZoomFactor or 15
-    else
-        targetYards = db.maxZoomFactor or 39
-    end
-
     if db.autoCombatZoom and (inCombat or hasThreat or ShouldActiveCombatZoom()) then
-        newState = ZOOM_STATE_COMBAT
-        targetYards = db.maxZoomFactor
-    elseif db.autoMountZoom and isMounted then
-        newState = ZOOM_STATE_MOUNT
-        targetYards = db.mountZoomFactor
+        return ZOOM_STATE_COMBAT, (db.maxZoomFactor or (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or 39)
     end
 
-    if newState == currentZoomState and event ~= "manual_update" then
+    if db.autoMountZoom and isMounted then
+        return ZOOM_STATE_MOUNT, (db.mountZoomFactor or db.maxZoomFactor or 39)
+    end
+
+    -- none (normal)
+    local normalYards
+    if db.autoCombatZoom then
+        normalYards = db.minZoomFactor or 15
+    else
+        normalYards = db.maxZoomFactor or 39
+    end
+
+    return ZOOM_STATE_NONE, normalYards
+end
+
+function Functions:UpdateSmartZoomState(event)
+    local db = DB()
+    if not db then return end
+    if not db.autoCombatZoom and not db.autoMountZoom then return end
+
+    local newState, targetYards = ComputeDesiredState(db)
+
+    -- If going INTO combat or mount, always cancel pending “zoom-in”
+    -- (prevents normal transition from firing after re-enter combat)
+    if newState ~= ZOOM_STATE_NONE then
+        CancelTransition()
+    end
+
+    -- Same state? still might need to “win back” after fast flip.
+    -- If we are combat/mount, we allow re-apply on auto_update too.
+    local stateSame = (newState == currentZoomState)
+    if stateSame and (newState == ZOOM_STATE_NONE) and event ~= "manual_update" then
         return
     end
 
-    CancelTransition()
+    -- Any change invalidates old delayed timers
+    stateToken = stateToken + 1
     currentZoomState = newState
 
     local transitionTime = db.zoomTransitionTime or 0.5
 
     if newState == ZOOM_STATE_NONE and event ~= "manual_update" then
+        -- Delay zoom-in after leaving combat/mount
         local delay = db.dismountDelay or 0
+        local myToken = stateToken
+
+        CancelTransition()
         transitionTimer = C_Timer.After(delay, function()
-            ApplyZoomTransition(targetYards, transitionTime)
+            -- Re-check: if state changed since scheduling, do nothing
+            if myToken ~= stateToken then return end
+
+            -- Recompute again at fire-time (combat re-enter, mount, etc.)
+            local nowState, nowYards = ComputeDesiredState(db)
+            if nowState ~= ZOOM_STATE_NONE then
+                -- state changed, let next update handle it (or apply immediately)
+                return
+            end
+
+            ApplyZoomTransition(nowYards, transitionTime)
+            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", nowState, nowYards))
         end)
     else
+        -- Immediate apply for combat/mount, or manual update
         ApplyZoomTransition(targetYards, transitionTime)
+        Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, targetYards))
     end
-
-    Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"], newState, targetYards))
 end
 
 function Functions:AdjustCamera(forceNow)
-    if not (ns.Database and ns.Database.db) then return end
-    local db = ns.Database.db.profile
+    local db = DB()
+    if not db then return end
 
     Functions:UpdateActionCam()
 
@@ -414,18 +463,19 @@ function Functions:AdjustCamera(forceNow)
             Functions:RequestUpdate()
         end
     else
-        local targetYards = ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE
-        local targetFactor = targetYards / CONVERSION_RATIO
+        -- Manual-only mode
+        local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (IS_RETAIL and 39 or 50)
+        local targetFactor = maxYards / CONVERSION_RATIO
 
         UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
-
         if LibCamera and LibCamera.SetZoomUsingCVar then
-            LibCamera:SetZoomUsingCVar(db.maxZoomFactor, db.zoomTransitionTime or 0.5)
+            LibCamera:SetZoomUsingCVar(db.maxZoomFactor or maxYards, db.zoomTransitionTime or 0.5)
         end
 
-        Functions:logMessage("info", L["SMART_ZOOM_DISABLED_MSG"])
+        Functions:logMessage("info", L["SMART_ZOOM_DISABLED_MSG"] or "Smart Zoom is disabled. Using manual max distance settings.")
     end
 
+    -- Always apply other CVars
     UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
     UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
@@ -437,8 +487,8 @@ end
 
 function Functions:OnCVarUpdate(_, cvarName, value)
     if isInternalUpdate then return end
-    if not (ns.Database and ns.Database.db) then return end
-    local db = ns.Database.db.profile
+    local db = DB()
+    if not db then return end
 
     if (cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax") then
         if db.autoCombatZoom or db.autoMountZoom then
@@ -450,9 +500,9 @@ function Functions:OnCVarUpdate(_, cvarName, value)
 
     if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then
         local yards = numValue * CONVERSION_RATIO
-        if yards > 1 and math.abs(db.maxZoomFactor - yards) > 0.1 then
+        if yards > 1 and db.maxZoomFactor and math_abs(db.maxZoomFactor - yards) > 0.1 then
             db.maxZoomFactor = yards
-            Functions:logMessage("info", string.format("DB synced from CVar: %.1f factor -> %.1f yards", numValue, yards))
+            Functions:logMessage("info", string.format("DB synced from CVar: %.2f factor -> %.1f yards", numValue, yards))
         end
     elseif cvarName == "cameraDistanceMoveSpeed" then
         db.moveViewDistance = numValue
@@ -471,49 +521,48 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     end
 end
 
--- ============================================================================
--- 9. AFK HANDLER (SAFE MODE)
--- ============================================================================
+-- =====================================================================
+-- 13) AFK (SAFE)
+-- =====================================================================
 function Functions:OnPlayerFlagsChanged()
-    if not (ns.Database and ns.Database.db) then return end
-    local db = ns.Database.db.profile
-
-    if not db.afkMode then return end
+    local db = DB()
+    if not db or not db.afkMode then return end
 
     local isAFK = UnitIsAFK("player")
 
     if isAFK and not wasAFK then
         wasAFK = true
-        Functions:logMessage("info", L["AFK_ENTER_MSG"])
+        Functions:logMessage("info", L["AFK_ENTER_MSG"] or "AFK Mode: enabled (cinematic rotation).")
 
-        savedYawSpeed = tonumber(SafeGetCVar("cameraYawMoveSpeed")) or 180
+        savedYawSpeed = SafeGetCVar("cameraYawMoveSpeed") or 180
         SafeSetCVar("cameraYawMoveSpeed", AFK_YAW_SPEED)
         MoveViewRightStart()
 
-        local maxYards = ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE
+        local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (IS_RETAIL and 39 or 50)
         if LibCamera and LibCamera.SetZoomUsingCVar then
             LibCamera:SetZoomUsingCVar(maxYards, 4.0)
         end
 
         UIParent:Hide()
-        Functions:FixSettingsAlpha(true)
         safeExitFrame:Show()
 
-    elseif not isAFK and wasAFK then
+    elseif (not isAFK) and wasAFK then
         wasAFK = false
-        Functions:logMessage("info", L["AFK_EXIT_MSG"])
+        Functions:logMessage("info", L["AFK_EXIT_MSG"] or "AFK Mode: disabled (restored UI and camera).")
 
         MoveViewRightStop()
         SafeSetCVar("cameraYawMoveSpeed", savedYawSpeed)
 
         UIParent:Show()
-        Functions:FixSettingsAlpha(false)
         safeExitFrame:Hide()
 
         Functions:AdjustCamera(true)
     end
 end
 
+-- =====================================================================
+-- 14) QUEST TRACKER
+-- =====================================================================
 function Functions:ClearAllQuestTracking()
     if not C_QuestLog or not C_QuestLog.GetNumQuestWatches then
         Functions:SendMessage("Quest tracking API not available in this client.")
@@ -522,7 +571,7 @@ function Functions:ClearAllQuestTracking()
 
     local numWatches = C_QuestLog.GetNumQuestWatches()
     if not numWatches or numWatches <= 0 then
-        Functions:SendMessage(L["QUEST_TRACKER_EMPTY"])
+        Functions:SendMessage(L["QUEST_TRACKER_EMPTY"] or "Quest tracker is already empty.")
         return
     end
 
@@ -533,24 +582,24 @@ function Functions:ClearAllQuestTracking()
         end
     end
 
-    Functions:SendMessage(string.format(L["QUEST_TRACKER_CLEARED"], numWatches))
+    Functions:SendMessage(string.format(L["QUEST_TRACKER_CLEARED"] or "Stopped tracking %d quests.", numWatches))
 end
 
--- ============================================================================
--- 10. SLASH COMMANDS
--- ============================================================================
+-- =====================================================================
+-- 15) SLASH
+-- =====================================================================
 function Functions:SlashCmdHandler(msg)
     local command = strlower(msg or "")
 
     if not (ns.Database and ns.Database.db) then
-        Functions:SendMessage(L["DB_NOT_READY"])
+        Functions:SendMessage(L["DB_NOT_READY"] or "Database not initialized yet.")
         return
     end
 
     local db = ns.Database.db.profile
 
     if command == "config" then
-        if ACD then
+        if ACD and ACD.Open then
             ACD:Open(addonName)
         else
             Functions:SendMessage("Error: AceConfigDialog not found. Cannot open settings.")
