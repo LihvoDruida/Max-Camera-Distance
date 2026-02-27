@@ -375,7 +375,8 @@ end
 -- =====================================================================
 local function ComputeDesiredState(db)
     local inCombat = Functions:IsGroupInCombat()
-    local hasThreat = UnitThreatSituation("player")
+    local threatStatus = UnitThreatSituation("player")
+    local hasThreat = (threatStatus ~= nil and threatStatus > 0)
     local isMounted = IsInTravelForm()
 
     if db.autoCombatZoom and (inCombat or hasThreat or ShouldActiveCombatZoom()) then
