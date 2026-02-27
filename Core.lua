@@ -128,9 +128,20 @@ eventHandlers.PLAYER_FLAGS_CHANGED = function(event)
 end
 
 eventHandlers.CVAR_UPDATE = function(event, cvarName, value)
-    if cvarName ~= "cameraDistanceMaxZoomFactor" and cvarName ~= "cameraDistanceMax" then return end
     if not (ns.Functions and ns.Functions.OnCVarUpdate) then return end
-    SafeCall(ns.Functions.OnCVarUpdate, "OnCVarUpdate", ns.Functions, event, cvarName, value)
+
+    -- Keep this tight to avoid noisy CVAR_UPDATE spam.
+    if cvarName == "cameraDistanceMaxZoomFactor"
+        or cvarName == "cameraDistanceMax"
+        or cvarName == "cameraDistanceMoveSpeed"
+        or cvarName == "cameraYawMoveSpeed"
+        or cvarName == "cameraPitchMoveSpeed"
+        or cvarName == "cameraReduceUnexpectedMovement"
+        or cvarName == "cameraIndirectVisibility"
+        or cvarName == "resampleAlwaysSharpen"
+        or cvarName == "SoftTargetIconGameObject" then
+        SafeCall(ns.Functions.OnCVarUpdate, "OnCVarUpdate", ns.Functions, event, cvarName, value)
+    end
 end
 
 -- Main dispatcher
