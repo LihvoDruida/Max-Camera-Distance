@@ -255,9 +255,10 @@ function Config:SetupOptions()
                         type = "range",
                         name = L["MOVE_VIEW_DISTANCE"],
                         desc = L["MOVE_VIEW_DISTANCE_DESC"],
-                        min = 10000,
-                        max = 50000,
-                        step = 1000,
+                        -- cameraDistanceMoveSpeed is a small value (usually ~20)
+                        min = 1,
+                        max = 50,
+                        step = 1,
                         get = function() return GetOption("moveViewDistance") end,
                         set = function(_, val) SetOption("moveViewDistance", val) end,
                         order = 3,
