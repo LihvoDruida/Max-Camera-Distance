@@ -43,6 +43,12 @@ local function RequestSmartUpdate()
     end
 end
 
+local function ForceSmartUpdate()
+    if ns.Functions and ns.Functions.AdjustCamera then
+        SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions, true)
+    end
+end
+
 local function InitMinimapButton()
     if minimapInited then return end
     minimapInited = true
@@ -103,7 +109,7 @@ eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
     -- Small defer avoids early-load race on some clients
     C_Timer.After(0, function()
         if not IsPlayerReady() then return end
-        SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions)
+        SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions, true)
     end)
 end
 
@@ -115,6 +121,8 @@ eventHandlers.PLAYER_ALIVE          = RequestSmartUpdate
 eventHandlers.PLAYER_UNGHOST        = RequestSmartUpdate
 eventHandlers.PLAYER_MOUNT_DISPLAY_CHANGED = RequestSmartUpdate
 eventHandlers.UPDATE_SHAPESHIFT_FORM = RequestSmartUpdate
+eventHandlers.ZONE_CHANGED_NEW_AREA = ForceSmartUpdate
+eventHandlers.PLAYER_DIFFICULTY_CHANGED = ForceSmartUpdate
 
 -- Retail-only (talents UI)
 if IS_RETAIL then
