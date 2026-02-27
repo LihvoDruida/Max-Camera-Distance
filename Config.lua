@@ -142,6 +142,8 @@ function Config:SetupOptions()
 
     -- Make sure distance matches the current client
     local maxDistance = defaults.MAX_POSSIBLE_DISTANCE or (IS_RETAIL and 39 or 50)
+    local isClassic = not IS_RETAIL
+    local hasQuestWatch = (C_QuestLog and C_QuestLog.GetNumQuestWatches) and true or false
 
     local options = {
         name = "Max Camera Distance",
@@ -483,7 +485,8 @@ function Config:SetupOptions()
                             end
                         end,
                         order = 0.5,
-                        width = "full"
+                        width = "full",
+                        hidden = function() return not hasQuestWatch end,
                     },
 
                     -- ActionCam: show ONLY if the client has the CVars
