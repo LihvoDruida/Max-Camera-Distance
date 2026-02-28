@@ -243,15 +243,55 @@ end
 -- 8) TRANSITIONS (fix race conditions)
 -- =====================================================================
 local function CancelTransition()
-    if transitionTimer then
-        C_Timer.CancelTimer(transitionTimer)
+    if not transitionTimer then return end
+
+    if type(transitionTimer) == "table" and type(transitionTimer.Cancel) == "function" then
+        pcall(function() transitionTimer:Cancel() end)
+    elseif C_Timer and C_Timer.CancelTimer then
+        pcall(C_Timer.CancelTimer, transitionTimer)
+    end
+
+    transitionTimer = nil
+end
+
+local function ScheduleTransition(delay, callback)
+    CancelTransition()
+
+    if C_Timer and C_Timer.NewTimer then
+        transitionTimer = C_Timer.NewTimer(delay, function()
+            transitionTimer = nil
+            callback()
+        end)
+        return
+    end
+
+    transitionTimer = true
+    C_Timer.After(delay, function()
+        if transitionTimer ~= true then return end
         transitionTimer = nil
+        callback()
+    end)
+end
+
+local function ApplyZoomCap(targetYards)
+    local targetFactor = targetYards / CONVERSION_RATIO
+
+    if SafeGetCVar("cameraDistanceMaxZoomFactor") ~= nil then
+        UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
+    end
+
+    if SafeGetCVar("cameraDistanceMax") ~= nil then
+        UpdateCVar("cameraDistanceMax", targetYards)
     end
 end
 
 local function ApplyZoomTransition(targetYards, transitionTime)
-    local targetFactor  = targetYards / CONVERSION_RATIO
-    local currentFactor = SafeGetCVar("cameraDistanceMaxZoomFactor") or 0
+    local targetFactor = targetYards / CONVERSION_RATIO
+    local currentFactor = SafeGetCVar("cameraDistanceMaxZoomFactor")
+
+    if currentFactor == nil then
+        currentFactor = targetFactor
+    end
 
     -- If we are shrinking max factor, do zoom first then lower cap (prevents snap)
     if targetFactor < currentFactor then
@@ -260,13 +300,13 @@ local function ApplyZoomTransition(targetYards, transitionTime)
         end
 
         local myToken = stateToken
-        transitionTimer = C_Timer.After((transitionTime or 0) + 0.05, function()
-            -- If state changed since scheduling, ignore (prevents “sticky” normal)
+        ScheduleTransition((transitionTime or 0) + 0.05, function()
+            -- If state changed since scheduling, ignore (prevents stale restore)
             if myToken ~= stateToken then return end
-            UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
+            ApplyZoomCap(targetYards)
         end)
     else
-        UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
+        ApplyZoomCap(targetYards)
         if LibCamera and LibCamera.SetZoomUsingCVar then
             LibCamera:SetZoomUsingCVar(targetYards, transitionTime)
         end
@@ -319,26 +359,29 @@ function Functions:IsGroupInCombat()
     return false
 end
 
-local function ShouldActiveCombatZoom()
-    local db = DB()
-    if not db then return false end
-
+local function IsCombatZoomAllowedInCurrentZone(db)
     local inInstance, instanceType = IsInInstance()
 
-    if inInstance then
-        if instanceType == "party" and db.zoneParty then return true end
-        if instanceType == "raid" and db.zoneRaid then return true end
-        if instanceType == "arena" and db.zoneArena then return true end
-        if instanceType == "pvp" and db.zoneBg then return true end
-        if instanceType == "scenario" and db.zoneScenario then return true end
-        return false
-    end
-
-    if db.zoneWorldBoss and IsEncounterInProgress() then
+    if not inInstance then
         return true
     end
 
+    if instanceType == "party" then return db.zoneParty and true or false end
+    if instanceType == "raid" then return db.zoneRaid and true or false end
+    if instanceType == "arena" then return db.zoneArena and true or false end
+    if instanceType == "pvp" then return db.zoneBg and true or false end
+    if instanceType == "scenario" then return db.zoneScenario and true or false end
+
     return false
+end
+
+local function ShouldForceCombatZoom(db)
+    local inInstance = IsInInstance()
+    if inInstance then
+        return false
+    end
+
+    return db.zoneWorldBoss and IsEncounterInProgress() and true or false
 end
 
 -- =====================================================================
@@ -421,8 +464,10 @@ local function ComputeDesiredState(db)
     local threatStatus = UnitThreatSituation("player")
     local hasThreat = (threatStatus ~= nil and threatStatus > 0)
     local isMounted = IsInTravelForm()
+    local allowCombatZoom = IsCombatZoomAllowedInCurrentZone(db)
+    local forceCombatZoom = ShouldForceCombatZoom(db)
 
-    if db.autoCombatZoom and (inCombat or hasThreat or ShouldActiveCombatZoom()) then
+    if db.autoCombatZoom and ((allowCombatZoom and (inCombat or hasThreat)) or forceCombatZoom) then
         return ZOOM_STATE_COMBAT, (db.maxZoomFactor or (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or 39)
     end
 
@@ -472,13 +517,15 @@ function Functions:UpdateSmartZoomState(event)
         local delay = db.dismountDelay or 0
         local myToken = stateToken
 
-        CancelTransition()
-        transitionTimer = C_Timer.After(delay, function()
+        ScheduleTransition(delay, function()
             -- Re-check: if state changed since scheduling, do nothing
             if myToken ~= stateToken then return end
 
+            local liveDb = DB()
+            if not liveDb then return end
+
             -- Recompute again at fire-time (combat re-enter, mount, etc.)
-            local nowState, nowYards = ComputeDesiredState(db)
+            local nowState, nowYards = ComputeDesiredState(liveDb)
             if nowState ~= ZOOM_STATE_NONE then
                 -- state changed, let next update handle it (or apply immediately)
                 return
@@ -509,11 +556,15 @@ function Functions:AdjustCamera(forceNow)
     else
         -- Manual-only mode
         local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (IS_RETAIL and 39 or 50)
-        local targetFactor = maxYards / CONVERSION_RATIO
+        local manualTargetYards = db.maxZoomFactor or maxYards
 
-        UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
+        stateToken = stateToken + 1
+        currentZoomState = ZOOM_STATE_NONE
+        CancelTransition()
+
+        ApplyZoomCap(manualTargetYards)
         if LibCamera and LibCamera.SetZoomUsingCVar then
-            LibCamera:SetZoomUsingCVar(db.maxZoomFactor or maxYards, db.zoomTransitionTime or 0.5)
+            LibCamera:SetZoomUsingCVar(manualTargetYards, db.zoomTransitionTime or 0.5)
         end
 
         Functions:logMessage("info", L["SMART_ZOOM_DISABLED_MSG"] or "Smart Zoom is disabled. Using manual max distance settings.")
@@ -538,13 +589,20 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     local db = DB()
     if not db then return end
 
+    local numValue = tonumber(value) or 0
+
     if (cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax") then
         if db.autoCombatZoom or db.autoMountZoom then
+            local _, desiredYards = ComputeDesiredState(db)
+            local expected = (cvarName == "cameraDistanceMax") and desiredYards or (desiredYards / CONVERSION_RATIO)
+            local epsilon = (cvarName == "cameraDistanceMax") and 0.1 or 0.01
+
+            if math_abs(numValue - expected) > epsilon then
+                Functions:RequestUpdate()
+            end
             return
         end
     end
-
-    local numValue = tonumber(value) or 0
 
     if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then
         local yards
