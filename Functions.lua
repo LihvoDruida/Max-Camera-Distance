@@ -2,7 +2,7 @@ local addonName, ns = ...
 ns.Functions = ns.Functions or {}
 local Functions = ns.Functions
 
-local L = LibStub("AceLocale-3.0"):GetLocale(addonName) or {}
+local L = LibStub("AceLocale-3.0"):GetLocale(addonName, true) or {}
 
 local LibCamera    = LibStub("LibCamera-1.0", true)
 local LibMountInfo = LibStub("LibMountInfo-1.0", true)
@@ -140,15 +140,38 @@ local function SafeGetCVar(name)
 end
 
 local function SafeSetCVar(name, value)
-    if not (C_CVar and C_CVar.SetCVar) then return false end
-    local ok = pcall(C_CVar.SetCVar, name, value)
-    return ok and true or false
+    if C_CVar and C_CVar.SetCVar then
+        local ok = pcall(C_CVar.SetCVar, name, value)
+        if ok then
+            return true
+        end
+    end
+
+    if type(_G.SetCVar) == "function" then
+        local ok = pcall(_G.SetCVar, name, value)
+        return ok and true or false
+    end
+
+    return false
 end
 
 local function UpdateCVar(key, value)
-    if not (C_CVar and C_CVar.GetCVar and C_CVar.SetCVar) then return end
+    local currentValue = nil
 
-    local currentValue = C_CVar.GetCVar(key)
+    if C_CVar and C_CVar.GetCVar then
+        local ok, result = pcall(C_CVar.GetCVar, key)
+        if ok then
+            currentValue = result
+        end
+    end
+
+    if currentValue == nil and type(_G.GetCVar) == "function" then
+        local ok, result = pcall(_G.GetCVar, key)
+        if ok then
+            currentValue = result
+        end
+    end
+
     if currentValue == nil then return end
 
     local strValue = tostring(value)
@@ -163,7 +186,7 @@ local function UpdateCVar(key, value)
     end
 
     isInternalUpdate = true
-    pcall(C_CVar.SetCVar, key, value)
+    SafeSetCVar(key, value)
     isInternalUpdate = false
 end
 
@@ -524,10 +547,17 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     local numValue = tonumber(value) or 0
 
     if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then
-        local yards = numValue * CONVERSION_RATIO
+        local yards
+
+        if cvarName == "cameraDistanceMaxZoomFactor" then
+            yards = numValue * CONVERSION_RATIO
+        else
+            yards = numValue
+        end
+
         if yards > 1 and db.maxZoomFactor and math_abs(db.maxZoomFactor - yards) > 0.1 then
             db.maxZoomFactor = yards
-            Functions:logMessage("info", string.format("DB synced from CVar: %.2f factor -> %.1f yards", numValue, yards))
+            Functions:logMessage("info", string.format("DB synced from CVar: %s -> %.1f yards", tostring(value), yards))
         end
     elseif cvarName == "cameraDistanceMoveSpeed" then
         db.moveViewDistance = numValue

@@ -1,6 +1,7 @@
 local addonName, ns = ...
 ns.CVarGuard = ns.CVarGuard or {}
 local CVarGuard = ns.CVarGuard
+ns.CVarMonitor = CVarGuard -- legacy alias for older modules
 
 local type = type
 local pcall = pcall
@@ -283,7 +284,16 @@ function CVarGuard:Init()
     end
 
     if C_CVar and C_CVar.SetCVar then
-        hooksecurefunc(C_CVar, "SetCVar", function(_, cvar, value)
+        hooksecurefunc(C_CVar, "SetCVar", function(...)
+            local argc = select("#", ...)
+            local cvar, value
+
+            if argc >= 3 then
+                cvar, value = select(2, ...)
+            else
+                cvar, value = ...
+            end
+
             CVarGuard:OnExternalCVarSet(cvar, value)
         end)
     end

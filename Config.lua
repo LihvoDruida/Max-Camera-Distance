@@ -3,9 +3,9 @@ ns.Config = ns.Config or {}
 local Config = ns.Config
 
 -- Libs
-local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
-local AceConfig = LibStub("AceConfig-3.0")
-local AceConfigDialog = LibStub("AceConfigDialog-3.0")
+local L = LibStub("AceLocale-3.0"):GetLocale(addonName, true) or {}
+local AceConfig = LibStub("AceConfig-3.0", true)
+local AceConfigDialog = LibStub("AceConfigDialog-3.0", true)
 
 -- =====================================================================
 -- VERSION / CLIENT DETECTION
@@ -593,8 +593,16 @@ function Config:SetupOptions()
         }
     }
 
+    if not AceConfig then
+        print(addonName .. ": AceConfig-3.0 not found.")
+        return
+    end
+
     AceConfig:RegisterOptionsTable(addonName, options)
-    AceConfigDialog:AddToBlizOptions(addonName, "Max Camera Distance")
+
+    if AceConfigDialog and AceConfigDialog.AddToBlizOptions then
+        AceConfigDialog:AddToBlizOptions(addonName, "Max Camera Distance")
+    end
 end
 
 -- =====================================================================

@@ -135,7 +135,7 @@ local PROFILE_DEFAULTS = {
 
     -- advanced (best-effort defaults from client when possible)
     reduceUnexpectedMovement = (defaultReduceMove == 1) or false,
-    cameraIndirectVisibility = (defaultIndirect == 1) or true,
+    cameraIndirectVisibility = (defaultIndirect == nil) and true or (defaultIndirect == 1),
 
     resampleAlwaysSharpen = (defaultSharpen == 1) or false,
     softTargetInteract = (defaultSoftTarget == 1) or false,
@@ -169,18 +169,22 @@ local PROFILE_DEFAULTS = {
 function Database:ApplyMigrations(profile)
     if not profile then return end
 
+    local legacyShoulder = profile.actionCamShoulder
+    local missingShoulderInCombat = (profile.actionCamShoulderInCombat == nil)
+    local missingShoulderOutOfCombat = (profile.actionCamShoulderOutOfCombat == nil)
+
     for k, v in pairs(PROFILE_DEFAULTS) do
         if profile[k] == nil then
             profile[k] = (type(v) == "table") and CopyTableSafe(v) or v
         end
     end
 
-    if profile.actionCamShoulder ~= nil then
-        if profile.actionCamShoulderInCombat == nil then
-            profile.actionCamShoulderInCombat = profile.actionCamShoulder
+    if legacyShoulder ~= nil then
+        if missingShoulderInCombat then
+            profile.actionCamShoulderInCombat = legacyShoulder
         end
-        if profile.actionCamShoulderOutOfCombat == nil then
-            profile.actionCamShoulderOutOfCombat = profile.actionCamShoulder
+        if missingShoulderOutOfCombat then
+            profile.actionCamShoulderOutOfCombat = legacyShoulder
         end
     end
 

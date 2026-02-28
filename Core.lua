@@ -13,7 +13,7 @@ local C_Timer = C_Timer
 -- Minimap libs
 local LDB = LibStub("LibDataBroker-1.1", true)
 local LDBIcon = LibStub("LibDBIcon-1.0", true)
-local ACD = LibStub("AceConfigDialog-3.0")
+local ACD = LibStub("AceConfigDialog-3.0", true)
 
 local ENABLE_LOGGING = false
 local minimapInited = false
@@ -97,8 +97,9 @@ eventHandlers.ADDON_LOADED = function(event, loadedAddon)
         SafeCall(ns.Config.SetupOptions, "SetupOptions", ns.Config)
     end
 
-    if ns.CVarMonitor and ns.CVarMonitor.Init then
-        SafeCall(ns.CVarMonitor.Init, "CVarGuard.Init", ns.CVarMonitor)
+    local guard = ns.CVarGuard or ns.CVarMonitor
+    if guard and guard.Init then
+        SafeCall(guard.Init, "CVarGuard.Init", guard)
     end
 
     SafeCall(InitMinimapButton, "InitMinimapButton")
