@@ -502,14 +502,23 @@ function Config:SetupOptions()
                         order = 2,
                         hidden = function() return not SupportsActionCam() end,
                     },
-                    enableShoulder = {
+                    enableShoulderInCombat = {
                         type = "toggle",
-                        name = L["ACTION_CAM_SHOULDER_NAME"],
-                        desc = L["ACTION_CAM_SHOULDER_DESC"],
+                        name = "Over-Shoulder in Combat",
+                        desc = "Enable over-shoulder camera while in combat.",
                         hidden = function() return not HasCVar("test_cameraOverShoulder") end,
-                        get = function() return GetOption("actionCamShoulder") end,
-                        set = function(_, val) SetOption("actionCamShoulder", val) end,
+                        get = function() return GetOption("actionCamShoulderInCombat") end,
+                        set = function(_, val) SetOption("actionCamShoulderInCombat", val) end,
                         order = 3
+                    },
+                    enableShoulderOutOfCombat = {
+                        type = "toggle",
+                        name = "Over-Shoulder out of Combat",
+                        desc = "Enable over-shoulder camera while out of combat.",
+                        hidden = function() return not HasCVar("test_cameraOverShoulder") end,
+                        get = function() return GetOption("actionCamShoulderOutOfCombat") end,
+                        set = function(_, val) SetOption("actionCamShoulderOutOfCombat", val) end,
+                        order = 4
                     },
                     enableDynamicPitch = {
                         type = "toggle",
@@ -518,7 +527,7 @@ function Config:SetupOptions()
                         hidden = function() return not HasCVar("test_cameraDynamicPitch") end,
                         get = function() return GetOption("actionCamPitch") end,
                         set = function(_, val) SetOption("actionCamPitch", val) end,
-                        order = 4
+                        order = 5
                     },
 
                     afkHeader = { type = "header", name = L["AFK_MODE_HEADER"], order = 10 },

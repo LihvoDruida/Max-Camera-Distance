@@ -141,7 +141,9 @@ local PROFILE_DEFAULTS = {
     softTargetInteract = (defaultSoftTarget == 1) or false,
 
     -- actioncam / afk
-    actionCamShoulder = false,
+    actionCamShoulder = false, -- legacy key for migration
+    actionCamShoulderInCombat = false,
+    actionCamShoulderOutOfCombat = false,
     actionCamPitch = false,
     afkMode = false,
 
@@ -170,6 +172,15 @@ function Database:ApplyMigrations(profile)
     for k, v in pairs(PROFILE_DEFAULTS) do
         if profile[k] == nil then
             profile[k] = (type(v) == "table") and CopyTableSafe(v) or v
+        end
+    end
+
+    if profile.actionCamShoulder ~= nil then
+        if profile.actionCamShoulderInCombat == nil then
+            profile.actionCamShoulderInCombat = profile.actionCamShoulder
+        end
+        if profile.actionCamShoulderOutOfCombat == nil then
+            profile.actionCamShoulderOutOfCombat = profile.actionCamShoulder
         end
     end
 

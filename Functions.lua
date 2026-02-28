@@ -266,6 +266,9 @@ updateFrame:SetScript("OnUpdate", function(self)
     end
     updatePending = false
     self:Hide()
+
+    -- Always refresh ActionCam too, so shoulder mode can switch on combat enter/leave
+    Functions:UpdateActionCam()
     Functions:UpdateSmartZoomState("auto_update")
 end)
 
@@ -352,13 +355,26 @@ shoulderHandlerFrame:SetScript("OnUpdate", function(self)
 end)
 shoulderHandlerFrame:Hide()
 
+function Functions:ShouldEnableShoulderNow()
+    local db = DB()
+    if not db then return false end
+
+    local inCombat = self:IsGroupInCombat()
+
+    if inCombat then
+        return db.actionCamShoulderInCombat and true or false
+    end
+
+    return db.actionCamShoulderOutOfCombat and true or false
+end
+
 function Functions:UpdateActionCam()
     local db = DB()
     if not db then return end
 
     UpdateCVar("test_cameraDynamicPitch", db.actionCamPitch and 1 or 0)
 
-    if db.actionCamShoulder then
+    if self:ShouldEnableShoulderNow() then
         if type(_G.GetCVar) == "function" and tonumber(_G.GetCVar("CameraKeepCharacterCentered")) == 1 then
             UpdateCVar("CameraKeepCharacterCentered", 0)
             Functions:logMessage("warning", L["CONFLICT_FIX_MSG"] or "ActionCam: Disabled Keep Character Centered to prevent jitter.")
