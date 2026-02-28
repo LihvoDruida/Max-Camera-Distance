@@ -97,6 +97,10 @@ eventHandlers.ADDON_LOADED = function(event, loadedAddon)
         SafeCall(ns.Config.SetupOptions, "SetupOptions", ns.Config)
     end
 
+    if ns.CVarMonitor and ns.CVarMonitor.Init then
+        SafeCall(ns.CVarMonitor.Init, "CVarGuard.Init", ns.CVarMonitor)
+    end
+
     SafeCall(InitMinimapButton, "InitMinimapButton")
 
     frame:UnregisterEvent("ADDON_LOADED")
@@ -144,6 +148,9 @@ eventHandlers.CVAR_UPDATE = function(event, cvarName, value)
         or cvarName == "cameraDistanceMoveSpeed"
         or cvarName == "cameraYawMoveSpeed"
         or cvarName == "cameraPitchMoveSpeed"
+        or cvarName == "CameraKeepCharacterCentered"
+        or cvarName == "test_cameraOverShoulder"
+        or cvarName == "test_cameraDynamicPitch"
         or cvarName == "cameraReduceUnexpectedMovement"
         or cvarName == "cameraIndirectVisibility"
         or cvarName == "resampleAlwaysSharpen"

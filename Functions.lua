@@ -384,6 +384,10 @@ function Functions:UpdateActionCam()
         shoulderHandlerFrame:Hide()
         UpdateCVar("test_cameraOverShoulder", 0)
     end
+
+    if ns.CVarGuard and ns.CVarGuard.Refresh then
+        ns.CVarGuard:Refresh()
+    end
 end
 
 -- =====================================================================
@@ -500,6 +504,10 @@ function Functions:AdjustCamera(forceNow)
     UpdateCVar("cameraIndirectVisibility", db.cameraIndirectVisibility and 1 or 0)
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
+    
+    if ns.CVarGuard and ns.CVarGuard.Refresh then
+        ns.CVarGuard:Refresh()
+    end
 end
 
 function Functions:OnCVarUpdate(_, cvarName, value)
