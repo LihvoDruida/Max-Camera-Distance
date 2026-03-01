@@ -339,21 +339,33 @@ end)
 -- 10) COMBAT DETECT (group-safe)
 -- =====================================================================
 function Functions:IsGroupInCombat()
-    if IsEncounterInProgress() then return true end
-    if UnitAffectingCombat("player") then return true end
-
+    -- This helper is intentionally GROUP-ONLY.
+    -- Personal combat should be checked separately (UnitAffectingCombat("player"),
+    -- UnitThreatSituation("player"), etc.).
     if IsInRaid() then
+        if IsEncounterInProgress() then
+            return true
+        end
+
         for i = 1, GetNumGroupMembers() do
-            if UnitAffectingCombat("raid"..i) then
+            local unit = "raid"..i
+            if UnitExists(unit) and not UnitIsUnit(unit, "player") and UnitAffectingCombat(unit) then
                 return true
             end
         end
-    elseif IsInGroup() then
+
+        return false
+    end
+
+    if IsInGroup() then
         for i = 1, GetNumSubgroupMembers() do
-            if UnitAffectingCombat("party"..i) then
+            local unit = "party"..i
+            if UnitExists(unit) and UnitAffectingCombat(unit) then
                 return true
             end
         end
+
+        return false
     end
 
     return false
