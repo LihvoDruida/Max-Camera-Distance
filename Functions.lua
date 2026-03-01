@@ -371,18 +371,18 @@ function Functions:IsGroupInCombat()
     return false
 end
 
-local function IsCombatZoomAllowedInCurrentZone(db)
+local function ShouldForceMaxZoomInCurrentZone(db)
     local inInstance, instanceType = IsInInstance()
 
     if not inInstance then
-        return true
+        return false
     end
 
-    if instanceType == "party" then return db.zoneParty and true or false end
-    if instanceType == "raid" then return db.zoneRaid and true or false end
-    if instanceType == "arena" then return db.zoneArena and true or false end
-    if instanceType == "pvp" then return db.zoneBg and true or false end
-    if instanceType == "scenario" then return db.zoneScenario and true or false end
+    if instanceType == "party" then return db.zoneParty == true end
+    if instanceType == "raid" then return db.zoneRaid == true end
+    if instanceType == "arena" then return db.zoneArena == true end
+    if instanceType == "pvp" then return db.zoneBg == true end
+    if instanceType == "scenario" then return db.zoneScenario == true end
 
     return false
 end
@@ -472,14 +472,22 @@ end
 -- 12) SMART ZOOM CORE (FIXED: no “sticky” state)
 -- =====================================================================
 local function ComputeDesiredState(db)
-    local inCombat = Functions:IsGroupInCombat()
+    local playerInCombat = UnitAffectingCombat("player") and true or false
+    local groupInCombat = Functions:IsGroupInCombat()
+    local inCombat = playerInCombat or groupInCombat
+
     local threatStatus = UnitThreatSituation("player")
     local hasThreat = (threatStatus ~= nil and threatStatus > 0)
     local isMounted = IsInTravelForm()
-    local allowCombatZoom = IsCombatZoomAllowedInCurrentZone(db)
+
+    local forceZoneMaxZoom = ShouldForceMaxZoomInCurrentZone(db)
     local forceCombatZoom = ShouldForceCombatZoom(db)
 
-    if db.autoCombatZoom and ((allowCombatZoom and (inCombat or hasThreat)) or forceCombatZoom) then
+    if forceZoneMaxZoom then
+        return ZOOM_STATE_COMBAT, (db.maxZoomFactor or (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or 39)
+    end
+
+    if db.autoCombatZoom and ((inCombat or hasThreat) or forceCombatZoom) then
         return ZOOM_STATE_COMBAT, (db.maxZoomFactor or (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or 39)
     end
 
