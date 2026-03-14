@@ -7,94 +7,22 @@ local L = LibStub("AceLocale-3.0"):GetLocale(addonName, true) or {}
 local AceConfig = LibStub("AceConfig-3.0", true)
 local AceConfigDialog = LibStub("AceConfigDialog-3.0", true)
 
--- =====================================================================
--- VERSION / CLIENT DETECTION
--- =====================================================================
-local build = select(4, GetBuildInfo()) or 0
-
--- Provided targets:
--- Retail: 120000, 120001
--- Classic Era: 20505
--- Cata Classic: 50502
-local IS_RETAIL  = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE) or (build >= 120000)
-local IS_CATA    = (build >= 50000 and build < 60000) -- 50502
-local IS_ERA     = (build > 0 and build < 30000)      -- 20505-ish
-
--- Cached globals / APIs
-local type = type
-local print = print
-local tostring = tostring
-local pcall = pcall
-local hooksecurefunc = hooksecurefunc
-local ipairs = ipairs
-
-local ReloadUI = ReloadUI
-local C_UI = C_UI
-local C_AddOns = C_AddOns
-local GetAddOnMetadata = GetAddOnMetadata
-local C_CVar = C_CVar
-local GetCVar = GetCVar
-
--- =====================================================================
--- CVAR FEATURE DETECTION (works cross-version)
--- =====================================================================
-local function HasCVar(name)
-    -- Prefer C_CVar in modern clients
-    if C_CVar and C_CVar.GetCVar then
-        local ok, val = pcall(C_CVar.GetCVar, name)
-        return ok and val ~= nil
-    end
-    -- Fallback for older clients
-    if type(GetCVar) == "function" then
-        local ok, val = pcall(GetCVar, name)
-        return ok and val ~= nil
-    end
-    return false
-end
-
-local function SupportsFSRSharpen()
-    return IS_RETAIL and HasCVar("resampleAlwaysSharpen")
-end
-
-local function SupportsSoftTargetIcons()
-    -- SoftTargetIconGameObject is Retail-ish
-    return IS_RETAIL and HasCVar("SoftTargetIconGameObject")
-end
-
-local function SupportsActionCam()
-    -- test_camera* CVars exist on Retail; sometimes present on some Classic branches,
-    -- but safest is to show only if at least one exists.
-    return HasCVar("test_cameraOverShoulder") or HasCVar("test_cameraDynamicPitch")
-end
-
-local function SupportsScenarioZone()
-    -- "scenario" instanceType is reliably Retail (Delves, Scenarios)
-    return IS_RETAIL
-end
-
--- =====================================================================
--- ADDON VERSION
--- =====================================================================
-local function GetAddonVersion()
-    if C_AddOns and C_AddOns.GetAddOnMetadata then
-        return C_AddOns.GetAddOnMetadata(addonName, "Version") or "Dev"
-    end
-    if GetAddOnMetadata then
-        return GetAddOnMetadata(addonName, "Version") or "Dev"
-    end
-    return "Dev"
-end
-
-local versionNumber = GetAddonVersion()
+local Compat = ns.Compat or {}
+local IS_RETAIL = Compat.IS_RETAIL and true or false
+local HasCVar = Compat.HasCVar or function() return false end
+local SupportsFSRSharpen = Compat.SupportsFSRSharpen or function() return false end
+local SupportsSoftTargetIcons = Compat.SupportsSoftTargetIcons or function() return false end
+local SupportsActionCam = Compat.SupportsActionCam or function() return false end
+local SupportsScenarioZone = Compat.SupportsScenarioZone or function() return IS_RETAIL end
+local versionNumber = (Compat.GetAddonVersion and Compat.GetAddonVersion()) or "Dev"
+local clientTag = Compat.CLIENT_TAG or (IS_RETAIL and "Retail" or "Classic")
 
 -- =====================================================================
 -- SAFE HELPERS
 -- =====================================================================
 local function SafeReload()
-    if C_UI and C_UI.Reload then
-        C_UI.Reload()
-    elseif ReloadUI then
-        ReloadUI()
+    if Compat.SafeReload then
+        Compat.SafeReload()
     end
 end
 
@@ -141,7 +69,7 @@ function Config:SetupOptions()
     local defaults = ns.Database.DEFAULTS
 
     -- Make sure distance matches the current client
-    local maxDistance = defaults.MAX_POSSIBLE_DISTANCE or (IS_RETAIL and 39 or 50)
+    local maxDistance = defaults.MAX_POSSIBLE_DISTANCE or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
     local isClassic = not IS_RETAIL
     local hasQuestWatch = (C_QuestLog and C_QuestLog.GetNumQuestWatches) and true or false
 
@@ -155,7 +83,7 @@ function Config:SetupOptions()
                 name = function()
                     return (L["VERSION_PREFIX"] or "Version: ")
                         .. "|cFF87CEFA" .. versionNumber .. "|r"
-                        .. (IS_RETAIL and " |cff00ff00(Retail)|r" or " |cffffd100(Classic)|r")
+                        .. " |cff00ff00(" .. clientTag .. ")|r"
                 end,
                 fontSize = "medium",
             },

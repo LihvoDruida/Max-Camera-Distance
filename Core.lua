@@ -1,14 +1,14 @@
 local addonName, ns = ...
 local frame = CreateFrame("Frame")
+local Compat = ns.Compat or {}
 
--- Version flags
-local IS_RETAIL  = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
-local IS_CLASSIC = not IS_RETAIL
+local IS_RETAIL = Compat.IS_RETAIL and true or false
 
 -- Cached globals
 local UnitExists = UnitExists
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local C_Timer = C_Timer
+local pcall = pcall
 
 -- Minimap libs
 local LDB = LibStub("LibDataBroker-1.1", true)
@@ -34,6 +34,13 @@ end
 
 local function IsPlayerReady()
     return UnitExists("player") and not UnitIsDeadOrGhost("player")
+end
+
+local function SafeRegisterEvent(targetFrame, eventName)
+    local ok = pcall(targetFrame.RegisterEvent, targetFrame, eventName)
+    if not ok and ENABLE_LOGGING then
+        print(string.format("%s: skipped unsupported event %s", addonName, tostring(eventName)))
+    end
 end
 
 -- One-liner updater for many events
@@ -83,6 +90,30 @@ local function InitMinimapButton()
     end
 end
 
+local watchedCVars = {
+    cameraDistanceMaxZoomFactor = true,
+    cameraDistanceMax = true,
+    cameraDistanceMoveSpeed = true,
+    cameraYawMoveSpeed = true,
+    cameraPitchMoveSpeed = true,
+    CameraKeepCharacterCentered = true,
+    cameraReduceUnexpectedMovement = true,
+    cameraIndirectVisibility = true,
+}
+
+if Compat.HasCVar and Compat.HasCVar("test_cameraOverShoulder") then
+    watchedCVars.test_cameraOverShoulder = true
+end
+if Compat.HasCVar and Compat.HasCVar("test_cameraDynamicPitch") then
+    watchedCVars.test_cameraDynamicPitch = true
+end
+if Compat.HasCVar and Compat.HasCVar("resampleAlwaysSharpen") then
+    watchedCVars.resampleAlwaysSharpen = true
+end
+if Compat.HasCVar and Compat.HasCVar("SoftTargetIconGameObject") then
+    watchedCVars.SoftTargetIconGameObject = true
+end
+
 -- Event handlers
 local eventHandlers = {}
 
@@ -111,25 +142,22 @@ eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
     if not IsPlayerReady() then return end
     if not (ns.Functions and ns.Functions.AdjustCamera) then return end
 
-    -- Small defer avoids early-load race on some clients
     C_Timer.After(0, function()
         if not IsPlayerReady() then return end
         SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions, true)
     end)
 end
 
--- State events (combat/mount/form/death-res)
 eventHandlers.PLAYER_REGEN_DISABLED = RequestSmartUpdate
-eventHandlers.PLAYER_REGEN_ENABLED  = RequestSmartUpdate
-eventHandlers.PLAYER_DEAD           = RequestSmartUpdate
-eventHandlers.PLAYER_ALIVE          = RequestSmartUpdate
-eventHandlers.PLAYER_UNGHOST        = RequestSmartUpdate
+eventHandlers.PLAYER_REGEN_ENABLED = RequestSmartUpdate
+eventHandlers.PLAYER_DEAD = RequestSmartUpdate
+eventHandlers.PLAYER_ALIVE = RequestSmartUpdate
+eventHandlers.PLAYER_UNGHOST = RequestSmartUpdate
 eventHandlers.PLAYER_MOUNT_DISPLAY_CHANGED = RequestSmartUpdate
 eventHandlers.UPDATE_SHAPESHIFT_FORM = RequestSmartUpdate
 eventHandlers.ZONE_CHANGED_NEW_AREA = ForceSmartUpdate
 eventHandlers.PLAYER_DIFFICULTY_CHANGED = ForceSmartUpdate
 
--- Retail-only (talents UI)
 if IS_RETAIL then
     eventHandlers.TRAIT_CONFIG_UPDATED = RequestSmartUpdate
 end
@@ -142,25 +170,11 @@ end
 
 eventHandlers.CVAR_UPDATE = function(event, cvarName, value)
     if not (ns.Functions and ns.Functions.OnCVarUpdate) then return end
-
-    -- Keep this tight to avoid noisy CVAR_UPDATE spam.
-    if cvarName == "cameraDistanceMaxZoomFactor"
-        or cvarName == "cameraDistanceMax"
-        or cvarName == "cameraDistanceMoveSpeed"
-        or cvarName == "cameraYawMoveSpeed"
-        or cvarName == "cameraPitchMoveSpeed"
-        or cvarName == "CameraKeepCharacterCentered"
-        or cvarName == "test_cameraOverShoulder"
-        or cvarName == "test_cameraDynamicPitch"
-        or cvarName == "cameraReduceUnexpectedMovement"
-        or cvarName == "cameraIndirectVisibility"
-        or cvarName == "resampleAlwaysSharpen"
-        or cvarName == "SoftTargetIconGameObject" then
+    if watchedCVars[cvarName] then
         SafeCall(ns.Functions.OnCVarUpdate, "OnCVarUpdate", ns.Functions, event, cvarName, value)
     end
 end
 
--- Main dispatcher
 frame:SetScript("OnEvent", function(self, event, ...)
     local handler = eventHandlers[event]
     if handler then
@@ -169,12 +183,10 @@ frame:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
--- Register events
 for event in pairs(eventHandlers) do
-    frame:RegisterEvent(event)
+    SafeRegisterEvent(frame, event)
 end
 
--- Slash commands
 SLASH_MAXCAMDIST1 = "/mcd"
 SlashCmdList["MAXCAMDIST"] = function(msg)
     if ns.Functions and ns.Functions.SlashCmdHandler then

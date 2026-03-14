@@ -3,6 +3,7 @@ ns.Functions = ns.Functions or {}
 local Functions = ns.Functions
 
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName, true) or {}
+local Compat = ns.Compat or {}
 
 local LibCamera    = LibStub("LibCamera-1.0", true)
 local LibMountInfo = LibStub("LibMountInfo-1.0", true)
@@ -11,7 +12,6 @@ local ACD          = LibStub("AceConfigDialog-3.0", true)
 -- =====================================================================
 -- 1) FAST LOCALS / API
 -- =====================================================================
-local C_CVar      = C_CVar
 local C_Timer     = C_Timer
 local C_UnitAuras = C_UnitAuras
 
@@ -43,8 +43,8 @@ local IsInGroup            = IsInGroup
 local GetNumGroupMembers   = GetNumGroupMembers
 local GetNumSubgroupMembers= GetNumSubgroupMembers
 
-local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
-local CONVERSION_RATIO = IS_RETAIL and 15 or 12.5
+local IS_RETAIL = Compat.IS_RETAIL and true or false
+local CONVERSION_RATIO = Compat.CONVERSION_RATIO or (IS_RETAIL and 15 or 12.5)
 
 -- =====================================================================
 -- 2) STATE
@@ -124,54 +124,23 @@ end
 -- 6) SAFE CVAR HELPERS (fix SafeGetCVar nil + cross-client)
 -- =====================================================================
 local function SafeGetCVar(name)
-    if C_CVar and C_CVar.GetCVar then
-        local ok, val = pcall(C_CVar.GetCVar, name)
-        if ok and val ~= nil then
-            return tonumber(val)
-        end
-    end
-    if type(_G.GetCVar) == "function" then
-        local ok, val = pcall(_G.GetCVar, name)
-        if ok and val ~= nil then
-            return tonumber(val)
-        end
+    if Compat.SafeGetCVarNumber then
+        return Compat.SafeGetCVarNumber(name)
     end
     return nil
 end
 
+
 local function SafeSetCVar(name, value)
-    if C_CVar and C_CVar.SetCVar then
-        local ok = pcall(C_CVar.SetCVar, name, value)
-        if ok then
-            return true
-        end
+    if Compat.SafeSetCVar then
+        return Compat.SafeSetCVar(name, value)
     end
-
-    if type(_G.SetCVar) == "function" then
-        local ok = pcall(_G.SetCVar, name, value)
-        return ok and true or false
-    end
-
     return false
 end
 
+
 local function UpdateCVar(key, value)
-    local currentValue = nil
-
-    if C_CVar and C_CVar.GetCVar then
-        local ok, result = pcall(C_CVar.GetCVar, key)
-        if ok then
-            currentValue = result
-        end
-    end
-
-    if currentValue == nil and type(_G.GetCVar) == "function" then
-        local ok, result = pcall(_G.GetCVar, key)
-        if ok then
-            currentValue = result
-        end
-    end
-
+    local currentValue = Compat.SafeGetCVar and Compat.SafeGetCVar(key) or nil
     if currentValue == nil then return end
 
     local strValue = tostring(value)
@@ -437,7 +406,10 @@ function Functions:ShouldEnableShoulderNow()
     local db = DB()
     if not db then return false end
 
-    local inCombat = self:IsGroupInCombat()
+    local playerInCombat = UnitAffectingCombat("player") and true or false
+    local threatStatus = UnitThreatSituation("player")
+    local hasThreat = (threatStatus ~= nil and threatStatus > 0)
+    local inCombat = playerInCombat or hasThreat or self:IsGroupInCombat()
 
     if inCombat then
         return db.actionCamShoulderInCombat and true or false
@@ -453,7 +425,7 @@ function Functions:UpdateActionCam()
     UpdateCVar("test_cameraDynamicPitch", db.actionCamPitch and 1 or 0)
 
     if self:ShouldEnableShoulderNow() then
-        if type(_G.GetCVar) == "function" and tonumber(_G.GetCVar("CameraKeepCharacterCentered")) == 1 then
+        if SafeGetCVar("CameraKeepCharacterCentered") == 1 then
             UpdateCVar("CameraKeepCharacterCentered", 0)
             Functions:logMessage("warning", L["CONFLICT_FIX_MSG"] or "ActionCam: Disabled Keep Character Centered to prevent jitter.")
         end
@@ -575,7 +547,7 @@ function Functions:AdjustCamera(forceNow)
         end
     else
         -- Manual-only mode
-        local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (IS_RETAIL and 39 or 50)
+        local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
         local manualTargetYards = db.maxZoomFactor or maxYards
 
         stateToken = stateToken + 1
@@ -671,7 +643,7 @@ function Functions:OnPlayerFlagsChanged()
         SafeSetCVar("cameraYawMoveSpeed", AFK_YAW_SPEED)
         MoveViewRightStart()
 
-        local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (IS_RETAIL and 39 or 50)
+        local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
         if LibCamera and LibCamera.SetZoomUsingCVar then
             LibCamera:SetZoomUsingCVar(maxYards, 4.0)
         end

@@ -1,9 +1,9 @@
 ## X-Flavor: retail
-## X-Expansion: TWW
-## Interface: 120000, 120001
+## X-Expansion: Midnight
+## Interface: 120000, 120001, 120005
 
 ## Title:<|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
-## Notes: Automatically set the camera to its maximum distance when the addon is loaded.
+## Notes: Smart camera distance with safer cross-version compatibility guards.
 ## IconTexture: Interface\AddOns\Max_Camera_Distance\assets\icon
 ## Version: v7.4
 ## Author: melles1991

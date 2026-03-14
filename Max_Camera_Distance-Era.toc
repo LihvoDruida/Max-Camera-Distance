@@ -1,14 +1,14 @@
-## X-Flavor: bcc
-## X-Expansion: TBC Anniversary
-## Interface: 20505
+## X-Flavor: classic
+## X-Expansion: Era
+## Interface: 11508
 
 ## Title:<|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
 ## Notes: Smart camera distance with safer cross-version compatibility guards.
 ## IconTexture: Interface\AddOns\Max_Camera_Distance\assets\icon
 ## Version: v7.4
 ## Author: melles1991
-## DefaultState: Enabled
 ## OptionalDeps: Ace3
+## DefaultState: Enabled
 ## SavedVariables: MaxCameraDistanceDB
 ## LoadSavedVariablesFirst: true
 ## Category-enUS: Camera

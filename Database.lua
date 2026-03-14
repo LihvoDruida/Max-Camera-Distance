@@ -3,17 +3,12 @@ ns.Database = ns.Database or {}
 local Database = ns.Database
 
 local AceDB = LibStub("AceDB-3.0")
+local Compat = ns.Compat or {}
 
--- ============================================================================
--- VERSION FLAGS / CONSTANTS
--- ============================================================================
-local IS_RETAIL  = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
-local IS_CLASSIC = not IS_RETAIL
-
--- Retail: 39 yards max (2.6 factor * 15)
--- Classic: commonly 50 yards max (4.0 factor * 12.5)
-local MAX_YARDS         = IS_RETAIL and 39 or 50
-local CONVERSION_RATIO  = IS_RETAIL and 15 or 12.5
+local IS_RETAIL = Compat.IS_RETAIL and true or false
+local IS_CLASSIC = Compat.IS_CLASSIC and true or false
+local MAX_YARDS = Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50)
+local CONVERSION_RATIO = Compat.CONVERSION_RATIO or (IS_RETAIL and 15 or 12.5)
 
 -- ============================================================================
 -- FAST LOCALS
@@ -21,27 +16,14 @@ local CONVERSION_RATIO  = IS_RETAIL and 15 or 12.5
 local type, tonumber, tostring = type, tonumber, tostring
 local pcall, pairs, print = pcall, pairs, print
 
-local C_CVar = C_CVar
-local GetCVar = GetCVar
 
 -- ============================================================================
 -- SAFE HELPERS
 -- ============================================================================
 local function SafeGetCVar(name)
-    if C_CVar and C_CVar.GetCVar then
-        local ok, val = pcall(C_CVar.GetCVar, name)
-        if ok and val ~= nil then
-            return tonumber(val)
-        end
+    if Compat.SafeGetCVarNumber then
+        return Compat.SafeGetCVarNumber(name)
     end
-
-    if type(GetCVar) == "function" then
-        local ok, val = pcall(GetCVar, name)
-        if ok and val ~= nil then
-            return tonumber(val)
-        end
-    end
-
     return nil
 end
 
@@ -74,7 +56,7 @@ end
 -- We always try to read it from the client; fallbacks are only for safety.
 local defaultFactor = SafeGetCVar("cameraDistanceMaxZoomFactor")
 if not defaultFactor then
-    defaultFactor = IS_RETAIL and 1.9 or 2.6
+    defaultFactor = IS_RETAIL and 1.9 or 4.0
 end
 
 local BLIZZARD_DEFAULT_YARDS = Clamp(defaultFactor * CONVERSION_RATIO, 1, MAX_YARDS)
@@ -152,7 +134,7 @@ local PROFILE_DEFAULTS = {
     zoneRaid = true,
     zoneArena = true,
     zoneBg = true,
-    zoneScenario = IS_RETAIL, -- hide/mostly irrelevant for Classic
+    zoneScenario = (Compat.SupportsScenarioZone and Compat.SupportsScenarioZone()) or IS_RETAIL,
     zoneWorldBoss = true,
 
     -- debug

@@ -4,10 +4,10 @@ local CVarGuard = ns.CVarGuard
 ns.CVarMonitor = CVarGuard -- legacy alias for older modules
 
 local type = type
-local pcall = pcall
 local tonumber = tonumber
 local hooksecurefunc = hooksecurefunc
 
+local Compat = ns.Compat or {}
 local C_CVar = C_CVar
 
 local internalWriteDepth = 0
@@ -33,32 +33,16 @@ local function DB()
 end
 
 local function SafeGetCVar(name)
-    if C_CVar and C_CVar.GetCVar then
-        local ok, val = pcall(C_CVar.GetCVar, name)
-        if ok and val ~= nil then
-            return tonumber(val)
-        end
+    if Compat.SafeGetCVarNumber then
+        return Compat.SafeGetCVarNumber(name)
     end
-
-    if type(_G.GetCVar) == "function" then
-        local ok, val = pcall(_G.GetCVar, name)
-        if ok and val ~= nil then
-            return tonumber(val)
-        end
-    end
-
     return nil
 end
 
 local function SafeSetCVar(name, value)
-    if C_CVar and C_CVar.SetCVar then
-        return pcall(C_CVar.SetCVar, name, value)
+    if Compat.SafeSetCVar then
+        return Compat.SafeSetCVar(name, value)
     end
-
-    if type(_G.SetCVar) == "function" then
-        return pcall(_G.SetCVar, name, value)
-    end
-
     return false
 end
 
