@@ -14,7 +14,8 @@ local SetCVar = SetCVar
 local ReloadUI = ReloadUI
 local GetAddOnMetadata = GetAddOnMetadata
 
-Compat.BUILD = tonumber(select(4, GetBuildInfo())) or 0
+local _, _, _, buildNumber = GetBuildInfo()
+Compat.BUILD = tonumber(buildNumber) or 0
 Compat.PROJECT_ID = WOW_PROJECT_ID or 0
 
 Compat.IS_RETAIL = (Compat.PROJECT_ID == WOW_PROJECT_MAINLINE) or (Compat.BUILD >= 120000)
