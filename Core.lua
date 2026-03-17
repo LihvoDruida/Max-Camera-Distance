@@ -56,6 +56,30 @@ local function ForceSmartUpdate()
     end
 end
 
+local startupRefreshToken = 0
+
+local function ScheduleStartupCameraRefresh()
+    if not C_Timer or not C_Timer.After then
+        ForceSmartUpdate()
+        return
+    end
+
+    startupRefreshToken = startupRefreshToken + 1
+    local myToken = startupRefreshToken
+
+    -- Login/load can briefly report stale combat, mount, zone or CVar state.
+    -- Re-apply Smart Zoom a few times so the final state settles to the
+    -- correct Normal/Mount/Combat target instead of sometimes staying at max.
+    local delays = { 0, 0.25, 1.0, 2.0 }
+    for _, delay in ipairs(delays) do
+        C_Timer.After(delay, function()
+            if myToken ~= startupRefreshToken then return end
+            if not IsPlayerReady() then return end
+            ForceSmartUpdate()
+        end)
+    end
+end
+
 local function InitMinimapButton()
     if minimapInited then return end
     minimapInited = true
@@ -142,10 +166,14 @@ eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
     if not IsPlayerReady() then return end
     if not (ns.Functions and ns.Functions.AdjustCamera) then return end
 
-    C_Timer.After(0, function()
-        if not IsPlayerReady() then return end
-        SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions, true)
-    end)
+    if isLogin or isReload then
+        ScheduleStartupCameraRefresh()
+    else
+        C_Timer.After(0, function()
+            if not IsPlayerReady() then return end
+            ForceSmartUpdate()
+        end)
+    end
 end
 
 eventHandlers.PLAYER_REGEN_DISABLED = RequestSmartUpdate
