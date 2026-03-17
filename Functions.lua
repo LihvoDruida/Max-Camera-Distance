@@ -60,6 +60,7 @@ local isInternalUpdate = false
 
 -- token that invalidates old delayed transitions (fixes “sticky states”)
 local stateToken = 0
+local refreshBurstToken = 0
 
 -- Throttling (no permanent OnUpdate)
 local updatePending = false
@@ -254,6 +255,22 @@ local function ApplyZoomCap(targetYards)
     end
 end
 
+local function IsZoomCapAligned(targetYards)
+    local targetFactor = targetYards / CONVERSION_RATIO
+    local currentFactor = SafeGetCVar("cameraDistanceMaxZoomFactor")
+    local currentMax = SafeGetCVar("cameraDistanceMax")
+
+    if currentFactor ~= nil and math_abs(currentFactor - targetFactor) > 0.01 then
+        return false
+    end
+
+    if currentMax ~= nil and math_abs(currentMax - targetYards) > 0.1 then
+        return false
+    end
+
+    return true
+end
+
 local function ApplyZoomTransition(targetYards, transitionTime)
     local targetFactor = targetYards / CONVERSION_RATIO
     local currentFactor = SafeGetCVar("cameraDistanceMaxZoomFactor")
@@ -285,6 +302,32 @@ end
 -- =====================================================================
 -- 9) EVENT THROTTLING
 -- =====================================================================
+function Functions:ScheduleStabilizedUpdate(delays, forceNow)
+    if not C_Timer or not C_Timer.After then
+        if forceNow then
+            self:AdjustCamera(true)
+        else
+            self:RequestUpdate()
+        end
+        return
+    end
+
+    refreshBurstToken = refreshBurstToken + 1
+    local myToken = refreshBurstToken
+    local burstDelays = delays or { 0, 0.2, 0.8 }
+
+    for _, delay in ipairs(burstDelays) do
+        C_Timer.After(delay, function()
+            if myToken ~= refreshBurstToken then return end
+            if forceNow then
+                Functions:AdjustCamera(true)
+            else
+                Functions:RequestUpdate()
+            end
+        end)
+    end
+end
+
 function Functions:RequestUpdate()
     if updatePending then return end
     updatePending = true
@@ -491,10 +534,11 @@ function Functions:UpdateSmartZoomState(event)
         CancelTransition()
     end
 
-    -- Same state? still might need to “win back” after fast flip.
-    -- If we are combat/mount, we allow re-apply on auto_update too.
+    -- Same state? only re-apply when the current camera cap drifted away
+    -- or when we explicitly force a manual refresh.
     local stateSame = (newState == currentZoomState)
-    if stateSame and (newState == ZOOM_STATE_NONE) and event ~= "manual_update" then
+    local capAligned = IsZoomCapAligned(targetYards)
+    if stateSame and capAligned and event ~= "manual_update" then
         return
     end
 
@@ -580,6 +624,17 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     if isInternalUpdate then return end
     local db = DB()
     if not db then return end
+
+    if cvarName == "cameraView" then
+        -- Saved camera views persist across sessions and can re-apply a full
+        -- camera preset after login or preset switching. We do not use
+        -- SaveView/SetView as our main transport, so softly re-apply our
+        -- distance state instead of touching the user's saved slots.
+        if db.autoCombatZoom or db.autoMountZoom then
+            Functions:ScheduleStabilizedUpdate({ 0, 0.15, 0.75 }, true)
+        end
+        return
+    end
 
     local numValue = tonumber(value) or 0
 

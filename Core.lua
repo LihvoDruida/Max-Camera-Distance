@@ -123,6 +123,7 @@ local watchedCVars = {
     CameraKeepCharacterCentered = true,
     cameraReduceUnexpectedMovement = true,
     cameraIndirectVisibility = true,
+    cameraView = true,
 }
 
 if Compat.HasCVar and Compat.HasCVar("test_cameraOverShoulder") then
