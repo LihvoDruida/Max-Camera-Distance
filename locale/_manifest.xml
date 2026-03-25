@@ -3,6 +3,5 @@
 	<Script file="enUS.lua"/>
 	<Script file="deDE.lua"/>
 	<Script file="frFR.lua"/>
-	<Script file="ukUA.lua"/>
 	<Script file="zhCN.lua"/>
 </Ui>
