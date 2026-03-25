@@ -114,7 +114,10 @@ local PROFILE_DEFAULTS = {
     autoCombatZoom = false,
     autoMountZoom = false,
     mountZoomFactor = MAX_YARDS,
-    zoneZoomFactor = MAX_YARDS,
+    worldCombatZoomFactor = MAX_YARDS,
+    groupCombatZoomFactor = MAX_YARDS,
+    pvpCombatZoomFactor = MAX_YARDS,
+    zoneZoomFactor = MAX_YARDS, -- legacy key kept for migration only
 
     -- advanced (best-effort defaults from client when possible)
     reduceUnexpectedMovement = (defaultReduceMove == 1) or false,
@@ -187,6 +190,24 @@ function Database:ApplyMigrations(profile)
     profile.minZoomFactor = Clamp(tonumber(profile.minZoomFactor) or BLIZZARD_DEFAULT_YARDS, 1, MAX_YARDS)
     profile.mountZoomFactor = Clamp(tonumber(profile.mountZoomFactor) or MAX_YARDS, 1, MAX_YARDS)
     profile.zoneZoomFactor = Clamp(tonumber(profile.zoneZoomFactor) or profile.maxZoomFactor or MAX_YARDS, 1, MAX_YARDS)
+
+    -- Combat distance split migration:
+    -- old profile used maxZoomFactor for regular combat and zoneZoomFactor for raid/dungeon/pvp zones.
+    profile.worldCombatZoomFactor = Clamp(
+        tonumber(profile.worldCombatZoomFactor) or profile.maxZoomFactor or MAX_YARDS,
+        1,
+        MAX_YARDS
+    )
+    profile.groupCombatZoomFactor = Clamp(
+        tonumber(profile.groupCombatZoomFactor) or profile.zoneZoomFactor or profile.maxZoomFactor or MAX_YARDS,
+        1,
+        MAX_YARDS
+    )
+    profile.pvpCombatZoomFactor = Clamp(
+        tonumber(profile.pvpCombatZoomFactor) or profile.zoneZoomFactor or profile.maxZoomFactor or MAX_YARDS,
+        1,
+        MAX_YARDS
+    )
 
     -- move speed is typically 1..50
     profile.moveViewDistance = Clamp(tonumber(profile.moveViewDistance) or defaultMoveSpeed, 1, 50)
