@@ -70,7 +70,7 @@ local function ScheduleStartupCameraRefresh()
     -- Login/load can briefly report stale combat, mount, zone or CVar state.
     -- Re-apply Smart Zoom a few times so the final state settles to the
     -- correct Normal/Mount/Combat target instead of sometimes staying at max.
-    local delays = { 0, 0.25, 1.0, 2.0 }
+    local delays = { 0.10, 0.50, 1.50, 3.0, 6.0 }
     for _, delay in ipairs(delays) do
         C_Timer.After(delay, function()
             if myToken ~= startupRefreshToken then return end
@@ -184,6 +184,9 @@ eventHandlers.PLAYER_ALIVE = RequestSmartUpdate
 eventHandlers.PLAYER_UNGHOST = RequestSmartUpdate
 eventHandlers.PLAYER_MOUNT_DISPLAY_CHANGED = RequestSmartUpdate
 eventHandlers.UPDATE_SHAPESHIFT_FORM = RequestSmartUpdate
+eventHandlers.GROUP_ROSTER_UPDATE = RequestSmartUpdate
+eventHandlers.ENCOUNTER_START = ForceSmartUpdate
+eventHandlers.ENCOUNTER_END = ForceSmartUpdate
 eventHandlers.ZONE_CHANGED_NEW_AREA = ForceSmartUpdate
 eventHandlers.PLAYER_DIFFICULTY_CHANGED = ForceSmartUpdate
 

@@ -499,7 +499,7 @@ local function ComputeDesiredState(db)
     local forceCombatZoom = ShouldForceCombatZoom(db)
 
     if forceZoneMaxZoom then
-        return ZOOM_STATE_COMBAT, (db.maxZoomFactor or (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or 39)
+        return ZOOM_STATE_COMBAT, (db.zoneZoomFactor or db.maxZoomFactor or (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or 39)
     end
 
     if db.autoCombatZoom and ((inCombat or hasThreat) or forceCombatZoom) then

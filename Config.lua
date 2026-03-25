@@ -227,7 +227,7 @@ function Config:SetupOptions()
                 args = {
                     desc = { type = "description", name = L["COMBAT_SETTINGS_WARNING"], order = 0 },
 
-                    combatHeader = { type = "header", name = "Combat", order = 10 },
+                    combatHeader = { type = "header", name = L["COMBAT_HEADER"], order = 10 },
 
                     autoCombatZoom = {
                         type = "toggle",
@@ -248,7 +248,7 @@ function Config:SetupOptions()
                         args = {
                             zonesDescription = { type = "description", name = L["ZONES_DESC"], order = 0, fontSize = "medium" },
 
-                            br1 = { type = "header", name = "PVP", order = 0.1, width = "full" },
+                            br1 = { type = "header", name = L["ZONE_CATEGORY_PVP"], order = 0.1, width = "full" },
 
                             zoneArena = { type = "toggle", name = L["ZONE_ARENA"], order = 1,
                                 get = function() return GetOption("zoneArena") end,
@@ -259,7 +259,7 @@ function Config:SetupOptions()
                                 set = function(_, v) SetOption("zoneBg", v) end
                             },
 
-                            br2 = { type = "header", name = "PVE", order = 2.1, width = "full" },
+                            br2 = { type = "header", name = L["ZONE_CATEGORY_PVE"], order = 2.1, width = "full" },
 
                             zoneParty = { type = "toggle", name = L["ZONE_PARTY"], order = 3,
                                 get = function() return GetOption("zoneParty") end,
@@ -311,6 +311,18 @@ function Config:SetupOptions()
                         order = 13,
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
+                    zoneZoomFactor = {
+                        type = "range",
+                        name = (L["ZONE_ZOOM_FACTOR"] or "Zone Distance") .. " (Yards)",
+                        desc = L["ZONE_ZOOM_FACTOR_DESC"],
+                        min = 1.0,
+                        max = maxDistance,
+                        step = 1.0,
+                        get = function() return GetOption("zoneZoomFactor") end,
+                        set = function(_, val) SetOption("zoneZoomFactor", val) end,
+                        order = 14,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
 
                     mountHeader = { type = "header", name = L["MOUNT_SETTINGS_HEADER"], order = 20 },
                     autoMountZoom = {
@@ -335,7 +347,7 @@ function Config:SetupOptions()
                         disabled = function() return not GetOption("autoMountZoom") end
                     },
 
-                    delayHeader = { type = "header", name = "Transition Delay", order = 30 },
+                    delayHeader = { type = "header", name = L["DELAY_HEADER"], order = 30 },
                     dismountDelay = {
                         type = "range",
                         name = L["DISMOUNT_DELAY"],
@@ -432,8 +444,8 @@ function Config:SetupOptions()
                     },
                     enableShoulderInCombat = {
                         type = "toggle",
-                        name = "Over-Shoulder in Combat",
-                        desc = "Enable over-shoulder camera while in combat.",
+                        name = L["ACTION_CAM_SHOULDER_IN_COMBAT_NAME"],
+                        desc = L["ACTION_CAM_SHOULDER_IN_COMBAT_DESC"],
                         hidden = function() return not HasCVar("test_cameraOverShoulder") end,
                         get = function() return GetOption("actionCamShoulderInCombat") end,
                         set = function(_, val) SetOption("actionCamShoulderInCombat", val) end,
@@ -441,8 +453,8 @@ function Config:SetupOptions()
                     },
                     enableShoulderOutOfCombat = {
                         type = "toggle",
-                        name = "Over-Shoulder out of Combat",
-                        desc = "Enable over-shoulder camera while out of combat.",
+                        name = L["ACTION_CAM_SHOULDER_OUT_OF_COMBAT_NAME"],
+                        desc = L["ACTION_CAM_SHOULDER_OUT_OF_COMBAT_DESC"],
                         hidden = function() return not HasCVar("test_cameraOverShoulder") end,
                         get = function() return GetOption("actionCamShoulderOutOfCombat") end,
                         set = function(_, val) SetOption("actionCamShoulderOutOfCombat", val) end,
