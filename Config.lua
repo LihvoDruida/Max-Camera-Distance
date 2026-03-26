@@ -52,7 +52,14 @@ local function SetOption(key, value)
         EnsureDebugLevelTable(db)
     end
 
-    ApplyNow()
+    local shouldApplyNow = true
+    if ns.Functions and ns.Functions.ShouldApplyOptionImmediately then
+        shouldApplyNow = ns.Functions:ShouldApplyOptionImmediately(key)
+    end
+
+    if shouldApplyNow then
+        ApplyNow()
+    end
 end
 
 local function GetOption(key)

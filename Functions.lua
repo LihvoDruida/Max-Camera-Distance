@@ -399,6 +399,25 @@ local function GetCombatContext()
     return "world"
 end
 
+local function GetCurrentZoomContext(db)
+    local playerInCombat = UnitAffectingCombat("player") and true or false
+    local groupInCombat = Functions:IsGroupInCombat()
+    local threatStatus = UnitThreatSituation("player")
+    local hasThreat = (threatStatus ~= nil and threatStatus > 0)
+    local isMounted = IsInTravelForm()
+    local forceCombatZoom = ShouldForceCombatZoom(db)
+
+    if db.autoCombatZoom and ((playerInCombat or groupInCombat or hasThreat) or forceCombatZoom) then
+        return ZOOM_STATE_COMBAT, GetCombatContext()
+    end
+
+    if db.autoMountZoom and isMounted then
+        return ZOOM_STATE_MOUNT, nil
+    end
+
+    return ZOOM_STATE_NONE, nil
+end
+
 local function GetCombatTargetYards(db)
     local defaults = ns.Database and ns.Database.DEFAULTS
     local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or 39
@@ -503,21 +522,13 @@ end
 -- 12) SMART ZOOM CORE (FIXED: no “sticky” state)
 -- =====================================================================
 local function ComputeDesiredState(db)
-    local playerInCombat = UnitAffectingCombat("player") and true or false
-    local groupInCombat = Functions:IsGroupInCombat()
-    local inCombat = playerInCombat or groupInCombat
+    local state = GetCurrentZoomContext(db)
 
-    local threatStatus = UnitThreatSituation("player")
-    local hasThreat = (threatStatus ~= nil and threatStatus > 0)
-    local isMounted = IsInTravelForm()
-
-    local forceCombatZoom = ShouldForceCombatZoom(db)
-
-    if db.autoCombatZoom and ((inCombat or hasThreat) or forceCombatZoom) then
+    if state == ZOOM_STATE_COMBAT then
         return ZOOM_STATE_COMBAT, GetCombatTargetYards(db)
     end
 
-    if db.autoMountZoom and isMounted then
+    if state == ZOOM_STATE_MOUNT then
         return ZOOM_STATE_MOUNT, (db.mountZoomFactor or db.maxZoomFactor or 39)
     end
 
@@ -530,6 +541,29 @@ local function ComputeDesiredState(db)
     end
 
     return ZOOM_STATE_NONE, normalYards
+end
+
+function Functions:ShouldApplyOptionImmediately(key)
+    local db = DB()
+    if not db then return true end
+
+    local state, combatContext = GetCurrentZoomContext(db)
+
+    if key == "minZoomFactor" then
+        return state == ZOOM_STATE_NONE
+    elseif key == "mountZoomFactor" then
+        return state == ZOOM_STATE_MOUNT
+    elseif key == "worldCombatZoomFactor" then
+        return state == ZOOM_STATE_COMBAT and combatContext == "world"
+    elseif key == "groupCombatZoomFactor" then
+        return state == ZOOM_STATE_COMBAT and combatContext == "group"
+    elseif key == "pvpCombatZoomFactor" then
+        return state == ZOOM_STATE_COMBAT and combatContext == "pvp"
+    elseif key == "maxZoomFactor" then
+        return not (db.autoCombatZoom or db.autoMountZoom)
+    end
+
+    return true
 end
 
 function Functions:UpdateSmartZoomState(event)
@@ -663,6 +697,10 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     end
 
     if cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax" then
+        if db.autoCombatZoom or db.autoMountZoom then
+            return
+        end
+
         local yards
 
         if cvarName == "cameraDistanceMaxZoomFactor" then
