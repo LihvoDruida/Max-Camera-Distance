@@ -399,6 +399,8 @@ local function GetCombatContext()
     return "world"
 end
 
+local ShouldForceCombatZoom
+
 local function GetCurrentZoomContext(db)
     local playerInCombat = UnitAffectingCombat("player") and true or false
     local groupInCombat = Functions:IsGroupInCombat()
@@ -434,7 +436,7 @@ local function GetCombatTargetYards(db)
     return db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
 end
 
-local function ShouldForceCombatZoom(db)
+ShouldForceCombatZoom = function(db)
     local inInstance = IsInInstance()
     if inInstance then
         return false

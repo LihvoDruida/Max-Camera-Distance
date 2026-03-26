@@ -49,6 +49,22 @@ local function Clamp(num, minv, maxv)
     return num
 end
 
+local function NormalizeBoolean(value, default)
+    if type(value) == "boolean" then
+        return value
+    end
+
+    if value == 1 or value == "1" or value == "true" then
+        return true
+    end
+
+    if value == 0 or value == "0" or value == "false" then
+        return false
+    end
+
+    return default and true or false
+end
+
 -- ============================================================================
 -- READ GAME DEFAULTS (best-effort, per client)
 -- ============================================================================
@@ -211,6 +227,34 @@ function Database:ApplyMigrations(profile)
 
     -- move speed is typically 1..50
     profile.moveViewDistance = Clamp(tonumber(profile.moveViewDistance) or defaultMoveSpeed, 1, 50)
+    profile.zoomTransitionTime = Clamp(tonumber(profile.zoomTransitionTime) or 0.5, 0, 2)
+    profile.dismountDelay = Clamp(tonumber(profile.dismountDelay) or 0, 0, 10)
+    profile.cameraYawMoveSpeed = Clamp(tonumber(profile.cameraYawMoveSpeed) or defaultYaw, 0, 360)
+    profile.cameraPitchMoveSpeed = Clamp(tonumber(profile.cameraPitchMoveSpeed) or defaultPitch, 0, 360)
+
+    -- Normalize booleans in case SavedVariables contain stale numeric/string values.
+    profile.autoCombatZoom = NormalizeBoolean(profile.autoCombatZoom, PROFILE_DEFAULTS.autoCombatZoom)
+    profile.autoMountZoom = NormalizeBoolean(profile.autoMountZoom, PROFILE_DEFAULTS.autoMountZoom)
+    profile.reduceUnexpectedMovement = NormalizeBoolean(profile.reduceUnexpectedMovement, PROFILE_DEFAULTS.reduceUnexpectedMovement)
+    profile.cameraIndirectVisibility = NormalizeBoolean(profile.cameraIndirectVisibility, PROFILE_DEFAULTS.cameraIndirectVisibility)
+    profile.resampleAlwaysSharpen = NormalizeBoolean(profile.resampleAlwaysSharpen, PROFILE_DEFAULTS.resampleAlwaysSharpen)
+    profile.softTargetInteract = NormalizeBoolean(profile.softTargetInteract, PROFILE_DEFAULTS.softTargetInteract)
+    profile.actionCamShoulderInCombat = NormalizeBoolean(profile.actionCamShoulderInCombat, PROFILE_DEFAULTS.actionCamShoulderInCombat)
+    profile.actionCamShoulderOutOfCombat = NormalizeBoolean(profile.actionCamShoulderOutOfCombat, PROFILE_DEFAULTS.actionCamShoulderOutOfCombat)
+    profile.actionCamPitch = NormalizeBoolean(profile.actionCamPitch, PROFILE_DEFAULTS.actionCamPitch)
+    profile.afkMode = NormalizeBoolean(profile.afkMode, PROFILE_DEFAULTS.afkMode)
+    profile.zoneParty = NormalizeBoolean(profile.zoneParty, PROFILE_DEFAULTS.zoneParty)
+    profile.zoneRaid = NormalizeBoolean(profile.zoneRaid, PROFILE_DEFAULTS.zoneRaid)
+    profile.zoneArena = NormalizeBoolean(profile.zoneArena, PROFILE_DEFAULTS.zoneArena)
+    profile.zoneBg = NormalizeBoolean(profile.zoneBg, PROFILE_DEFAULTS.zoneBg)
+    profile.zoneScenario = NormalizeBoolean(profile.zoneScenario, PROFILE_DEFAULTS.zoneScenario)
+    profile.zoneWorldBoss = NormalizeBoolean(profile.zoneWorldBoss, PROFILE_DEFAULTS.zoneWorldBoss)
+    profile.enableDebugLogging = NormalizeBoolean(profile.enableDebugLogging, PROFILE_DEFAULTS.enableDebugLogging)
+    profile.minimap.hide = NormalizeBoolean(profile.minimap.hide, false)
+
+    for level, defaultValue in pairs(Database.DEFAULT_DEBUG_LEVEL) do
+        profile.debugLevel[level] = NormalizeBoolean(profile.debugLevel[level], defaultValue)
+    end
 end
 
 -- ============================================================================
