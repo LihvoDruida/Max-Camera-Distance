@@ -139,16 +139,81 @@ local function SafeSetCVar(name, value)
     return false
 end
 
+local function ClampNumber(value, minValue, maxValue)
+    local num = tonumber(value)
+    if not num then return nil end
+    if num < minValue then return minValue end
+    if num > maxValue then return maxValue end
+    return num
+end
+
+local function NormalizeManagedCVarValue(cvarName, value, db)
+    local defaults = ns.Database and ns.Database.DEFAULTS
+    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local maxFactor = maxYards / CONVERSION_RATIO
+
+    if cvarName == "cameraDistanceMoveSpeed" then
+        return ClampNumber(value, 1, 50)
+    elseif cvarName == "cameraYawMoveSpeed" then
+        return ClampNumber(value, 1, 360) or (db and ClampNumber(db.cameraYawMoveSpeed, 1, 360)) or 180
+    elseif cvarName == "cameraPitchMoveSpeed" then
+        return ClampNumber(value, 1, 360) or (db and ClampNumber(db.cameraPitchMoveSpeed, 1, 360)) or 90
+    elseif cvarName == "cameraDistanceMaxZoomFactor" then
+        return ClampNumber(value, 1 / CONVERSION_RATIO, maxFactor)
+    elseif cvarName == "cameraDistanceMax" then
+        return ClampNumber(value, 1, maxYards)
+    elseif cvarName == "cameraReduceUnexpectedMovement"
+        or cvarName == "cameraIndirectVisibility"
+        or cvarName == "resampleAlwaysSharpen"
+        or cvarName == "SoftTargetIconGameObject"
+        or cvarName == "CameraKeepCharacterCentered"
+        or cvarName == "test_cameraDynamicPitch" then
+        local num = tonumber(value)
+        if value == true or value == "true" or num == 1 then
+            return 1
+        end
+        return 0
+    elseif cvarName == "test_cameraOverShoulder" then
+        return ClampNumber(value, 0, 2) or 0
+    end
+
+    local num = tonumber(value)
+    return num ~= nil and num or value
+end
+
+local function SanitizeRuntimeProfile(db)
+    if not db then return end
+
+    local defaults = ns.Database and ns.Database.DEFAULTS
+    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local defaultNormal = (defaults and defaults.BLIZZARD_DEFAULT_YARDS) or 20
+
+    db.maxZoomFactor = ClampNumber(db.maxZoomFactor, 1, maxYards) or maxYards
+    db.minZoomFactor = ClampNumber(db.minZoomFactor, 1, maxYards) or defaultNormal
+    db.mountZoomFactor = ClampNumber(db.mountZoomFactor, 1, maxYards) or db.maxZoomFactor
+    db.worldCombatZoomFactor = ClampNumber(db.worldCombatZoomFactor, 1, maxYards) or db.maxZoomFactor
+    db.groupCombatZoomFactor = ClampNumber(db.groupCombatZoomFactor, 1, maxYards) or db.worldCombatZoomFactor
+    db.pvpCombatZoomFactor = ClampNumber(db.pvpCombatZoomFactor, 1, maxYards) or db.groupCombatZoomFactor
+    db.moveViewDistance = ClampNumber(db.moveViewDistance, 1, 50) or 20
+    db.cameraYawMoveSpeed = ClampNumber(db.cameraYawMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraYawMoveSpeed"), 1, 360) or 180)
+    db.cameraPitchMoveSpeed = ClampNumber(db.cameraPitchMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraPitchMoveSpeed"), 1, 360) or 90)
+    db.zoomTransitionTime = ClampNumber(db.zoomTransitionTime, 0, 2) or 0.5
+    db.dismountDelay = ClampNumber(db.dismountDelay, 0, 10) or 0
+end
 
 local function UpdateCVar(key, value)
+    local db = DB()
+    local normalizedValue = NormalizeManagedCVarValue(key, value, db)
+    if normalizedValue == nil then return end
+
     local currentValue = Compat.SafeGetCVar and Compat.SafeGetCVar(key) or nil
     if currentValue == nil then return end
 
-    local strValue = tostring(value)
+    local strValue = tostring(normalizedValue)
 
-    if type(value) == "number" then
+    if type(normalizedValue) == "number" then
         local numCurrent = tonumber(currentValue)
-        if numCurrent and math_abs(numCurrent - value) < 0.005 then
+        if numCurrent and math_abs(numCurrent - normalizedValue) < 0.005 then
             return
         end
     else
@@ -156,7 +221,7 @@ local function UpdateCVar(key, value)
     end
 
     isInternalUpdate = true
-    SafeSetCVar(key, value)
+    SafeSetCVar(key, normalizedValue)
     isInternalUpdate = false
 end
 
@@ -628,6 +693,7 @@ function Functions:AdjustCamera(forceNow)
     local db = DB()
     if not db then return end
 
+    SanitizeRuntimeProfile(db)
     Functions:UpdateActionCam()
 
     if db.autoCombatZoom or db.autoMountZoom then
@@ -673,26 +739,24 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     if not db then return end
 
     if cvarName == "cameraView" then
-        -- Saved camera views persist across sessions and can re-apply a full
-        -- camera preset after login or preset switching. We do not use
-        -- SaveView/SetView as our main transport, so softly re-apply our
-        -- distance state instead of touching the user's saved slots.
-        if db.autoCombatZoom or db.autoMountZoom then
-            Functions:ScheduleStabilizedUpdate({ 0, 0.15, 0.75 }, true)
-        end
+        -- Saved camera views can override zoom, yaw, pitch and other camera CVars
+        -- during login / view restore. Re-apply the full addon state, not just zoom.
+        Functions:ScheduleStabilizedUpdate({ 0, 0.15, 0.75, 1.5 }, true)
         return
     end
 
-    local numValue = tonumber(value) or 0
+    local normalizedValue = NormalizeManagedCVarValue(cvarName, value, db)
+    local numValue = tonumber(normalizedValue) or 0
 
     if (cvarName == "cameraDistanceMaxZoomFactor" or cvarName == "cameraDistanceMax") then
         if db.autoCombatZoom or db.autoMountZoom then
             local _, desiredYards = ComputeDesiredState(db)
             local expected = (cvarName == "cameraDistanceMax") and desiredYards or (desiredYards / CONVERSION_RATIO)
+            local expectedNormalized = NormalizeManagedCVarValue(cvarName, expected, db)
             local epsilon = (cvarName == "cameraDistanceMax") and 0.1 or 0.01
 
-            if math_abs(numValue - expected) > epsilon then
-                Functions:RequestUpdate()
+            if normalizedValue == nil or math_abs(numValue - expectedNormalized) > epsilon then
+                UpdateCVar(cvarName, expectedNormalized)
             end
             return
         end
@@ -711,24 +775,66 @@ function Functions:OnCVarUpdate(_, cvarName, value)
             yards = numValue
         end
 
-        if yards > 1 and db.maxZoomFactor and math_abs(db.maxZoomFactor - yards) > 0.1 then
+        local defaults = ns.Database and ns.Database.DEFAULTS
+        local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+        yards = ClampNumber(yards, 1, maxYards)
+
+        if yards and db.maxZoomFactor and math_abs(db.maxZoomFactor - yards) > 0.1 then
             db.maxZoomFactor = yards
             Functions:logMessage("info", string.format("DB synced from CVar: %s -> %.1f yards", tostring(value), yards))
         end
     elseif cvarName == "cameraDistanceMoveSpeed" then
-        db.moveViewDistance = numValue
+        local desired = NormalizeManagedCVarValue(cvarName, db.moveViewDistance, db)
+        if normalizedValue == nil or math_abs(numValue - desired) > 0.005 then
+            UpdateCVar(cvarName, desired)
+            return
+        end
+        db.moveViewDistance = desired
     elseif cvarName == "cameraYawMoveSpeed" then
-        db.cameraYawMoveSpeed = numValue
+        local desired = NormalizeManagedCVarValue(cvarName, db.cameraYawMoveSpeed, db)
+        if normalizedValue == nil or math_abs(numValue - desired) > 0.005 then
+            UpdateCVar(cvarName, desired)
+            return
+        end
+        db.cameraYawMoveSpeed = desired
     elseif cvarName == "cameraPitchMoveSpeed" then
-        db.cameraPitchMoveSpeed = numValue
+        local desired = NormalizeManagedCVarValue(cvarName, db.cameraPitchMoveSpeed, db)
+        if normalizedValue == nil or math_abs(numValue - desired) > 0.005 then
+            UpdateCVar(cvarName, desired)
+            return
+        end
+        db.cameraPitchMoveSpeed = desired
     elseif cvarName == "cameraReduceUnexpectedMovement" then
-        db.reduceUnexpectedMovement = (numValue == 1)
+        local desired = db.reduceUnexpectedMovement and 1 or 0
+        if numValue ~= desired then
+            UpdateCVar(cvarName, desired)
+            return
+        end
+        db.reduceUnexpectedMovement = (desired == 1)
     elseif cvarName == "cameraIndirectVisibility" then
-        db.cameraIndirectVisibility = (numValue == 1)
+        local desired = db.cameraIndirectVisibility and 1 or 0
+        if numValue ~= desired then
+            UpdateCVar(cvarName, desired)
+            return
+        end
+        db.cameraIndirectVisibility = (desired == 1)
     elseif cvarName == "resampleAlwaysSharpen" then
-        db.resampleAlwaysSharpen = (numValue == 1)
+        local desired = db.resampleAlwaysSharpen and 1 or 0
+        if numValue ~= desired then
+            UpdateCVar(cvarName, desired)
+            return
+        end
+        db.resampleAlwaysSharpen = (desired == 1)
     elseif cvarName == "SoftTargetIconGameObject" then
-        db.softTargetInteract = (numValue == 1)
+        local desired = db.softTargetInteract and 1 or 0
+        if numValue ~= desired then
+            UpdateCVar(cvarName, desired)
+            return
+        end
+        db.softTargetInteract = (desired == 1)
+    elseif cvarName == "test_cameraDynamicPitch" or cvarName == "test_cameraOverShoulder" then
+        Functions:UpdateActionCam()
+        return
     end
 end
 
