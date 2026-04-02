@@ -6,6 +6,7 @@ local Config = ns.Config
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName, true) or {}
 local AceConfig = LibStub("AceConfig-3.0", true)
 local AceConfigDialog = LibStub("AceConfigDialog-3.0", true)
+local AceDBOptions = LibStub("AceDBOptions-3.0", true)
 
 local Compat = ns.Compat or {}
 local IS_RETAIL = Compat.IS_RETAIL and true or false
@@ -28,6 +29,10 @@ end
 
 local function GetDB()
     return (ns.Database and ns.Database.db and ns.Database.db.profile) or nil
+end
+
+local function GetDatabaseObject()
+    return (ns.Database and ns.Database.db) or nil
 end
 
 local function ApplyNow()
@@ -464,6 +469,13 @@ function Config:SetupOptions()
                 }
             },
 
+            profiles = {
+                type = "group",
+                name = L["PROFILES"] or "Profiles",
+                order = 7,
+                args = {}
+            },
+
             -- Debug
             debugSettings = {
                 type = "group",
@@ -514,6 +526,23 @@ function Config:SetupOptions()
         }
     }
 
+    local dbObject = GetDatabaseObject()
+    if dbObject and AceDBOptions and AceDBOptions.GetOptionsTable then
+        options.args.profiles = AceDBOptions:GetOptionsTable(dbObject)
+    else
+        options.args.profiles = {
+            type = "group",
+            name = L["PROFILES"] or "Profiles",
+            args = {
+                info = {
+                    type = "description",
+                    name = L["PROFILES_MISSING_LIB_DESC"] or "AceDBOptions-3.0 was not found, so advanced profile controls are unavailable.",
+                    order = 1,
+                },
+            },
+        }
+    end
+
     if not AceConfig then
         print(addonName .. ": AceConfig-3.0 not found.")
         return
@@ -523,6 +552,7 @@ function Config:SetupOptions()
 
     if AceConfigDialog and AceConfigDialog.AddToBlizOptions then
         AceConfigDialog:AddToBlizOptions(addonName, "Max Camera Distance")
+        AceConfigDialog:AddToBlizOptions(addonName, L["PROFILES"] or "Profiles", addonName, "profiles")
     end
 end
 

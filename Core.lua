@@ -1,4 +1,6 @@
 local addonName, ns = ...
+ns.Core = ns.Core or {}
+local Core = ns.Core
 local frame = CreateFrame("Frame")
 local Compat = ns.Compat or {}
 
@@ -80,6 +82,22 @@ local function ScheduleStartupCameraRefresh()
     end
 end
 
+function Core:RefreshMinimapButton()
+    if not LDBIcon or not ns.Database or not ns.Database.db or not ns.Database.db.profile then return end
+
+    ns.Database.db.profile.minimap = ns.Database.db.profile.minimap or { hide = false }
+
+    if LDBIcon.Refresh then
+        LDBIcon:Refresh(addonName, ns.Database.db.profile.minimap)
+    end
+
+    if ns.Database.db.profile.minimap.hide then
+        LDBIcon:Hide(addonName)
+    else
+        LDBIcon:Show(addonName)
+    end
+end
+
 local function InitMinimapButton()
     if minimapInited then return end
     minimapInited = true
@@ -111,6 +129,7 @@ local function InitMinimapButton()
 
     if minimapDataObj then
         LDBIcon:Register(addonName, minimapDataObj, ns.Database.db.profile.minimap)
+        Core:RefreshMinimapButton()
     end
 end
 

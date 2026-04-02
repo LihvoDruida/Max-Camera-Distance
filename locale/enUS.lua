@@ -190,3 +190,7 @@ L["GROUP_COMBAT_ZOOM_FACTOR"] = "Raid / Party Combat Distance"
 L["GROUP_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while you are in combat in a party, dungeon, raid, or similar group content."
 L["PVP_COMBAT_ZOOM_FACTOR"] = "PvP Combat Distance"
 L["PVP_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while you are in combat in PvP content."
+
+L["PROFILES"] = "Profiles"
+
+L["PROFILES_MISSING_LIB_DESC"] = "AceDBOptions-3.0 was not found, so advanced profile controls are unavailable."

@@ -15,6 +15,8 @@ local CONVERSION_RATIO = Compat.CONVERSION_RATIO or (IS_RETAIL and 15 or 12.5)
 -- ============================================================================
 local type, tonumber, tostring = type, tonumber, tostring
 local pcall, pairs, print = pcall, pairs, print
+local UnitName, GetRealmName = UnitName, GetRealmName
+local format = string.format
 
 
 -- ============================================================================
@@ -63,6 +65,17 @@ local function NormalizeBoolean(value, default)
     end
 
     return default and true or false
+end
+
+local function GetCurrentCharacterKey()
+    local playerName = UnitName and UnitName("player")
+    local realmName = GetRealmName and GetRealmName()
+
+    if not playerName or not realmName then
+        return nil
+    end
+
+    return format("%s - %s", tostring(playerName), tostring(realmName))
 end
 
 -- ============================================================================
@@ -258,12 +271,51 @@ function Database:ApplyMigrations(profile)
 end
 
 -- ============================================================================
+-- PROFILE MIGRATION: shared Default -> per-character profile
+-- ============================================================================
+function Database:MigrateToPerCharacterProfiles()
+    local rawDb = _G.MaxCameraDistanceDB
+    if type(rawDb) ~= "table" then return end
+
+    local characterKey = GetCurrentCharacterKey()
+    if not characterKey then return end
+
+    rawDb.profiles = rawDb.profiles or {}
+    rawDb.profileKeys = rawDb.profileKeys or {}
+    rawDb.__migrations = rawDb.__migrations or {}
+    rawDb.__migrations.perCharacterProfiles = rawDb.__migrations.perCharacterProfiles or {}
+
+    if rawDb.__migrations.perCharacterProfiles[characterKey] then
+        return
+    end
+
+    local currentProfileKey = rawDb.profileKeys[characterKey]
+    local sharedDefaultProfile = rawDb.profiles.Default
+    local characterProfile = rawDb.profiles[characterKey]
+
+    local shouldCopySharedDefault =
+        type(sharedDefaultProfile) == "table"
+        and characterProfile == nil
+        and (currentProfileKey == nil or currentProfileKey == "Default")
+
+    if shouldCopySharedDefault then
+        rawDb.profiles[characterKey] = CopyTableSafe(sharedDefaultProfile)
+    end
+
+    if currentProfileKey == nil or currentProfileKey == "Default" then
+        rawDb.profileKeys[characterKey] = characterKey
+        rawDb.__migrations.perCharacterProfiles[characterKey] = true
+    end
+end
+
+-- ============================================================================
 -- INIT DB
 -- ============================================================================
 function Database:InitDB()
     local defaultsWrapper = { profile = CopyTableSafe(PROFILE_DEFAULTS) }
 
-    self.db = AceDB:New("MaxCameraDistanceDB", defaultsWrapper, true)
+    self:MigrateToPerCharacterProfiles()
+    self.db = AceDB:New("MaxCameraDistanceDB", defaultsWrapper)
 
     if not self.db then
         print(addonName .. ": DB initialization failed.")
@@ -293,6 +345,10 @@ function Database:OnProfileUpdate(reason)
 
     if ns.Functions and ns.Functions.logMessage then
         ns.Functions:logMessage("info", tostring(reason) .. ". Re-applying settings...")
+    end
+
+    if ns.Core and ns.Core.RefreshMinimapButton then
+        ns.Core:RefreshMinimapButton()
     end
 
     if ns.Functions and ns.Functions.AdjustCamera then
