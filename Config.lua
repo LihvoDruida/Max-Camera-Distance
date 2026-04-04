@@ -108,6 +108,8 @@ local function ZoneSourceText(value)
     return L["STATUS_ZONE_SOURCE_WORLD"] or "World"
 end
 
+local DistanceKeyText
+
 local function BuildLiveStatusText()
     if not (ns.Functions and ns.Functions.GetStatusSnapshot) then
         return L["STATUS_UNAVAILABLE"] or "Live status is unavailable right now."
@@ -118,12 +120,23 @@ local function BuildLiveStatusText()
         return L["STATUS_UNAVAILABLE"] or "Live status is unavailable right now."
     end
 
+    local distanceSourceLabel = L["PRESET_MANUAL"] or "Manual"
+    if snapshot.targetSourceType == "preset" then
+        local presetChoices = ns.Functions and ns.Functions.GetPresetChoices and ns.Functions:GetPresetChoices(snapshot.targetDistanceKey)
+        distanceSourceLabel = (presetChoices and presetChoices[snapshot.targetPresetId]) or snapshot.targetPresetId or "preset"
+    end
+
     return table.concat({
         string.format("%s: %s", L["STATUS_ZOOM_STATE"] or "Zoom State", StateText(snapshot.state)),
         string.format("%s: %s", L["STATUS_CONTEXT"] or "Resolved Context", ContextText(snapshot.resolvedContext)),
         string.format("%s: %s", L["STATUS_RAW_CONTEXT"] or "Raw Context", ContextText(snapshot.rawContext)),
         string.format("%s: %s", L["STATUS_ZONE_SOURCE"] or "Zone Source", ZoneSourceText(snapshot.zoneSource)),
         string.format("%s: %.1f", L["STATUS_TARGET_DISTANCE"] or "Target Distance", snapshot.targetYards or 0),
+        string.format("%s: %s (%s)",
+            L["STATUS_DISTANCE_SOURCE"] or "Distance Source",
+            DistanceKeyText(snapshot.targetDistanceKey),
+            distanceSourceLabel
+        ),
         string.format("%s: %s", L["STATUS_WORLD_FALLBACK"] or "Using World Fallback", BoolText(snapshot.usedWorldFallback)),
         string.format("%s: %s=%s, %s=%s, %s=%s, %s=%s, %s=%s",
             L["STATUS_REASON_FLAGS"] or "Reason Flags",
@@ -156,6 +169,119 @@ local function BuildLiveStatusText()
     }, "\n")
 end
 
+
+local PRESET_DISTANCE_KEYS = {
+    maxZoomFactor = true,
+    minZoomFactor = true,
+    mountZoomFactor = true,
+    worldCombatZoomFactor = true,
+    partyCombatZoomFactor = true,
+    raidCombatZoomFactor = true,
+    pvpCombatZoomFactor = true,
+}
+
+local function GetPresetChoices(distanceKey)
+    if ns.Functions and ns.Functions.GetPresetChoices then
+        return ns.Functions:GetPresetChoices(distanceKey)
+    end
+    return {
+        manual = L["PRESET_MANUAL"] or "Manual",
+    }
+end
+
+local function GetControlSnapshot(distanceKey)
+    if ns.Functions and ns.Functions.GetDistanceControlSnapshot then
+        return ns.Functions:GetDistanceControlSnapshot(distanceKey)
+    end
+    local db = GetDB()
+    if not db then return nil end
+    return {
+        distanceKey = distanceKey,
+        manualValue = db[distanceKey],
+        effectiveValue = db[distanceKey],
+        sourceType = "manual",
+        presetId = "manual",
+        isManual = true,
+    }
+end
+
+local function GetPresetBindingKey(distanceKey)
+    if ns.Functions and ns.Functions.GetPresetBindingKey then
+        return ns.Functions:GetPresetBindingKey(distanceKey)
+    end
+    local mapping = {
+        maxZoomFactor = "manualMaxPreset",
+        minZoomFactor = "normalZoomPreset",
+        mountZoomFactor = "mountZoomPreset",
+        worldCombatZoomFactor = "worldCombatPreset",
+        partyCombatZoomFactor = "partyCombatPreset",
+        raidCombatZoomFactor = "raidCombatPreset",
+        pvpCombatZoomFactor = "pvpCombatPreset",
+    }
+    return mapping[distanceKey]
+end
+
+local function GetPresetSelectValue(distanceKey)
+    local db = GetDB()
+    if not db then return "manual" end
+    local presetKey = GetPresetBindingKey(distanceKey)
+    return (presetKey and db[presetKey]) or "manual"
+end
+
+local function SetPresetSelectValue(distanceKey, presetId)
+    local db = GetDB()
+    if not db then return end
+    local presetKey = GetPresetBindingKey(distanceKey)
+    if not presetKey then return end
+    SetOption(presetKey, presetId)
+end
+
+local function BuildPresetStatusText(distanceKey)
+    local snapshot = GetControlSnapshot(distanceKey)
+    if not snapshot then
+        return L["PRESET_STATUS_UNAVAILABLE"] or "Preset status is unavailable."
+    end
+
+    if snapshot.isManual then
+        return string.format(
+            L["PRESET_STATUS_MANUAL"] or "Manual control is active. Slider value: %.1f yd.",
+            snapshot.manualValue or 0
+        )
+    end
+
+    local choices = GetPresetChoices(distanceKey)
+    local presetLabel = choices[snapshot.presetId] or snapshot.presetId or (L["PRESET_UNKNOWN"] or "Unknown")
+    return string.format(
+        L["PRESET_STATUS_LOCKED"] or "Preset: %s. Effective distance: %.1f yd. Matching manual control is locked until you switch back to Manual.",
+        presetLabel,
+        snapshot.effectiveValue or 0
+    )
+end
+
+local function IsManualControlLocked(distanceKey)
+    local snapshot = GetControlSnapshot(distanceKey)
+    return snapshot and not snapshot.isManual or false
+end
+
+local function BuildRangeDesc(baseDesc, distanceKey)
+    local statusText = BuildPresetStatusText(distanceKey)
+    if baseDesc and baseDesc ~= "" then
+        return baseDesc .. "\n\n" .. statusText
+    end
+    return statusText
+end
+
+DistanceKeyText = function(distanceKey)
+    if distanceKey == "maxZoomFactor" then return L["MAX_ZOOM_FACTOR"] or "Max Zoom" end
+    if distanceKey == "minZoomFactor" then return L["MIN_COMBAT_ZOOM_FACTOR"] or "Normal Distance" end
+    if distanceKey == "mountZoomFactor" then return L["MOUNT_ZOOM_FACTOR"] or "Mount Distance" end
+    if distanceKey == "worldCombatZoomFactor" then return L["WORLD_COMBAT_ZOOM_FACTOR"] or "Open World Combat Distance" end
+    if distanceKey == "partyCombatZoomFactor" then return L["PARTY_COMBAT_ZOOM_FACTOR"] or "Party Combat Distance" end
+    if distanceKey == "raidCombatZoomFactor" then return L["RAID_COMBAT_ZOOM_FACTOR"] or "Raid Combat Distance" end
+    if distanceKey == "pvpCombatZoomFactor" then return L["PVP_COMBAT_ZOOM_FACTOR"] or "PvP Combat Distance" end
+    return distanceKey or "-"
+end
+
 -- =====================================================================
 -- OPTIONS
 -- =====================================================================
@@ -163,9 +289,7 @@ function Config:SetupOptions()
     if not ns.Database or not ns.Database.db then return end
     local defaults = ns.Database.DEFAULTS
 
-    -- Make sure distance matches the current client
     local maxDistance = defaults.MAX_POSSIBLE_DISTANCE or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
-    local isClassic = not IS_RETAIL
     local hasQuestWatch = (C_QuestLog and C_QuestLog.GetNumQuestWatches) and true or false
 
     local options = {
@@ -183,7 +307,6 @@ function Config:SetupOptions()
                 fontSize = "medium",
             },
 
-            -- Reload / Reset / Minimap
             reloadGroup = {
                 order = 1,
                 type = "group",
@@ -250,24 +373,33 @@ function Config:SetupOptions()
                 },
             },
 
-            -- General
             generalSettings = {
                 type = "group",
                 name = L["GENERAL_SETTINGS"],
                 inline = false,
                 order = 2,
                 args = {
+                    manualHeader = {
+                        type = "header",
+                        name = L["MANUAL_SECTION_HEADER"] or "Manual Camera Controls",
+                        order = 1,
+                    },
+                    manualDesc = {
+                        type = "description",
+                        name = L["MANUAL_SECTION_DESC"] or "Manual controls stay available only when the matching preset is set to Manual.",
+                        order = 2,
+                    },
                     maxZoomFactor = {
                         type = "range",
                         name = (L["MAX_ZOOM_FACTOR"] or "Max Zoom") .. " (Yards)",
-                        desc = L["MAX_ZOOM_FACTOR_DESC"],
+                        desc = function() return BuildRangeDesc(L["MAX_ZOOM_FACTOR_DESC"], "maxZoomFactor") end,
                         min = 1.0,
                         max = maxDistance,
                         step = 1.0,
                         get = function() return GetOption("maxZoomFactor") end,
                         set = function(_, val) SetOption("maxZoomFactor", val) end,
-                        order = 1,
-                        disabled = function() return GetOption("autoCombatZoom") end,
+                        order = 10,
+                        disabled = function() return GetOption("autoCombatZoom") or IsManualControlLocked("maxZoomFactor") end,
                     },
                     zoomTransition = {
                         type = "range",
@@ -278,19 +410,18 @@ function Config:SetupOptions()
                         step = 0.1,
                         get = function() return GetOption("zoomTransitionTime") end,
                         set = function(_, val) SetOption("zoomTransitionTime", val) end,
-                        order = 2,
+                        order = 20,
                     },
                     moveViewDistance = {
                         type = "range",
                         name = L["MOVE_VIEW_DISTANCE"],
                         desc = L["MOVE_VIEW_DISTANCE_DESC"],
-                        -- cameraDistanceMoveSpeed is a small value (usually ~20)
                         min = 1,
                         max = 50,
                         step = 1,
                         get = function() return GetOption("moveViewDistance") end,
                         set = function(_, val) SetOption("moveViewDistance", val) end,
-                        order = 3,
+                        order = 30,
                     },
                     yawSpeed = {
                         type = "range",
@@ -301,7 +432,7 @@ function Config:SetupOptions()
                         step = 10,
                         get = function() return GetOption("cameraYawMoveSpeed") end,
                         set = function(_, val) SetOption("cameraYawMoveSpeed", val) end,
-                        order = 4,
+                        order = 40,
                     },
                     pitchSpeed = {
                         type = "range",
@@ -312,22 +443,137 @@ function Config:SetupOptions()
                         step = 10,
                         get = function() return GetOption("cameraPitchMoveSpeed") end,
                         set = function(_, val) SetOption("cameraPitchMoveSpeed", val) end,
-                        order = 5,
+                        order = 50,
                     },
                 },
             },
 
-            -- Smart Zoom
+            presetSettings = {
+                type = "group",
+                name = L["PRESET_SETTINGS"] or "Presets",
+                order = 3,
+                args = {
+                    presetHeader = {
+                        type = "header",
+                        name = L["PRESET_SECTION_HEADER"] or "Distance Presets",
+                        order = 1,
+                    },
+                    presetDesc = {
+                        type = "description",
+                        name = L["PRESET_SECTION_DESC"] or "Presets convert high-level choices into real distances. If a preset other than Manual is selected, the matching slider is locked automatically.",
+                        order = 2,
+                    },
+                    manualPresetHeader = {
+                        type = "header",
+                        name = L["PRESET_MANUAL_GROUP_HEADER"] or "Manual / Normal",
+                        order = 10,
+                    },
+                    manualMaxPreset = {
+                        type = "select",
+                        name = L["MANUAL_MAX_PRESET"] or "Manual Max Distance Preset",
+                        desc = function() return BuildPresetStatusText("maxZoomFactor") end,
+                        values = function() return GetPresetChoices("maxZoomFactor") end,
+                        get = function() return GetPresetSelectValue("maxZoomFactor") end,
+                        set = function(_, value) SetPresetSelectValue("maxZoomFactor", value) end,
+                        order = 11,
+                    },
+                    manualMaxPresetInfo = {
+                        type = "description",
+                        name = function() return BuildPresetStatusText("maxZoomFactor") end,
+                        order = 12,
+                    },
+                    normalZoomPreset = {
+                        type = "select",
+                        name = L["NORMAL_ZOOM_PRESET"] or "Normal Distance Preset",
+                        desc = function() return BuildPresetStatusText("minZoomFactor") end,
+                        values = function() return GetPresetChoices("minZoomFactor") end,
+                        get = function() return GetPresetSelectValue("minZoomFactor") end,
+                        set = function(_, value) SetPresetSelectValue("minZoomFactor", value) end,
+                        order = 13,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
+                    normalZoomPresetInfo = {
+                        type = "description",
+                        name = function() return BuildPresetStatusText("minZoomFactor") end,
+                        order = 14,
+                        hidden = function() return not GetOption("autoCombatZoom") end,
+                    },
+                    combatPresetHeader = {
+                        type = "header",
+                        name = L["PRESET_COMBAT_GROUP_HEADER"] or "Combat Presets",
+                        order = 20,
+                    },
+                    worldCombatPreset = {
+                        type = "select",
+                        name = L["WORLD_COMBAT_PRESET"] or "Open World Combat Preset",
+                        desc = function() return BuildPresetStatusText("worldCombatZoomFactor") end,
+                        values = function() return GetPresetChoices("worldCombatZoomFactor") end,
+                        get = function() return GetPresetSelectValue("worldCombatZoomFactor") end,
+                        set = function(_, value) SetPresetSelectValue("worldCombatZoomFactor", value) end,
+                        order = 21,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
+                    worldCombatPresetInfo = { type = "description", name = function() return BuildPresetStatusText("worldCombatZoomFactor") end, order = 22, hidden = function() return not GetOption("autoCombatZoom") end },
+                    partyCombatPreset = {
+                        type = "select",
+                        name = L["PARTY_COMBAT_PRESET"] or "Party Combat Preset",
+                        desc = function() return BuildPresetStatusText("partyCombatZoomFactor") end,
+                        values = function() return GetPresetChoices("partyCombatZoomFactor") end,
+                        get = function() return GetPresetSelectValue("partyCombatZoomFactor") end,
+                        set = function(_, value) SetPresetSelectValue("partyCombatZoomFactor", value) end,
+                        order = 23,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
+                    partyCombatPresetInfo = { type = "description", name = function() return BuildPresetStatusText("partyCombatZoomFactor") end, order = 24, hidden = function() return not GetOption("autoCombatZoom") end },
+                    raidCombatPreset = {
+                        type = "select",
+                        name = L["RAID_COMBAT_PRESET"] or "Raid Combat Preset",
+                        desc = function() return BuildPresetStatusText("raidCombatZoomFactor") end,
+                        values = function() return GetPresetChoices("raidCombatZoomFactor") end,
+                        get = function() return GetPresetSelectValue("raidCombatZoomFactor") end,
+                        set = function(_, value) SetPresetSelectValue("raidCombatZoomFactor", value) end,
+                        order = 25,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
+                    raidCombatPresetInfo = { type = "description", name = function() return BuildPresetStatusText("raidCombatZoomFactor") end, order = 26, hidden = function() return not GetOption("autoCombatZoom") end },
+                    pvpCombatPreset = {
+                        type = "select",
+                        name = L["PVP_COMBAT_PRESET"] or "PvP Combat Preset",
+                        desc = function() return BuildPresetStatusText("pvpCombatZoomFactor") end,
+                        values = function() return GetPresetChoices("pvpCombatZoomFactor") end,
+                        get = function() return GetPresetSelectValue("pvpCombatZoomFactor") end,
+                        set = function(_, value) SetPresetSelectValue("pvpCombatZoomFactor", value) end,
+                        order = 27,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
+                    pvpCombatPresetInfo = { type = "description", name = function() return BuildPresetStatusText("pvpCombatZoomFactor") end, order = 28, hidden = function() return not GetOption("autoCombatZoom") end },
+                    mountPresetHeader = {
+                        type = "header",
+                        name = L["PRESET_MOUNT_GROUP_HEADER"] or "Mount / Travel",
+                        order = 30,
+                    },
+                    mountZoomPreset = {
+                        type = "select",
+                        name = L["MOUNT_ZOOM_PRESET"] or "Mount Distance Preset",
+                        desc = function() return BuildPresetStatusText("mountZoomFactor") end,
+                        values = function() return GetPresetChoices("mountZoomFactor") end,
+                        get = function() return GetPresetSelectValue("mountZoomFactor") end,
+                        set = function(_, value) SetPresetSelectValue("mountZoomFactor", value) end,
+                        order = 31,
+                        disabled = function() return not GetOption("autoMountZoom") end,
+                    },
+                    mountZoomPresetInfo = { type = "description", name = function() return BuildPresetStatusText("mountZoomFactor") end, order = 32, hidden = function() return not GetOption("autoMountZoom") end },
+                },
+            },
+
             smartSettings = {
                 type = "group",
                 name = L["COMBAT_SETTINGS"],
                 inline = false,
-                order = 3,
+                order = 4,
                 args = {
-                    desc = { type = "description", name = L["COMBAT_SETTINGS_WARNING"], order = 0 },
-
+                    desc = { type = "description", name = L["COMBAT_SETTINGS_WARNING"], order = 1 },
                     combatHeader = { type = "header", name = L["COMBAT_HEADER"], order = 10 },
-
                     autoCombatZoom = {
                         type = "toggle",
                         name = L["AUTO_ZOOM_COMBAT"],
@@ -337,83 +583,21 @@ function Config:SetupOptions()
                         order = 11,
                         width = "full",
                     },
-
-                    worldCombatZoom = {
-                        type = "range",
-                        name = (L["WORLD_COMBAT_ZOOM_FACTOR"] or "Open World Combat Distance") .. " (Yards)",
-                        desc = L["WORLD_COMBAT_ZOOM_FACTOR_DESC"],
-                        min = 1.0,
-                        max = maxDistance,
-                        step = 1.0,
-                        get = function() return GetOption("worldCombatZoomFactor") end,
-                        set = function(_, val) SetOption("worldCombatZoomFactor", val) end,
-                        order = 12,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
-                    },
-                    partyCombatZoom = {
-                        type = "range",
-                        name = (L["PARTY_COMBAT_ZOOM_FACTOR"] or "Party Combat Distance") .. " (Yards)",
-                        desc = L["PARTY_COMBAT_ZOOM_FACTOR_DESC"],
-                        min = 1.0,
-                        max = maxDistance,
-                        step = 1.0,
-                        get = function() return GetOption("partyCombatZoomFactor") end,
-                        set = function(_, val) SetOption("partyCombatZoomFactor", val) end,
-                        order = 13,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
-                    },
-                    raidCombatZoom = {
-                        type = "range",
-                        name = (L["RAID_COMBAT_ZOOM_FACTOR"] or "Raid Combat Distance") .. " (Yards)",
-                        desc = L["RAID_COMBAT_ZOOM_FACTOR_DESC"],
-                        min = 1.0,
-                        max = maxDistance,
-                        step = 1.0,
-                        get = function() return GetOption("raidCombatZoomFactor") end,
-                        set = function(_, val) SetOption("raidCombatZoomFactor", val) end,
-                        order = 14,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
-                    },
-                    pvpCombatZoom = {
-                        type = "range",
-                        name = (L["PVP_COMBAT_ZOOM_FACTOR"] or "PvP Combat Distance") .. " (Yards)",
-                        desc = L["PVP_COMBAT_ZOOM_FACTOR_DESC"],
-                        min = 1.0,
-                        max = maxDistance,
-                        step = 1.0,
-                        get = function() return GetOption("pvpCombatZoomFactor") end,
-                        set = function(_, val) SetOption("pvpCombatZoomFactor", val) end,
-                        order = 15,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
-                    },
-                    combatMinZoom = {
-                        type = "range",
-                        name = (L["MIN_COMBAT_ZOOM_FACTOR"] or "Combat Min Zoom") .. " (Yards)",
-                        desc = L["MIN_COMBAT_ZOOM_FACTOR_DESC"],
-                        min = 1.0,
-                        max = maxDistance,
-                        step = 1.0,
-                        get = function() return GetOption("minZoomFactor") end,
-                        set = function(_, val) SetOption("minZoomFactor", val) end,
-                        order = 16,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
-                    },
-
                     zoneHeader = {
                         type = "header",
                         name = L["ZONE_CONTEXT_HEADER"] or "Context Rules",
-                        order = 17,
+                        order = 20,
                     },
                     zoneDesc = {
                         type = "description",
                         name = L["ZONE_CONTEXT_DESC"] or "These toggles decide whether party / raid / PvP content should use their own combat preset or fall back to the open-world combat distance.",
-                        order = 18,
+                        order = 21,
                     },
                     zoneParty = {
                         type = "toggle",
                         name = L["ZONE_PARTY"],
                         desc = L["ZONE_PARTY_DESC"],
-                        order = 19,
+                        order = 22,
                         get = function() return GetOption("zoneParty") end,
                         set = function(_, v) SetOption("zoneParty", v) end,
                         disabled = function() return not GetOption("autoCombatZoom") end,
@@ -422,7 +606,7 @@ function Config:SetupOptions()
                         type = "toggle",
                         name = L["ZONE_RAID"],
                         desc = L["ZONE_RAID_DESC"],
-                        order = 20,
+                        order = 23,
                         get = function() return GetOption("zoneRaid") end,
                         set = function(_, v) SetOption("zoneRaid", v) end,
                         disabled = function() return not GetOption("autoCombatZoom") end,
@@ -431,7 +615,7 @@ function Config:SetupOptions()
                         type = "toggle",
                         name = L["ZONE_ARENA"],
                         desc = L["ZONE_ARENA_DESC"],
-                        order = 21,
+                        order = 24,
                         get = function() return GetOption("zoneArena") end,
                         set = function(_, v) SetOption("zoneArena", v) end,
                         disabled = function() return not GetOption("autoCombatZoom") end,
@@ -440,7 +624,7 @@ function Config:SetupOptions()
                         type = "toggle",
                         name = L["ZONE_BG"],
                         desc = L["ZONE_BG_DESC"],
-                        order = 22,
+                        order = 25,
                         get = function() return GetOption("zoneBg") end,
                         set = function(_, v) SetOption("zoneBg", v) end,
                         disabled = function() return not GetOption("autoCombatZoom") end,
@@ -449,7 +633,7 @@ function Config:SetupOptions()
                         type = "toggle",
                         name = L["ZONE_SCENARIO"],
                         desc = L["ZONE_SCENARIO_DESC"],
-                        order = 23,
+                        order = 26,
                         hidden = function() return not SupportsScenarioZone() end,
                         get = function() return GetOption("zoneScenario") end,
                         set = function(_, v) SetOption("zoneScenario", v) end,
@@ -459,37 +643,105 @@ function Config:SetupOptions()
                         type = "toggle",
                         name = L["ZONE_WORLD_BOSS"],
                         desc = L["ZONE_WORLD_BOSS_DESC"],
-                        order = 24,
+                        order = 27,
                         width = "full",
                         get = function() return GetOption("zoneWorldBoss") end,
                         set = function(_, v) SetOption("zoneWorldBoss", v) end,
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
-
-                    mountHeader = { type = "header", name = L["MOUNT_SETTINGS_HEADER"], order = 30 },
+                    manualCombatHeader = {
+                        type = "header",
+                        name = L["MANUAL_COMBAT_HEADER"] or "Manual Distances",
+                        order = 40,
+                    },
+                    manualCombatDesc = {
+                        type = "description",
+                        name = L["MANUAL_COMBAT_DESC"] or "These sliders are used only when their matching preset is set to Manual.",
+                        order = 41,
+                    },
+                    worldCombatZoom = {
+                        type = "range",
+                        name = (L["WORLD_COMBAT_ZOOM_FACTOR"] or "Open World Combat Distance") .. " (Yards)",
+                        desc = function() return BuildRangeDesc(L["WORLD_COMBAT_ZOOM_FACTOR_DESC"], "worldCombatZoomFactor") end,
+                        min = 1.0,
+                        max = maxDistance,
+                        step = 1.0,
+                        get = function() return GetOption("worldCombatZoomFactor") end,
+                        set = function(_, val) SetOption("worldCombatZoomFactor", val) end,
+                        order = 42,
+                        disabled = function() return not GetOption("autoCombatZoom") or IsManualControlLocked("worldCombatZoomFactor") end,
+                    },
+                    partyCombatZoom = {
+                        type = "range",
+                        name = (L["PARTY_COMBAT_ZOOM_FACTOR"] or "Party Combat Distance") .. " (Yards)",
+                        desc = function() return BuildRangeDesc(L["PARTY_COMBAT_ZOOM_FACTOR_DESC"], "partyCombatZoomFactor") end,
+                        min = 1.0,
+                        max = maxDistance,
+                        step = 1.0,
+                        get = function() return GetOption("partyCombatZoomFactor") end,
+                        set = function(_, val) SetOption("partyCombatZoomFactor", val) end,
+                        order = 43,
+                        disabled = function() return not GetOption("autoCombatZoom") or IsManualControlLocked("partyCombatZoomFactor") end,
+                    },
+                    raidCombatZoom = {
+                        type = "range",
+                        name = (L["RAID_COMBAT_ZOOM_FACTOR"] or "Raid Combat Distance") .. " (Yards)",
+                        desc = function() return BuildRangeDesc(L["RAID_COMBAT_ZOOM_FACTOR_DESC"], "raidCombatZoomFactor") end,
+                        min = 1.0,
+                        max = maxDistance,
+                        step = 1.0,
+                        get = function() return GetOption("raidCombatZoomFactor") end,
+                        set = function(_, val) SetOption("raidCombatZoomFactor", val) end,
+                        order = 44,
+                        disabled = function() return not GetOption("autoCombatZoom") or IsManualControlLocked("raidCombatZoomFactor") end,
+                    },
+                    pvpCombatZoom = {
+                        type = "range",
+                        name = (L["PVP_COMBAT_ZOOM_FACTOR"] or "PvP Combat Distance") .. " (Yards)",
+                        desc = function() return BuildRangeDesc(L["PVP_COMBAT_ZOOM_FACTOR_DESC"], "pvpCombatZoomFactor") end,
+                        min = 1.0,
+                        max = maxDistance,
+                        step = 1.0,
+                        get = function() return GetOption("pvpCombatZoomFactor") end,
+                        set = function(_, val) SetOption("pvpCombatZoomFactor", val) end,
+                        order = 45,
+                        disabled = function() return not GetOption("autoCombatZoom") or IsManualControlLocked("pvpCombatZoomFactor") end,
+                    },
+                    combatMinZoom = {
+                        type = "range",
+                        name = (L["MIN_COMBAT_ZOOM_FACTOR"] or "Normal Distance") .. " (Yards)",
+                        desc = function() return BuildRangeDesc(L["MIN_COMBAT_ZOOM_FACTOR_DESC"], "minZoomFactor") end,
+                        min = 1.0,
+                        max = maxDistance,
+                        step = 1.0,
+                        get = function() return GetOption("minZoomFactor") end,
+                        set = function(_, val) SetOption("minZoomFactor", val) end,
+                        order = 46,
+                        disabled = function() return not GetOption("autoCombatZoom") or IsManualControlLocked("minZoomFactor") end,
+                    },
+                    mountHeader = { type = "header", name = L["MOUNT_SETTINGS_HEADER"], order = 60 },
                     autoMountZoom = {
                         type = "toggle",
                         name = L["AUTO_MOUNT_ZOOM"],
                         desc = L["AUTO_MOUNT_ZOOM_DESC"],
                         get = function() return GetOption("autoMountZoom") end,
                         set = function(_, val) SetOption("autoMountZoom", val) end,
-                        order = 21,
+                        order = 61,
                         width = "full"
                     },
                     mountZoomFactor = {
                         type = "range",
                         name = (L["MOUNT_ZOOM_FACTOR"] or "Mount Zoom") .. " (Yards)",
-                        desc = L["MOUNT_ZOOM_FACTOR_DESC"],
+                        desc = function() return BuildRangeDesc(L["MOUNT_ZOOM_FACTOR_DESC"], "mountZoomFactor") end,
                         min = 1.0,
                         max = maxDistance,
                         step = 1.0,
                         get = function() return GetOption("mountZoomFactor") end,
                         set = function(_, val) SetOption("mountZoomFactor", val) end,
-                        order = 22,
-                        disabled = function() return not GetOption("autoMountZoom") end
+                        order = 62,
+                        disabled = function() return not GetOption("autoMountZoom") or IsManualControlLocked("mountZoomFactor") end
                     },
-
-                    delayHeader = { type = "header", name = L["DELAY_HEADER"], order = 30 },
+                    delayHeader = { type = "header", name = L["DELAY_HEADER"], order = 80 },
                     dismountDelay = {
                         type = "range",
                         name = L["DISMOUNT_DELAY"],
@@ -499,17 +751,16 @@ function Config:SetupOptions()
                         step = 0.5,
                         get = function() return GetOption("dismountDelay") end,
                         set = function(_, val) SetOption("dismountDelay", val) end,
-                        order = 31,
+                        order = 81,
                         disabled = function() return not (GetOption("autoCombatZoom") or GetOption("autoMountZoom")) end
                     },
                 },
             },
 
-            -- Advanced
             advancedSettings = {
                 type = "group",
                 name = L["ADVANCED_SETTINGS"],
-                order = 4,
+                order = 5,
                 args = {
                     reduceMovement = {
                         type = "toggle",
@@ -527,8 +778,6 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("cameraIndirectVisibility", val) end,
                         order = 2
                     },
-
-                    -- Retail-only, and only if CVAR exists
                     resampleAlwaysSharpen = {
                         type = "toggle",
                         name = L["RESAMPLE_ALWAYS_SHARPEN"],
@@ -538,7 +787,6 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("resampleAlwaysSharpen", val) end,
                         order = 3
                     },
-
                     softTargetInteract = {
                         type = "toggle",
                         name = L["SOFT_TARGET_INTERACT"],
@@ -551,11 +799,10 @@ function Config:SetupOptions()
                 },
             },
 
-            -- Extra
             extraFeatures = {
                 type = "group",
                 name = L["EXTRA_FEATURES"],
-                order = 5,
+                order = 6,
                 args = {
                     clearTrackerBtn = {
                         type = "execute",
@@ -570,8 +817,6 @@ function Config:SetupOptions()
                         width = "full",
                         hidden = function() return not hasQuestWatch end,
                     },
-
-                    -- ActionCam: show ONLY if the client has the CVars
                     actionCamHeader = {
                         type = "header",
                         name = L["ACTION_CAM_HEADER"],
@@ -611,7 +856,6 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("actionCamPitch", val) end,
                         order = 5
                     },
-
                     afkHeader = { type = "header", name = L["AFK_MODE_HEADER"], order = 10 },
                     descAFK = { type = "description", name = L["AFK_MODE_DESC_SAFE"], order = 10.5 },
                     enableAFK = {
@@ -625,18 +869,10 @@ function Config:SetupOptions()
                 }
             },
 
-            profiles = {
-                type = "group",
-                name = L["PROFILES"] or "Profiles",
-                order = 7,
-                args = {}
-            },
-
-            -- Debug
             debugSettings = {
                 type = "group",
                 name = L["DEBUG_SETTINGS"],
-                order = 6,
+                order = 7,
                 args = {
                     statusHeader = {
                         type = "header",
@@ -696,14 +932,21 @@ function Config:SetupOptions()
                         order = 2
                     }
                 }
-            }
+            },
+
+            profiles = {
+                type = "group",
+                name = L["PROFILES"] or "Profiles",
+                order = 8,
+                args = {}
+            },
         }
     }
 
     local dbObject = GetDatabaseObject()
     if dbObject and AceDBOptions and AceDBOptions.GetOptionsTable then
         options.args.profiles = AceDBOptions:GetOptionsTable(dbObject)
-        options.args.profiles.order = 7
+        options.args.profiles.order = 8
         options.args.profiles.name = L["PROFILES"] or "Profiles"
     else
         options.args.profiles = {
@@ -716,6 +959,7 @@ function Config:SetupOptions()
                     order = 1,
                 },
             },
+            order = 8,
         }
     end
 

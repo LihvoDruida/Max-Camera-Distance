@@ -209,6 +209,142 @@ local function SanitizeRuntimeProfile(db)
     db.dismountDelay = ClampNumber(db.dismountDelay, 0, 10) or 0
 end
 
+
+local DISTANCE_PRESET_BINDINGS = {
+    maxZoomFactor = "manualMaxPreset",
+    minZoomFactor = "normalZoomPreset",
+    mountZoomFactor = "mountZoomPreset",
+    worldCombatZoomFactor = "worldCombatPreset",
+    partyCombatZoomFactor = "partyCombatPreset",
+    raidCombatZoomFactor = "raidCombatPreset",
+    pvpCombatZoomFactor = "pvpCombatPreset",
+}
+
+local PRESET_ORDER = { "manual", "client_default", "close", "balanced", "far", "max" }
+
+local function RoundHalfUp(value)
+    if not value then return 0 end
+    return math.floor(value + 0.5)
+end
+
+local function GetPresetDistanceValue(presetId, db, distanceKey)
+    if presetId == nil or presetId == "manual" then
+        return nil
+    end
+
+    local defaults = ns.Database and ns.Database.DEFAULTS
+    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local defaultNormal = (defaults and defaults.BLIZZARD_DEFAULT_YARDS) or 20
+
+    if presetId == "client_default" then
+        if distanceKey == "maxZoomFactor" then
+            return maxYards
+        end
+        return ClampNumber(defaultNormal, 1, maxYards) or defaultNormal
+    elseif presetId == "close" then
+        return ClampNumber(RoundHalfUp(maxYards * 0.35), 1, maxYards) or maxYards
+    elseif presetId == "balanced" then
+        return ClampNumber(RoundHalfUp(maxYards * 0.55), 1, maxYards) or maxYards
+    elseif presetId == "far" then
+        return ClampNumber(RoundHalfUp(maxYards * 0.75), 1, maxYards) or maxYards
+    elseif presetId == "max" then
+        return maxYards
+    end
+
+    return nil
+end
+
+local function GetDistancePresetId(db, distanceKey)
+    if not db or not distanceKey then return "manual" end
+    local presetKey = DISTANCE_PRESET_BINDINGS[distanceKey]
+    if not presetKey then return "manual" end
+    local presetId = db[presetKey]
+    for _, validId in ipairs(PRESET_ORDER) do
+        if presetId == validId then
+            return presetId
+        end
+    end
+    return "manual"
+end
+
+local function GetDistanceValue(db, distanceKey)
+    if not db or not distanceKey then return nil, "manual", "manual" end
+
+    local presetId = GetDistancePresetId(db, distanceKey)
+    local manualValue = db[distanceKey]
+
+    if presetId ~= "manual" then
+        local presetValue = GetPresetDistanceValue(presetId, db, distanceKey)
+        if presetValue ~= nil then
+            return presetValue, "preset", presetId
+        end
+    end
+
+    return manualValue, "manual", "manual"
+end
+
+local function GetContextDistanceKey(context)
+    if context == "pvp" then
+        return "pvpCombatZoomFactor"
+    elseif context == "raid" then
+        return "raidCombatZoomFactor"
+    elseif context == "party" then
+        return "partyCombatZoomFactor"
+    end
+    return "worldCombatZoomFactor"
+end
+
+function Functions:GetPresetChoices(distanceKey)
+    local db = DB()
+    local choices = {}
+    for _, presetId in ipairs(PRESET_ORDER) do
+        local yards = GetPresetDistanceValue(presetId, db, distanceKey)
+        local label
+        if presetId == "manual" then
+            label = L["PRESET_MANUAL"] or "Manual"
+        elseif presetId == "client_default" then
+            label = string.format("%s (%.1f yd)", L["PRESET_CLIENT_DEFAULT"] or "Game Default", yards or 0)
+        elseif presetId == "close" then
+            label = string.format("%s (%.1f yd)", L["PRESET_CLOSE"] or "Close", yards or 0)
+        elseif presetId == "balanced" then
+            label = string.format("%s (%.1f yd)", L["PRESET_BALANCED"] or "Balanced", yards or 0)
+        elseif presetId == "far" then
+            label = string.format("%s (%.1f yd)", L["PRESET_FAR"] or "Far", yards or 0)
+        elseif presetId == "max" then
+            label = string.format("%s (%.1f yd)", L["PRESET_MAX"] or "Maximum", yards or 0)
+        end
+        choices[presetId] = label or presetId
+    end
+    return choices
+end
+
+function Functions:GetDistanceControlSnapshot(distanceKey)
+    local db = DB()
+    if not db then return nil end
+    SanitizeRuntimeProfile(db)
+    local effectiveValue, sourceType, presetId = GetDistanceValue(db, distanceKey)
+    local manualValue = db[distanceKey]
+    return {
+        distanceKey = distanceKey,
+        manualValue = manualValue,
+        effectiveValue = effectiveValue or manualValue,
+        sourceType = sourceType,
+        presetId = presetId,
+        isManual = (sourceType == "manual"),
+    }
+end
+
+
+function Functions:GetPresetBindingKey(distanceKey)
+    return DISTANCE_PRESET_BINDINGS[distanceKey]
+end
+
+function Functions:GetDistancePresetId(distanceKey)
+    local db = DB()
+    if not db then return "manual" end
+    return GetDistancePresetId(db, distanceKey)
+end
+
 local function UpdateCVar(key, value)
     local db = DB()
     local normalizedValue = NormalizeManagedCVarValue(key, value, db)
@@ -537,20 +673,9 @@ local function GetCombatTargetYards(db, context)
     local defaults = ns.Database and ns.Database.DEFAULTS
     local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or 39
     local resolvedContext = context or "world"
-
-    if resolvedContext == "pvp" then
-        return db.pvpCombatZoomFactor or db.partyCombatZoomFactor or db.raidCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
-    end
-
-    if resolvedContext == "raid" then
-        return db.raidCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
-    end
-
-    if resolvedContext == "party" then
-        return db.partyCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
-    end
-
-    return db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
+    local distanceKey = GetContextDistanceKey(resolvedContext)
+    local value = GetDistanceValue(db, distanceKey)
+    return value or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards, distanceKey
 end
 
 local function BuildStatusSnapshot(db)
@@ -573,17 +698,31 @@ local function BuildStatusSnapshot(db)
         state = ZOOM_STATE_MOUNT
     end
 
-    local targetYards
+    local targetYards, targetDistanceKey, targetSourceType, targetPresetId
     if not db then
         targetYards = maxYards
+        targetDistanceKey = "maxZoomFactor"
+        targetSourceType = "manual"
+        targetPresetId = "manual"
     elseif state == ZOOM_STATE_COMBAT then
-        targetYards = GetCombatTargetYards(db, resolvedContext)
+        local combatDistanceKey
+        targetYards, combatDistanceKey = GetCombatTargetYards(db, resolvedContext)
+        targetDistanceKey = combatDistanceKey
+        local _, sourceType, presetId = GetDistanceValue(db, combatDistanceKey)
+        targetSourceType = sourceType
+        targetPresetId = presetId
     elseif state == ZOOM_STATE_MOUNT then
-        targetYards = db.mountZoomFactor or db.maxZoomFactor or maxYards
+        targetDistanceKey = "mountZoomFactor"
+        targetYards, targetSourceType, targetPresetId = GetDistanceValue(db, targetDistanceKey)
+        targetYards = targetYards or db.mountZoomFactor or db.maxZoomFactor or maxYards
     elseif db.autoCombatZoom then
-        targetYards = db.minZoomFactor or 15
+        targetDistanceKey = "minZoomFactor"
+        targetYards, targetSourceType, targetPresetId = GetDistanceValue(db, targetDistanceKey)
+        targetYards = targetYards or db.minZoomFactor or 15
     else
-        targetYards = db.maxZoomFactor or maxYards
+        targetDistanceKey = "maxZoomFactor"
+        targetYards, targetSourceType, targetPresetId = GetDistanceValue(db, targetDistanceKey)
+        targetYards = targetYards or db.maxZoomFactor or maxYards
     end
 
     return {
@@ -593,6 +732,9 @@ local function BuildStatusSnapshot(db)
         zoneSource = zoneSource,
         usedWorldFallback = usedWorldFallback,
         targetYards = targetYards,
+        targetDistanceKey = targetDistanceKey,
+        targetSourceType = targetSourceType,
+        targetPresetId = targetPresetId,
         playerInCombat = playerInCombat,
         groupInCombat = groupInCombat,
         hasThreat = hasThreat,
@@ -713,19 +855,42 @@ function Functions:ShouldApplyOptionImmediately(key)
     local state, combatContext = GetCurrentZoomContext(db)
 
     if key == "minZoomFactor" then
-        return state == ZOOM_STATE_NONE
+        return state == ZOOM_STATE_NONE and GetDistancePresetId(db, key) == "manual"
     elseif key == "mountZoomFactor" then
-        return state == ZOOM_STATE_MOUNT
+        return state == ZOOM_STATE_MOUNT and GetDistancePresetId(db, key) == "manual"
     elseif key == "worldCombatZoomFactor" then
-        return state == ZOOM_STATE_COMBAT and combatContext == "world"
+        return state == ZOOM_STATE_COMBAT and combatContext == "world" and GetDistancePresetId(db, key) == "manual"
     elseif key == "partyCombatZoomFactor" then
-        return state == ZOOM_STATE_COMBAT and combatContext == "party"
+        return state == ZOOM_STATE_COMBAT and combatContext == "party" and GetDistancePresetId(db, key) == "manual"
     elseif key == "raidCombatZoomFactor" then
-        return state == ZOOM_STATE_COMBAT and combatContext == "raid"
+        return state == ZOOM_STATE_COMBAT and combatContext == "raid" and GetDistancePresetId(db, key) == "manual"
     elseif key == "pvpCombatZoomFactor" then
-        return state == ZOOM_STATE_COMBAT and combatContext == "pvp"
+        return state == ZOOM_STATE_COMBAT and combatContext == "pvp" and GetDistancePresetId(db, key) == "manual"
     elseif key == "maxZoomFactor" then
-        return not (db.autoCombatZoom or db.autoMountZoom)
+        return not (db.autoCombatZoom or db.autoMountZoom) and GetDistancePresetId(db, key) == "manual"
+    elseif DISTANCE_PRESET_BINDINGS[key] then
+        local distanceKey = nil
+        for boundDistanceKey, presetKey in pairs(DISTANCE_PRESET_BINDINGS) do
+            if presetKey == key then
+                distanceKey = boundDistanceKey
+                break
+            end
+        end
+        if distanceKey == "maxZoomFactor" then
+            return not (db.autoCombatZoom or db.autoMountZoom)
+        elseif distanceKey == "minZoomFactor" then
+            return state == ZOOM_STATE_NONE and db.autoCombatZoom
+        elseif distanceKey == "mountZoomFactor" then
+            return state == ZOOM_STATE_MOUNT
+        elseif distanceKey == "worldCombatZoomFactor" then
+            return state == ZOOM_STATE_COMBAT and combatContext == "world"
+        elseif distanceKey == "partyCombatZoomFactor" then
+            return state == ZOOM_STATE_COMBAT and combatContext == "party"
+        elseif distanceKey == "raidCombatZoomFactor" then
+            return state == ZOOM_STATE_COMBAT and combatContext == "raid"
+        elseif distanceKey == "pvpCombatZoomFactor" then
+            return state == ZOOM_STATE_COMBAT and combatContext == "pvp"
+        end
     end
 
     return true
@@ -817,7 +982,7 @@ function Functions:AdjustCamera(forceNow)
     else
         -- Manual-only mode
         local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
-        local manualTargetYards = db.maxZoomFactor or maxYards
+        local manualTargetYards = (GetDistanceValue(db, "maxZoomFactor")) or db.maxZoomFactor or maxYards
 
         stateToken = stateToken + 1
         currentZoomState = ZOOM_STATE_NONE

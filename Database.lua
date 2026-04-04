@@ -147,6 +147,16 @@ local PROFILE_DEFAULTS = {
     partyCombatZoomFactor = MAX_YARDS,
     raidCombatZoomFactor = MAX_YARDS,
     pvpCombatZoomFactor = MAX_YARDS,
+
+    -- distance presets (manual keeps the matching slider active)
+    manualMaxPreset = "manual",
+    normalZoomPreset = "manual",
+    mountZoomPreset = "manual",
+    worldCombatPreset = "manual",
+    partyCombatPreset = "manual",
+    raidCombatPreset = "manual",
+    pvpCombatPreset = "manual",
+
     zoneZoomFactor = MAX_YARDS, -- legacy key kept for migration only
 
     -- advanced (best-effort defaults from client when possible)
@@ -258,6 +268,30 @@ function Database:ApplyMigrations(profile)
     profile.dismountDelay = Clamp(tonumber(profile.dismountDelay) or 0, 0, 10)
     profile.cameraYawMoveSpeed = Clamp(tonumber(profile.cameraYawMoveSpeed) or defaultYaw, 1, 360)
     profile.cameraPitchMoveSpeed = Clamp(tonumber(profile.cameraPitchMoveSpeed) or defaultPitch, 1, 360)
+
+    local VALID_PRESETS = {
+        manual = true,
+        client_default = true,
+        close = true,
+        balanced = true,
+        far = true,
+        max = true,
+    }
+
+    local function NormalizePreset(value)
+        if type(value) ~= "string" or not VALID_PRESETS[value] then
+            return "manual"
+        end
+        return value
+    end
+
+    profile.manualMaxPreset = NormalizePreset(profile.manualMaxPreset)
+    profile.normalZoomPreset = NormalizePreset(profile.normalZoomPreset)
+    profile.mountZoomPreset = NormalizePreset(profile.mountZoomPreset)
+    profile.worldCombatPreset = NormalizePreset(profile.worldCombatPreset)
+    profile.partyCombatPreset = NormalizePreset(profile.partyCombatPreset)
+    profile.raidCombatPreset = NormalizePreset(profile.raidCombatPreset)
+    profile.pvpCombatPreset = NormalizePreset(profile.pvpCombatPreset)
 
     -- Normalize booleans in case SavedVariables contain stale numeric/string values.
     profile.autoCombatZoom = NormalizeBoolean(profile.autoCombatZoom, PROFILE_DEFAULTS.autoCombatZoom)
