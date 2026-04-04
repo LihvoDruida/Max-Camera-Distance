@@ -121,6 +121,12 @@ function Functions:SendMessage(message)
     print("|cff0070deMax Camera Distance|r: " .. tostring(message))
 end
 
+local function NotifyConfigChanged()
+    if ns.Config and ns.Config.NotifyChange then
+        ns.Config:NotifyChange()
+    end
+end
+
 -- =====================================================================
 -- 6) SAFE CVAR HELPERS (fix SafeGetCVar nil + cross-client)
 -- =====================================================================
@@ -192,10 +198,10 @@ local function SanitizeRuntimeProfile(db)
     db.minZoomFactor = ClampNumber(db.minZoomFactor, 1, maxYards) or defaultNormal
     db.mountZoomFactor = ClampNumber(db.mountZoomFactor, 1, maxYards) or db.maxZoomFactor
     db.worldCombatZoomFactor = ClampNumber(db.worldCombatZoomFactor, 1, maxYards) or db.maxZoomFactor
-    db.groupCombatZoomFactor = ClampNumber(db.groupCombatZoomFactor, 1, maxYards) or db.worldCombatZoomFactor
-    db.partyCombatZoomFactor = ClampNumber(db.partyCombatZoomFactor, 1, maxYards) or db.groupCombatZoomFactor
-    db.raidCombatZoomFactor = ClampNumber(db.raidCombatZoomFactor, 1, maxYards) or db.groupCombatZoomFactor
-    db.pvpCombatZoomFactor = ClampNumber(db.pvpCombatZoomFactor, 1, maxYards) or db.partyCombatZoomFactor or db.raidCombatZoomFactor
+    db.partyCombatZoomFactor = ClampNumber(db.partyCombatZoomFactor, 1, maxYards) or db.worldCombatZoomFactor
+    db.raidCombatZoomFactor = ClampNumber(db.raidCombatZoomFactor, 1, maxYards) or db.worldCombatZoomFactor
+    db.pvpCombatZoomFactor = ClampNumber(db.pvpCombatZoomFactor, 1, maxYards) or db.partyCombatZoomFactor or db.raidCombatZoomFactor or db.worldCombatZoomFactor
+    db.groupCombatZoomFactor = nil
     db.moveViewDistance = ClampNumber(db.moveViewDistance, 1, 50) or 20
     db.cameraYawMoveSpeed = ClampNumber(db.cameraYawMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraYawMoveSpeed"), 1, 360) or 180)
     db.cameraPitchMoveSpeed = ClampNumber(db.cameraPitchMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraPitchMoveSpeed"), 1, 360) or 90)
@@ -450,73 +456,162 @@ function Functions:IsGroupInCombat()
     return false
 end
 
-local function GetCombatContext()
+local function GetCombatContextRaw()
     local inInstance, instanceType = IsInInstance()
 
     if inInstance then
-        if instanceType == "arena" or instanceType == "pvp" then
-            return "pvp"
+        if instanceType == "arena" then
+            return "pvp", "arena"
+        end
+
+        if instanceType == "pvp" then
+            return "pvp", "bg"
         end
 
         if instanceType == "raid" then
-            return "raid"
+            return "raid", "raid"
         end
 
-        if instanceType == "party" or instanceType == "scenario" then
-            return "party"
+        if instanceType == "party" then
+            return "party", "party"
+        end
+
+        if instanceType == "scenario" then
+            return "party", "scenario"
         end
     end
 
     if IsInRaid() then
-        return "raid"
+        return "raid", "raid"
     end
 
     if IsInGroup() then
-        return "party"
+        return "party", "party"
     end
 
-    return "world"
+    return "world", "world"
+end
+
+local function ResolveCombatContext(db, rawContext, zoneSource)
+    if not db then
+        return rawContext or "world", false
+    end
+
+    if rawContext == "pvp" then
+        if zoneSource == "arena" and db.zoneArena == false then
+            return "world", true
+        end
+        if zoneSource == "bg" and db.zoneBg == false then
+            return "world", true
+        end
+        return "pvp", false
+    end
+
+    if rawContext == "raid" then
+        if db.zoneRaid == false then
+            return "world", true
+        end
+        return "raid", false
+    end
+
+    if rawContext == "party" then
+        if zoneSource == "scenario" then
+            if db.zoneScenario == false then
+                return "world", true
+            end
+            return "party", false
+        end
+
+        if db.zoneParty == false then
+            return "world", true
+        end
+        return "party", false
+    end
+
+    return "world", false
 end
 
 local ShouldForceCombatZoom
 
-local function GetCurrentZoomContext(db)
+local function GetCombatTargetYards(db, context)
+    local defaults = ns.Database and ns.Database.DEFAULTS
+    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or 39
+    local resolvedContext = context or "world"
+
+    if resolvedContext == "pvp" then
+        return db.pvpCombatZoomFactor or db.partyCombatZoomFactor or db.raidCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
+    end
+
+    if resolvedContext == "raid" then
+        return db.raidCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
+    end
+
+    if resolvedContext == "party" then
+        return db.partyCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
+    end
+
+    return db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
+end
+
+local function BuildStatusSnapshot(db)
+    local defaults = ns.Database and ns.Database.DEFAULTS
+    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or 39
+
     local playerInCombat = UnitAffectingCombat("player") and true or false
     local groupInCombat = Functions:IsGroupInCombat()
     local threatStatus = UnitThreatSituation("player")
     local hasThreat = (threatStatus ~= nil and threatStatus > 0)
     local isMounted = IsInTravelForm()
-    local forceCombatZoom = ShouldForceCombatZoom(db)
+    local forceCombatZoom = (db and ShouldForceCombatZoom(db)) and true or false
+    local rawContext, zoneSource = GetCombatContextRaw()
+    local resolvedContext, usedWorldFallback = ResolveCombatContext(db, rawContext, zoneSource)
 
-    if db.autoCombatZoom and ((playerInCombat or groupInCombat or hasThreat) or forceCombatZoom) then
-        return ZOOM_STATE_COMBAT, GetCombatContext()
+    local state = ZOOM_STATE_NONE
+    if db and db.autoCombatZoom and ((playerInCombat or groupInCombat or hasThreat) or forceCombatZoom) then
+        state = ZOOM_STATE_COMBAT
+    elseif db and db.autoMountZoom and isMounted then
+        state = ZOOM_STATE_MOUNT
     end
 
-    if db.autoMountZoom and isMounted then
-        return ZOOM_STATE_MOUNT, nil
+    local targetYards
+    if not db then
+        targetYards = maxYards
+    elseif state == ZOOM_STATE_COMBAT then
+        targetYards = GetCombatTargetYards(db, resolvedContext)
+    elseif state == ZOOM_STATE_MOUNT then
+        targetYards = db.mountZoomFactor or db.maxZoomFactor or maxYards
+    elseif db.autoCombatZoom then
+        targetYards = db.minZoomFactor or 15
+    else
+        targetYards = db.maxZoomFactor or maxYards
     end
 
-    return ZOOM_STATE_NONE, nil
+    return {
+        state = state,
+        rawContext = rawContext,
+        resolvedContext = resolvedContext,
+        zoneSource = zoneSource,
+        usedWorldFallback = usedWorldFallback,
+        targetYards = targetYards,
+        playerInCombat = playerInCombat,
+        groupInCombat = groupInCombat,
+        hasThreat = hasThreat,
+        isMounted = isMounted,
+        forceWorldBoss = forceCombatZoom,
+        zoneFlags = {
+            party = db and db.zoneParty and true or false,
+            raid = db and db.zoneRaid and true or false,
+            arena = db and db.zoneArena and true or false,
+            bg = db and db.zoneBg and true or false,
+            scenario = db and db.zoneScenario and true or false,
+            worldBoss = db and db.zoneWorldBoss and true or false,
+        },
+    }
 end
 
-local function GetCombatTargetYards(db)
-    local defaults = ns.Database and ns.Database.DEFAULTS
-    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or 39
-    local context = GetCombatContext()
-
-    if context == "pvp" then
-        return db.pvpCombatZoomFactor or db.partyCombatZoomFactor or db.raidCombatZoomFactor or db.groupCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
-    end
-
-    if context == "raid" then
-        return db.raidCombatZoomFactor or db.groupCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
-    end
-
-    if context == "party" then
-        return db.partyCombatZoomFactor or db.groupCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
-    end
-
-    return db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
+local function GetCurrentZoomContext(db)
+    local snapshot = BuildStatusSnapshot(db)
+    return snapshot.state, snapshot.resolvedContext, snapshot
 end
 
 ShouldForceCombatZoom = function(db)
@@ -607,25 +702,8 @@ end
 -- 12) SMART ZOOM CORE (FIXED: no “sticky” state)
 -- =====================================================================
 local function ComputeDesiredState(db)
-    local state = GetCurrentZoomContext(db)
-
-    if state == ZOOM_STATE_COMBAT then
-        return ZOOM_STATE_COMBAT, GetCombatTargetYards(db)
-    end
-
-    if state == ZOOM_STATE_MOUNT then
-        return ZOOM_STATE_MOUNT, (db.mountZoomFactor or db.maxZoomFactor or 39)
-    end
-
-    -- none (normal)
-    local normalYards
-    if db.autoCombatZoom then
-        normalYards = db.minZoomFactor or 15
-    else
-        normalYards = db.maxZoomFactor or 39
-    end
-
-    return ZOOM_STATE_NONE, normalYards
+    local snapshot = BuildStatusSnapshot(db)
+    return snapshot.state, snapshot.targetYards, snapshot
 end
 
 function Functions:ShouldApplyOptionImmediately(key)
@@ -644,8 +722,6 @@ function Functions:ShouldApplyOptionImmediately(key)
         return state == ZOOM_STATE_COMBAT and combatContext == "party"
     elseif key == "raidCombatZoomFactor" then
         return state == ZOOM_STATE_COMBAT and combatContext == "raid"
-    elseif key == "groupCombatZoomFactor" then
-        return state == ZOOM_STATE_COMBAT and (combatContext == "party" or combatContext == "raid")
     elseif key == "pvpCombatZoomFactor" then
         return state == ZOOM_STATE_COMBAT and combatContext == "pvp"
     elseif key == "maxZoomFactor" then
@@ -660,7 +736,7 @@ function Functions:UpdateSmartZoomState(event)
     if not db then return end
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
-    local newState, targetYards = ComputeDesiredState(db)
+    local newState, targetYards, snapshot = ComputeDesiredState(db)
 
     -- If going INTO combat or mount, always cancel pending “zoom-in”
     -- (prevents normal transition from firing after re-enter combat)
@@ -673,6 +749,7 @@ function Functions:UpdateSmartZoomState(event)
     local stateSame = (newState == currentZoomState)
     local capAligned = IsZoomCapAligned(targetYards)
     if stateSame and capAligned and event ~= "manual_update" then
+        NotifyConfigChanged()
         return
     end
 
@@ -703,12 +780,25 @@ function Functions:UpdateSmartZoomState(event)
 
             ApplyZoomTransition(nowYards, transitionTime)
             Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", nowState, nowYards))
+            NotifyConfigChanged()
         end)
     else
         -- Immediate apply for combat/mount, or manual update
         ApplyZoomTransition(targetYards, transitionTime)
-        Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, targetYards))
+        if snapshot and snapshot.resolvedContext then
+            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, targetYards) .. " [" .. tostring(snapshot.resolvedContext) .. "]")
+        else
+            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, targetYards))
+        end
+        NotifyConfigChanged()
     end
+end
+
+function Functions:GetStatusSnapshot()
+    local db = DB()
+    if not db then return nil end
+    SanitizeRuntimeProfile(db)
+    return BuildStatusSnapshot(db)
 end
 
 function Functions:AdjustCamera(forceNow)
@@ -739,6 +829,7 @@ function Functions:AdjustCamera(forceNow)
         end
 
         Functions:logMessage("info", L["SMART_ZOOM_DISABLED_MSG"] or "Smart Zoom is disabled. Using manual max distance settings.")
+        NotifyConfigChanged()
     end
 
     -- Always apply other CVars

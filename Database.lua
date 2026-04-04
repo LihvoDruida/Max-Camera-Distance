@@ -243,12 +243,14 @@ function Database:ApplyMigrations(profile)
         1,
         MAX_YARDS
     )
-    profile.groupCombatZoomFactor = legacyGroupCombatZoom
     profile.pvpCombatZoomFactor = Clamp(
         tonumber(profile.pvpCombatZoomFactor) or profile.zoneZoomFactor or profile.maxZoomFactor or MAX_YARDS,
         1,
         MAX_YARDS
     )
+
+    -- Legacy split is migrated only once; it should not remain in runtime logic.
+    profile.groupCombatZoomFactor = nil
 
     -- move speed is typically 1..50
     profile.moveViewDistance = Clamp(tonumber(profile.moveViewDistance) or defaultMoveSpeed, 1, 50)
