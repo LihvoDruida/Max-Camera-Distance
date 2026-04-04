@@ -186,6 +186,10 @@ L["ACTION_CAM_SHOULDER_OUT_OF_COMBAT_DESC"] = "Enable over-shoulder camera while
 
 L["WORLD_COMBAT_ZOOM_FACTOR"] = "Open World Combat Distance"
 L["WORLD_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while you are in combat in the open world."
+L["PARTY_COMBAT_ZOOM_FACTOR"] = "Party Combat Distance"
+L["PARTY_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while you are in combat in a party, dungeon, delve, or similar small-group content."
+L["RAID_COMBAT_ZOOM_FACTOR"] = "Raid Combat Distance"
+L["RAID_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while you are in combat in a raid or other large-group content."
 L["GROUP_COMBAT_ZOOM_FACTOR"] = "Raid / Party Combat Distance"
 L["GROUP_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while you are in combat in a party, dungeon, raid, or similar group content."
 L["PVP_COMBAT_ZOOM_FACTOR"] = "PvP Combat Distance"

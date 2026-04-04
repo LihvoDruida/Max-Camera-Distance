@@ -193,7 +193,9 @@ local function SanitizeRuntimeProfile(db)
     db.mountZoomFactor = ClampNumber(db.mountZoomFactor, 1, maxYards) or db.maxZoomFactor
     db.worldCombatZoomFactor = ClampNumber(db.worldCombatZoomFactor, 1, maxYards) or db.maxZoomFactor
     db.groupCombatZoomFactor = ClampNumber(db.groupCombatZoomFactor, 1, maxYards) or db.worldCombatZoomFactor
-    db.pvpCombatZoomFactor = ClampNumber(db.pvpCombatZoomFactor, 1, maxYards) or db.groupCombatZoomFactor
+    db.partyCombatZoomFactor = ClampNumber(db.partyCombatZoomFactor, 1, maxYards) or db.groupCombatZoomFactor
+    db.raidCombatZoomFactor = ClampNumber(db.raidCombatZoomFactor, 1, maxYards) or db.groupCombatZoomFactor
+    db.pvpCombatZoomFactor = ClampNumber(db.pvpCombatZoomFactor, 1, maxYards) or db.partyCombatZoomFactor or db.raidCombatZoomFactor
     db.moveViewDistance = ClampNumber(db.moveViewDistance, 1, 50) or 20
     db.cameraYawMoveSpeed = ClampNumber(db.cameraYawMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraYawMoveSpeed"), 1, 360) or 180)
     db.cameraPitchMoveSpeed = ClampNumber(db.cameraPitchMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraPitchMoveSpeed"), 1, 360) or 90)
@@ -456,9 +458,21 @@ local function GetCombatContext()
             return "pvp"
         end
 
-        if instanceType == "party" or instanceType == "raid" or instanceType == "scenario" then
-            return "group"
+        if instanceType == "raid" then
+            return "raid"
         end
+
+        if instanceType == "party" or instanceType == "scenario" then
+            return "party"
+        end
+    end
+
+    if IsInRaid() then
+        return "raid"
+    end
+
+    if IsInGroup() then
+        return "party"
     end
 
     return "world"
@@ -491,11 +505,15 @@ local function GetCombatTargetYards(db)
     local context = GetCombatContext()
 
     if context == "pvp" then
-        return db.pvpCombatZoomFactor or db.groupCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
+        return db.pvpCombatZoomFactor or db.partyCombatZoomFactor or db.raidCombatZoomFactor or db.groupCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
     end
 
-    if context == "group" then
-        return db.groupCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
+    if context == "raid" then
+        return db.raidCombatZoomFactor or db.groupCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
+    end
+
+    if context == "party" then
+        return db.partyCombatZoomFactor or db.groupCombatZoomFactor or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
     end
 
     return db.worldCombatZoomFactor or db.maxZoomFactor or maxYards
@@ -622,8 +640,12 @@ function Functions:ShouldApplyOptionImmediately(key)
         return state == ZOOM_STATE_MOUNT
     elseif key == "worldCombatZoomFactor" then
         return state == ZOOM_STATE_COMBAT and combatContext == "world"
+    elseif key == "partyCombatZoomFactor" then
+        return state == ZOOM_STATE_COMBAT and combatContext == "party"
+    elseif key == "raidCombatZoomFactor" then
+        return state == ZOOM_STATE_COMBAT and combatContext == "raid"
     elseif key == "groupCombatZoomFactor" then
-        return state == ZOOM_STATE_COMBAT and combatContext == "group"
+        return state == ZOOM_STATE_COMBAT and (combatContext == "party" or combatContext == "raid")
     elseif key == "pvpCombatZoomFactor" then
         return state == ZOOM_STATE_COMBAT and combatContext == "pvp"
     elseif key == "maxZoomFactor" then

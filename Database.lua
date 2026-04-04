@@ -144,7 +144,8 @@ local PROFILE_DEFAULTS = {
     autoMountZoom = false,
     mountZoomFactor = MAX_YARDS,
     worldCombatZoomFactor = MAX_YARDS,
-    groupCombatZoomFactor = MAX_YARDS,
+    partyCombatZoomFactor = MAX_YARDS,
+    raidCombatZoomFactor = MAX_YARDS,
     pvpCombatZoomFactor = MAX_YARDS,
     zoneZoomFactor = MAX_YARDS, -- legacy key kept for migration only
 
@@ -227,11 +228,22 @@ function Database:ApplyMigrations(profile)
         1,
         MAX_YARDS
     )
-    profile.groupCombatZoomFactor = Clamp(
+    local legacyGroupCombatZoom = Clamp(
         tonumber(profile.groupCombatZoomFactor) or profile.zoneZoomFactor or profile.maxZoomFactor or MAX_YARDS,
         1,
         MAX_YARDS
     )
+    profile.partyCombatZoomFactor = Clamp(
+        tonumber(profile.partyCombatZoomFactor) or legacyGroupCombatZoom,
+        1,
+        MAX_YARDS
+    )
+    profile.raidCombatZoomFactor = Clamp(
+        tonumber(profile.raidCombatZoomFactor) or legacyGroupCombatZoom,
+        1,
+        MAX_YARDS
+    )
+    profile.groupCombatZoomFactor = legacyGroupCombatZoom
     profile.pvpCombatZoomFactor = Clamp(
         tonumber(profile.pvpCombatZoomFactor) or profile.zoneZoomFactor or profile.maxZoomFactor or MAX_YARDS,
         1,

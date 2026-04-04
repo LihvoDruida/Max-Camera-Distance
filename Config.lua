@@ -158,6 +158,10 @@ function Config:SetupOptions()
                             if iconLib then
                                 if val then iconLib:Show(addonName) else iconLib:Hide(addonName) end
                             end
+
+                            if ns.Core and ns.Core.RefreshMinimapButton then
+                                ns.Core:RefreshMinimapButton()
+                            end
                         end,
                     },
                 },
@@ -263,16 +267,28 @@ function Config:SetupOptions()
                         order = 12,
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
-                    groupCombatZoom = {
+                    partyCombatZoom = {
                         type = "range",
-                        name = (L["GROUP_COMBAT_ZOOM_FACTOR"] or "Raid / Party Combat Distance") .. " (Yards)",
-                        desc = L["GROUP_COMBAT_ZOOM_FACTOR_DESC"],
+                        name = (L["PARTY_COMBAT_ZOOM_FACTOR"] or "Party Combat Distance") .. " (Yards)",
+                        desc = L["PARTY_COMBAT_ZOOM_FACTOR_DESC"],
                         min = 1.0,
                         max = maxDistance,
                         step = 1.0,
-                        get = function() return GetOption("groupCombatZoomFactor") end,
-                        set = function(_, val) SetOption("groupCombatZoomFactor", val) end,
+                        get = function() return GetOption("partyCombatZoomFactor") end,
+                        set = function(_, val) SetOption("partyCombatZoomFactor", val) end,
                         order = 13,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
+                    raidCombatZoom = {
+                        type = "range",
+                        name = (L["RAID_COMBAT_ZOOM_FACTOR"] or "Raid Combat Distance") .. " (Yards)",
+                        desc = L["RAID_COMBAT_ZOOM_FACTOR_DESC"],
+                        min = 1.0,
+                        max = maxDistance,
+                        step = 1.0,
+                        get = function() return GetOption("raidCombatZoomFactor") end,
+                        set = function(_, val) SetOption("raidCombatZoomFactor", val) end,
+                        order = 14,
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
                     pvpCombatZoom = {
@@ -284,7 +300,7 @@ function Config:SetupOptions()
                         step = 1.0,
                         get = function() return GetOption("pvpCombatZoomFactor") end,
                         set = function(_, val) SetOption("pvpCombatZoomFactor", val) end,
-                        order = 14,
+                        order = 15,
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
                     combatMinZoom = {
@@ -296,14 +312,14 @@ function Config:SetupOptions()
                         step = 1.0,
                         get = function() return GetOption("minZoomFactor") end,
                         set = function(_, val) SetOption("minZoomFactor", val) end,
-                        order = 15,
+                        order = 16,
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
                     zoneWorldBoss = {
                         type = "toggle",
                         name = L["ZONE_WORLD_BOSS"],
                         desc = L["ZONE_WORLD_BOSS_DESC"],
-                        order = 16,
+                        order = 17,
                         width = "full",
                         get = function() return GetOption("zoneWorldBoss") end,
                         set = function(_, v) SetOption("zoneWorldBoss", v) end,
@@ -529,6 +545,8 @@ function Config:SetupOptions()
     local dbObject = GetDatabaseObject()
     if dbObject and AceDBOptions and AceDBOptions.GetOptionsTable then
         options.args.profiles = AceDBOptions:GetOptionsTable(dbObject)
+        options.args.profiles.order = 7
+        options.args.profiles.name = L["PROFILES"] or "Profiles"
     else
         options.args.profiles = {
             type = "group",

@@ -185,7 +185,14 @@ L["ACTION_CAM_SHOULDER_OUT_OF_COMBAT_DESC"] = "在脱离战斗时启用肩部偏
 
 L["WORLD_COMBAT_ZOOM_FACTOR"] = "开放世界战斗距离"
 L["WORLD_COMBAT_ZOOM_FACTOR_DESC"] = "在开放世界进入战斗时的目标镜头距离。"
+L["PARTY_COMBAT_ZOOM_FACTOR"] = "小队战斗距离"
+L["PARTY_COMBAT_ZOOM_FACTOR_DESC"] = "当你在小队、副本、地下堡或类似小规模内容中战斗时使用的目标镜头距离。"
+L["RAID_COMBAT_ZOOM_FACTOR"] = "团队战斗距离"
+L["RAID_COMBAT_ZOOM_FACTOR_DESC"] = "当你在团队副本或其他大型团队内容中战斗时使用的目标镜头距离。"
 L["GROUP_COMBAT_ZOOM_FACTOR"] = "队伍 / 团队战斗距离"
 L["GROUP_COMBAT_ZOOM_FACTOR_DESC"] = "在队伍、副本、团队或类似组队内容中进入战斗时的目标镜头距离。"
 L["PVP_COMBAT_ZOOM_FACTOR"] = "PvP 战斗距离"
 L["PVP_COMBAT_ZOOM_FACTOR_DESC"] = "在 PvP 内容中进入战斗时的目标镜头距离。"
+
+L["PROFILES"] = "配置文件"
+L["PROFILES_MISSING_LIB_DESC"] = "未找到 AceDBOptions-3.0，因此无法使用高级配置文件控制。"
