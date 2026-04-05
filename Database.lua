@@ -142,6 +142,9 @@ local PROFILE_DEFAULTS = {
     -- systems
     autoCombatZoom = false,
     autoMountZoom = false,
+    combatZoomOnPlayer = true,
+    combatZoomOnGroup = true,
+    combatZoomOnThreat = true,
     mountZoomFactor = MAX_YARDS,
     worldCombatZoomFactor = MAX_YARDS,
     partyCombatZoomFactor = MAX_YARDS,
@@ -297,6 +300,9 @@ function Database:ApplyMigrations(profile)
     -- Normalize booleans in case SavedVariables contain stale numeric/string values.
     profile.autoCombatZoom = NormalizeBoolean(profile.autoCombatZoom, PROFILE_DEFAULTS.autoCombatZoom)
     profile.autoMountZoom = NormalizeBoolean(profile.autoMountZoom, PROFILE_DEFAULTS.autoMountZoom)
+    profile.combatZoomOnPlayer = NormalizeBoolean(profile.combatZoomOnPlayer, PROFILE_DEFAULTS.combatZoomOnPlayer)
+    profile.combatZoomOnGroup = NormalizeBoolean(profile.combatZoomOnGroup, PROFILE_DEFAULTS.combatZoomOnGroup)
+    profile.combatZoomOnThreat = NormalizeBoolean(profile.combatZoomOnThreat, PROFILE_DEFAULTS.combatZoomOnThreat)
     profile.reduceUnexpectedMovement = NormalizeBoolean(profile.reduceUnexpectedMovement, PROFILE_DEFAULTS.reduceUnexpectedMovement)
     profile.cameraIndirectVisibility = NormalizeBoolean(profile.cameraIndirectVisibility, PROFILE_DEFAULTS.cameraIndirectVisibility)
     profile.resampleAlwaysSharpen = NormalizeBoolean(profile.resampleAlwaysSharpen, PROFILE_DEFAULTS.resampleAlwaysSharpen)

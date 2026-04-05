@@ -631,23 +631,51 @@ local function GetCombatTargetYards(db, context)
     return value or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards, distanceKey
 end
 
+local function GetCombatSignals(db)
+    local threatStatus = UnitThreatSituation("player")
+    return {
+        playerInCombat = UnitAffectingCombat("player") and true or false,
+        groupInCombat = Functions:IsGroupInCombat(),
+        hasThreat = (threatStatus ~= nil and threatStatus > 0) and true or false,
+        isMounted = IsInTravelForm(),
+        forceCombatZoom = (db and ShouldForceCombatZoom(db)) and true or false,
+        rawContext = GetCombatContextRaw(),
+    }
+end
+
+local function GetCombatTriggerConfig(db)
+    return {
+        player = (db and db.combatZoomOnPlayer ~= false) and true or false,
+        group = (db and db.combatZoomOnGroup ~= false) and true or false,
+        threat = (db and db.combatZoomOnThreat ~= false) and true or false,
+    }
+end
+
+local function GetCombatActivation(db, signals)
+    local triggerConfig = GetCombatTriggerConfig(db)
+    local activeTriggers = {
+        player = triggerConfig.player and signals.playerInCombat or false,
+        group = triggerConfig.group and signals.groupInCombat or false,
+        threat = triggerConfig.threat and signals.hasThreat or false,
+        worldBoss = signals.forceCombatZoom and true or false,
+    }
+    local isActive = activeTriggers.player or activeTriggers.group or activeTriggers.threat or activeTriggers.worldBoss
+    return isActive, triggerConfig, activeTriggers
+end
+
 local function BuildStatusSnapshot(db)
     local defaults = ns.Database and ns.Database.DEFAULTS
     local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or 39
 
-    local playerInCombat = UnitAffectingCombat("player") and true or false
-    local groupInCombat = Functions:IsGroupInCombat()
-    local threatStatus = UnitThreatSituation("player")
-    local hasThreat = (threatStatus ~= nil and threatStatus > 0)
-    local isMounted = IsInTravelForm()
-    local forceCombatZoom = (db and ShouldForceCombatZoom(db)) and true or false
-    local rawContext = GetCombatContextRaw()
+    local signals = GetCombatSignals(db)
+    local rawContext = signals.rawContext
     local resolvedContext = rawContext
+    local combatActive, triggerConfig, activeTriggers = GetCombatActivation(db, signals)
 
     local state = ZOOM_STATE_NONE
-    if db and db.autoCombatZoom and ((playerInCombat or groupInCombat or hasThreat) or forceCombatZoom) then
+    if db and db.autoCombatZoom and combatActive then
         state = ZOOM_STATE_COMBAT
-    elseif db and db.autoMountZoom and isMounted then
+    elseif db and db.autoMountZoom and signals.isMounted then
         state = ZOOM_STATE_MOUNT
     end
 
@@ -686,11 +714,13 @@ local function BuildStatusSnapshot(db)
         targetDistanceKey = targetDistanceKey,
         targetSourceType = targetSourceType,
         targetPresetId = targetPresetId,
-        playerInCombat = playerInCombat,
-        groupInCombat = groupInCombat,
-        hasThreat = hasThreat,
-        isMounted = isMounted,
-        forceWorldBoss = forceCombatZoom,
+        playerInCombat = signals.playerInCombat,
+        groupInCombat = signals.groupInCombat,
+        hasThreat = signals.hasThreat,
+        isMounted = signals.isMounted,
+        forceWorldBoss = signals.forceCombatZoom,
+        triggerConfig = triggerConfig,
+        activeTriggers = activeTriggers,
     }
 end
 
@@ -749,10 +779,8 @@ function Functions:ShouldEnableShoulderNow()
     local db = DB()
     if not db then return false end
 
-    local playerInCombat = UnitAffectingCombat("player") and true or false
-    local threatStatus = UnitThreatSituation("player")
-    local hasThreat = (threatStatus ~= nil and threatStatus > 0)
-    local inCombat = playerInCombat or hasThreat or self:IsGroupInCombat()
+    local signals = GetCombatSignals(db)
+    local inCombat = GetCombatActivation(db, signals)
 
     if inCombat then
         return db.actionCamShoulderInCombat and true or false

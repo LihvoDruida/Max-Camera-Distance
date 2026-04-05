@@ -118,6 +118,9 @@ local function BuildLiveStatusText()
         distanceSourceLabel = (presetChoices and presetChoices[snapshot.targetPresetId]) or snapshot.targetPresetId or "preset"
     end
 
+    local triggerConfig = snapshot.triggerConfig or {}
+    local activeTriggers = snapshot.activeTriggers or {}
+
     return table.concat({
         string.format("%s: %s", L["STATUS_ZOOM_STATE"] or "Zoom State", StateText(snapshot.state)),
         string.format("%s: %s", L["STATUS_CONTEXT"] or "Context", ContextText(snapshot.resolvedContext)),
@@ -126,6 +129,26 @@ local function BuildLiveStatusText()
             L["STATUS_DISTANCE_SOURCE"] or "Distance Source",
             DistanceKeyText(snapshot.targetDistanceKey),
             distanceSourceLabel
+        ),
+        string.format("%s: %s=%s, %s=%s, %s=%s",
+            L["STATUS_TRIGGER_RULES"] or "Trigger Rules",
+            L["COMBAT_TRIGGER_PLAYER"] or "Self Combat",
+            BoolText(triggerConfig.player),
+            L["COMBAT_TRIGGER_GROUP"] or "Group Combat",
+            BoolText(triggerConfig.group),
+            L["COMBAT_TRIGGER_THREAT"] or "Threat Only",
+            BoolText(triggerConfig.threat)
+        ),
+        string.format("%s: %s=%s, %s=%s, %s=%s, %s=%s",
+            L["STATUS_ACTIVE_TRIGGERS"] or "Active Triggers",
+            L["STATUS_REASON_PLAYER"] or "Player",
+            BoolText(activeTriggers.player),
+            L["STATUS_REASON_GROUP"] or "Group",
+            BoolText(activeTriggers.group),
+            L["STATUS_REASON_THREAT"] or "Threat",
+            BoolText(activeTriggers.threat),
+            L["STATUS_REASON_WORLD_BOSS"] or "World Boss",
+            BoolText(activeTriggers.worldBoss)
         ),
         string.format("%s: %s=%s, %s=%s, %s=%s, %s=%s, %s=%s",
             L["STATUS_REASON_FLAGS"] or "Reason Flags",
@@ -557,6 +580,46 @@ function Config:SetupOptions()
                         order = 11,
                         width = "full",
                     },
+                    combatTriggerHeader = {
+                        type = "header",
+                        name = L["COMBAT_TRIGGER_HEADER"] or "Combat Triggers",
+                        order = 20,
+                    },
+                    combatTriggerDesc = {
+                        type = "description",
+                        name = L["COMBAT_TRIGGER_DESC"] or "Choose which events are allowed to activate combat zoom.",
+                        order = 21,
+                    },
+                    combatZoomOnPlayer = {
+                        type = "toggle",
+                        name = L["COMBAT_TRIGGER_PLAYER"] or "Zoom when I enter combat",
+                        desc = L["COMBAT_TRIGGER_PLAYER_DESC"] or "Triggers combat zoom when your character enters combat.",
+                        get = function() return GetOption("combatZoomOnPlayer") end,
+                        set = function(_, val) SetOption("combatZoomOnPlayer", val) end,
+                        order = 22,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                        width = "full",
+                    },
+                    combatZoomOnGroup = {
+                        type = "toggle",
+                        name = L["COMBAT_TRIGGER_GROUP"] or "Zoom when party or raid enters combat",
+                        desc = L["COMBAT_TRIGGER_GROUP_DESC"] or "Triggers combat zoom when your party or raid is fighting, even if you are not actively in combat yet.",
+                        get = function() return GetOption("combatZoomOnGroup") end,
+                        set = function(_, val) SetOption("combatZoomOnGroup", val) end,
+                        order = 23,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                        width = "full",
+                    },
+                    combatZoomOnThreat = {
+                        type = "toggle",
+                        name = L["COMBAT_TRIGGER_THREAT"] or "Zoom on threat only",
+                        desc = L["COMBAT_TRIGGER_THREAT_DESC"] or "Triggers combat zoom when you have threat, even if the normal combat flag has not settled yet.",
+                        get = function() return GetOption("combatZoomOnThreat") end,
+                        set = function(_, val) SetOption("combatZoomOnThreat", val) end,
+                        order = 24,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                        width = "full",
+                    },
                     manualCombatHeader = {
                         type = "header",
                         name = L["MANUAL_COMBAT_HEADER"] or "Manual Distances",
@@ -779,7 +842,7 @@ function Config:SetupOptions()
 
             debugSettings = {
                 type = "group",
-                name = L["DEBUG_SETTINGS"],
+                name = L["DEBUG_SETTINGS"] or "Status & Debug",
                 order = 7,
                 args = {
                     statusHeader = {
@@ -799,6 +862,16 @@ function Config:SetupOptions()
                         end,
                         fontSize = "medium",
                         order = 0.2,
+                    },
+                    loggingHeader = {
+                        type = "header",
+                        name = L["DEBUG_LOGGING_HEADER"] or "Chat Logging",
+                        order = 1,
+                    },
+                    loggingDesc = {
+                        type = "description",
+                        name = L["DEBUG_LOGGING_DESC"] or "These options control what gets printed to chat. Live Status above is always available even with logging disabled.",
+                        order = 1.1,
                     },
                     enableDebug = {
                         type = "toggle",

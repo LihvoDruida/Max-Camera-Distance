@@ -271,3 +271,18 @@ L["PVP_COMBAT_PRESET"] = "PvP Combat Preset"
 L["MOUNT_ZOOM_PRESET"] = "Mount Distance Preset"
 
 L["STATUS_DISTANCE_SOURCE"] = "Distance Source"
+
+
+L["DEBUG_SETTINGS"] = "Status & Debug"
+L["DEBUG_LOGGING_HEADER"] = "Chat Logging"
+L["DEBUG_LOGGING_DESC"] = "These options control what gets printed to chat. Live Status above is always available even with logging disabled."
+L["COMBAT_TRIGGER_HEADER"] = "Combat Triggers"
+L["COMBAT_TRIGGER_DESC"] = "Choose which events are allowed to activate combat zoom."
+L["COMBAT_TRIGGER_PLAYER"] = "Zoom when I enter combat"
+L["COMBAT_TRIGGER_PLAYER_DESC"] = "Triggers combat zoom when your character enters combat."
+L["COMBAT_TRIGGER_GROUP"] = "Zoom when party or raid enters combat"
+L["COMBAT_TRIGGER_GROUP_DESC"] = "Triggers combat zoom when your party or raid is fighting, even if you are not actively in combat yet."
+L["COMBAT_TRIGGER_THREAT"] = "Zoom on threat only"
+L["COMBAT_TRIGGER_THREAT_DESC"] = "Triggers combat zoom when you have threat, even if the normal combat flag has not settled yet."
+L["STATUS_TRIGGER_RULES"] = "Trigger Rules"
+L["STATUS_ACTIVE_TRIGGERS"] = "Active Triggers"
