@@ -952,8 +952,9 @@ function Config:SetupOptions()
     AceConfig:RegisterOptionsTable(addonName, options)
 
     if AceConfigDialog and AceConfigDialog.AddToBlizOptions then
-        AceConfigDialog:AddToBlizOptions(addonName, "Max Camera Distance")
-        AceConfigDialog:AddToBlizOptions(addonName, L["PROFILES"] or "Profiles", addonName, "profiles")
+        local rootCategoryName = "Max Camera Distance"
+        AceConfigDialog:AddToBlizOptions(addonName, rootCategoryName)
+        AceConfigDialog:AddToBlizOptions(addonName, L["PROFILES"] or "Profiles", rootCategoryName, "profiles")
     end
 end
 
