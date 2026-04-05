@@ -37,6 +37,7 @@ local MoveViewRightStart    = MoveViewRightStart
 local MoveViewRightStop     = MoveViewRightStop
 local GetCameraZoom         = GetCameraZoom
 local IsEncounterInProgress = IsEncounterInProgress
+local GetTime = GetTime
 
 local IsInRaid             = IsInRaid
 local IsInGroup            = IsInGroup
@@ -57,6 +58,8 @@ local currentZoomState = ZOOM_STATE_NONE
 
 local transitionTimer = nil
 local isInternalUpdate = false
+local pendingReturnInfo = nil
+local lastCombatContext = "world"
 
 -- token that invalidates old delayed transitions (fixes “sticky states”)
 local stateToken = 0
@@ -207,6 +210,9 @@ local function SanitizeRuntimeProfile(db)
     db.cameraPitchMoveSpeed = ClampNumber(db.cameraPitchMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraPitchMoveSpeed"), 1, 360) or 90)
     db.zoomTransitionTime = ClampNumber(db.zoomTransitionTime, 0, 2) or 0.5
     db.dismountDelay = ClampNumber(db.dismountDelay, 0, 10) or 0
+    db.worldCombatReturnDelay = ClampNumber(db.worldCombatReturnDelay, 0, 10) or 0.4
+    db.partyCombatReturnDelay = ClampNumber(db.partyCombatReturnDelay, 0, 10) or 0.8
+    db.raidCombatReturnDelay = ClampNumber(db.raidCombatReturnDelay, 0, 10) or 1.2
 end
 
 
@@ -422,6 +428,8 @@ end
 -- 8) TRANSITIONS (fix race conditions)
 -- =====================================================================
 local function CancelTransition()
+    pendingReturnInfo = nil
+
     if not transitionTimer then return end
 
     if type(transitionTimer) == "table" and type(transitionTimer.Cancel) == "function" then
@@ -451,6 +459,25 @@ local function ScheduleTransition(delay, callback)
         callback()
     end)
 end
+local function GetCombatReturnDelay(db, context)
+    if not db then return 0 end
+
+    if context == "raid" then
+        return db.raidCombatReturnDelay or 0
+    elseif context == "party" then
+        return db.partyCombatReturnDelay or 0
+    end
+
+    return db.worldCombatReturnDelay or 0
+end
+
+local function GetPendingReturnRemaining()
+    if not pendingReturnInfo or not pendingReturnInfo.fireAt or not GetTime then
+        return 0
+    end
+    return math.max(0, pendingReturnInfo.fireAt - GetTime())
+end
+
 
 local function ApplyZoomCap(targetYards)
     local targetFactor = targetYards / CONVERSION_RATIO
@@ -706,6 +733,12 @@ local function BuildStatusSnapshot(db)
         targetYards = targetYards or db.maxZoomFactor or maxYards
     end
 
+    local pendingReturnActive = pendingReturnInfo ~= nil
+    local pendingReturnContext = pendingReturnActive and pendingReturnInfo.context or nil
+    local pendingReturnKind = pendingReturnActive and pendingReturnInfo.kind or nil
+    local pendingReturnDelay = pendingReturnActive and pendingReturnInfo.delay or 0
+    local pendingReturnRemaining = pendingReturnActive and GetPendingReturnRemaining() or 0
+
     return {
         state = state,
         rawContext = rawContext,
@@ -721,6 +754,15 @@ local function BuildStatusSnapshot(db)
         forceWorldBoss = signals.forceCombatZoom,
         triggerConfig = triggerConfig,
         activeTriggers = activeTriggers,
+        worldCombatReturnDelay = (db and db.worldCombatReturnDelay) or 0,
+        partyCombatReturnDelay = (db and db.partyCombatReturnDelay) or 0,
+        raidCombatReturnDelay = (db and db.raidCombatReturnDelay) or 0,
+        mountReturnDelay = (db and db.dismountDelay) or 0,
+        pendingReturnActive = pendingReturnActive,
+        pendingReturnContext = pendingReturnContext,
+        pendingReturnKind = pendingReturnKind,
+        pendingReturnDelay = pendingReturnDelay,
+        pendingReturnRemaining = pendingReturnRemaining,
     }
 end
 
@@ -823,6 +865,10 @@ function Functions:ShouldApplyOptionImmediately(key)
     local db = DB()
     if not db then return true end
 
+    if key == "worldCombatReturnDelay" or key == "partyCombatReturnDelay" or key == "raidCombatReturnDelay" or key == "dismountDelay" then
+        return false
+    end
+
     local state, combatContext = GetCurrentZoomContext(db)
 
     if key == "minZoomFactor" then
@@ -872,7 +918,13 @@ function Functions:UpdateSmartZoomState(event)
     if not db then return end
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
+    local previousState = currentZoomState
+    local previousCombatContext = lastCombatContext
     local newState, targetYards, snapshot = ComputeDesiredState(db)
+
+    if snapshot and snapshot.resolvedContext and newState == ZOOM_STATE_COMBAT then
+        lastCombatContext = snapshot.resolvedContext
+    end
 
     -- If going INTO combat or mount, always cancel pending “zoom-in”
     -- (prevents normal transition from firing after re-enter combat)
@@ -896,21 +948,38 @@ function Functions:UpdateSmartZoomState(event)
     local transitionTime = db.zoomTransitionTime or 0.5
 
     if newState == ZOOM_STATE_NONE and event ~= "manual_update" then
-        -- Delay zoom-in after leaving combat/mount
-        local delay = db.dismountDelay or 0
+        local delay = 0
+        local returnKind = nil
+        local returnContext = nil
+
+        if previousState == ZOOM_STATE_COMBAT then
+            returnKind = "combat"
+            returnContext = previousCombatContext or "world"
+            delay = GetCombatReturnDelay(db, returnContext)
+        elseif previousState == ZOOM_STATE_MOUNT then
+            returnKind = "mount"
+            delay = db.dismountDelay or 0
+        end
+
         local myToken = stateToken
 
+        if delay <= 0 then
+            pendingReturnInfo = nil
+            ApplyZoomTransition(targetYards, transitionTime)
+            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, targetYards))
+            NotifyConfigChanged()
+            return
+        end
+
         ScheduleTransition(delay, function()
-            -- Re-check: if state changed since scheduling, do nothing
             if myToken ~= stateToken then return end
+            pendingReturnInfo = nil
 
             local liveDb = DB()
             if not liveDb then return end
 
-            -- Recompute again at fire-time (combat re-enter, mount, etc.)
             local nowState, nowYards = ComputeDesiredState(liveDb)
             if nowState ~= ZOOM_STATE_NONE then
-                -- state changed, let next update handle it (or apply immediately)
                 return
             end
 
@@ -918,8 +987,15 @@ function Functions:UpdateSmartZoomState(event)
             Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", nowState, nowYards))
             NotifyConfigChanged()
         end)
+        pendingReturnInfo = {
+            kind = returnKind,
+            context = returnContext,
+            delay = delay,
+            fireAt = (GetTime and GetTime() or 0) + delay,
+        }
+        NotifyConfigChanged()
     else
-        -- Immediate apply for combat/mount, or manual update
+        pendingReturnInfo = nil
         ApplyZoomTransition(targetYards, transitionTime)
         if snapshot and snapshot.resolvedContext then
             Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, targetYards) .. " [" .. tostring(snapshot.resolvedContext) .. "]")

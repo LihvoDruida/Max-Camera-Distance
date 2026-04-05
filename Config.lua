@@ -99,6 +99,21 @@ local function ContextText(value)
     return L["STATUS_CONTEXT_WORLD"] or "World"
 end
 
+local function PendingReturnText(snapshot)
+    if not snapshot or not snapshot.pendingReturnActive then
+        return L["STATUS_PENDING_RETURN_NONE"] or "No delayed return is pending."
+    end
+
+    local contextText = snapshot.pendingReturnContext and ContextText(snapshot.pendingReturnContext) or (L["STATUS_STATE_NONE"] or "None")
+    local delayText = snapshot.pendingReturnKind == "mount" and (L["STATUS_RETURN_KIND_MOUNT"] or "Mount Return") or (L["STATUS_RETURN_KIND_COMBAT"] or "Combat Return")
+    return string.format(
+        L["STATUS_PENDING_RETURN_ACTIVE"] or "%s: %s, %.1fs remaining (total %.1fs).",
+        delayText,
+        contextText,
+        snapshot.pendingReturnRemaining or 0,
+        snapshot.pendingReturnDelay or 0
+    )
+end
 
 local DistanceKeyText
 
@@ -162,6 +177,21 @@ local function BuildLiveStatusText()
             BoolText(snapshot.isMounted),
             L["STATUS_REASON_WORLD_BOSS"] or "World Boss",
             BoolText(snapshot.forceWorldBoss)
+        ),
+        string.format("%s: %s=%.1fs, %s=%.1fs, %s=%.1fs, %s=%.1fs",
+            L["STATUS_RETURN_DELAYS"] or "Return Delays",
+            L["STATUS_CONTEXT_WORLD"] or "World",
+            snapshot.worldCombatReturnDelay or 0,
+            L["STATUS_CONTEXT_PARTY"] or "Party",
+            snapshot.partyCombatReturnDelay or 0,
+            L["STATUS_CONTEXT_RAID"] or "Raid",
+            snapshot.raidCombatReturnDelay or 0,
+            L["STATUS_RETURN_KIND_MOUNT"] or "Mount Return",
+            snapshot.mountReturnDelay or 0
+        ),
+        string.format("%s: %s",
+            L["STATUS_PENDING_RETURN"] or "Pending Return",
+            PendingReturnText(snapshot)
         )
     }, "\n")
 end
@@ -713,17 +743,58 @@ function Config:SetupOptions()
                         disabled = function() return not GetOption("autoMountZoom") or IsManualControlLocked("mountZoomFactor") end
                     },
                     delayHeader = { type = "header", name = L["DELAY_HEADER"], order = 80 },
+                    delayDesc = {
+                        type = "description",
+                        name = L["DELAY_HEADER_DESC"] or "Combat zoom-out is instant. Returning to Normal is delayed per context to avoid camera flicker.",
+                        order = 81,
+                    },
+                    worldCombatReturnDelay = {
+                        type = "range",
+                        name = L["WORLD_COMBAT_RETURN_DELAY"] or "Open World Return Delay",
+                        desc = L["WORLD_COMBAT_RETURN_DELAY_DESC"] or "Delay before returning to Normal after open-world combat ends.",
+                        min = 0,
+                        max = 10,
+                        step = 0.1,
+                        get = function() return GetOption("worldCombatReturnDelay") end,
+                        set = function(_, val) SetOption("worldCombatReturnDelay", val) end,
+                        order = 82,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
+                    partyCombatReturnDelay = {
+                        type = "range",
+                        name = L["PARTY_COMBAT_RETURN_DELAY"] or "Party Return Delay",
+                        desc = L["PARTY_COMBAT_RETURN_DELAY_DESC"] or "Delay before returning to Normal after party or dungeon combat ends.",
+                        min = 0,
+                        max = 10,
+                        step = 0.1,
+                        get = function() return GetOption("partyCombatReturnDelay") end,
+                        set = function(_, val) SetOption("partyCombatReturnDelay", val) end,
+                        order = 83,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
+                    raidCombatReturnDelay = {
+                        type = "range",
+                        name = L["RAID_COMBAT_RETURN_DELAY"] or "Raid Return Delay",
+                        desc = L["RAID_COMBAT_RETURN_DELAY_DESC"] or "Delay before returning to Normal after raid combat ends.",
+                        min = 0,
+                        max = 10,
+                        step = 0.1,
+                        get = function() return GetOption("raidCombatReturnDelay") end,
+                        set = function(_, val) SetOption("raidCombatReturnDelay", val) end,
+                        order = 84,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
                     dismountDelay = {
                         type = "range",
                         name = L["DISMOUNT_DELAY"],
                         desc = L["DISMOUNT_DELAY_DESC"],
                         min = 0,
                         max = 10,
-                        step = 0.5,
+                        step = 0.1,
                         get = function() return GetOption("dismountDelay") end,
                         set = function(_, val) SetOption("dismountDelay", val) end,
-                        order = 81,
-                        disabled = function() return not (GetOption("autoCombatZoom") or GetOption("autoMountZoom")) end
+                        order = 85,
+                        disabled = function() return not GetOption("autoMountZoom") end
                     },
                 },
             },
@@ -852,7 +923,7 @@ function Config:SetupOptions()
                     },
                     statusDesc = {
                         type = "description",
-                        name = L["STATUS_DESC"] or "Shows the current resolved zoom decision and why it was chosen.",
+                        name = L["STATUS_DESC"] or "Shows the current resolved zoom decision, active combat triggers, and delayed return state.",
                         order = 0.1,
                     },
                     statusSnapshot = {

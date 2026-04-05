@@ -151,6 +151,11 @@ local PROFILE_DEFAULTS = {
     raidCombatZoomFactor = MAX_YARDS,
     pvpCombatZoomFactor = MAX_YARDS,
 
+    -- return hysteresis (delay before zooming back in after leaving combat)
+    worldCombatReturnDelay = 0.4,
+    partyCombatReturnDelay = 0.8,
+    raidCombatReturnDelay = 1.2,
+
     -- distance presets (manual keeps the matching slider active)
     manualMaxPreset = "manual",
     normalZoomPreset = "manual",
@@ -270,6 +275,9 @@ function Database:ApplyMigrations(profile)
     profile.moveViewDistance = Clamp(tonumber(profile.moveViewDistance) or defaultMoveSpeed, 1, 50)
     profile.zoomTransitionTime = Clamp(tonumber(profile.zoomTransitionTime) or 0.5, 0, 2)
     profile.dismountDelay = Clamp(tonumber(profile.dismountDelay) or 0, 0, 10)
+    profile.worldCombatReturnDelay = Clamp(tonumber(profile.worldCombatReturnDelay) or PROFILE_DEFAULTS.worldCombatReturnDelay, 0, 10)
+    profile.partyCombatReturnDelay = Clamp(tonumber(profile.partyCombatReturnDelay) or PROFILE_DEFAULTS.partyCombatReturnDelay, 0, 10)
+    profile.raidCombatReturnDelay = Clamp(tonumber(profile.raidCombatReturnDelay) or PROFILE_DEFAULTS.raidCombatReturnDelay, 0, 10)
     profile.cameraYawMoveSpeed = Clamp(tonumber(profile.cameraYawMoveSpeed) or defaultYaw, 1, 360)
     profile.cameraPitchMoveSpeed = Clamp(tonumber(profile.cameraPitchMoveSpeed) or defaultPitch, 1, 360)
 
