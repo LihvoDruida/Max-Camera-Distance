@@ -173,13 +173,6 @@ local PROFILE_DEFAULTS = {
     actionCamPitch = false,
     afkMode = false,
 
-    -- zones
-    zoneParty = true,
-    zoneRaid = true,
-    zoneArena = true,
-    zoneBg = true,
-    zoneScenario = (Compat.SupportsScenarioZone and Compat.SupportsScenarioZone()) or IS_RETAIL,
-    zoneWorldBoss = true,
 
     -- debug
     enableDebugLogging = false,
@@ -223,6 +216,14 @@ function Database:ApplyMigrations(profile)
     elseif profile.minimap.hide == nil then
         profile.minimap.hide = false
     end
+
+    -- Remove obsolete zone-routing settings.
+    profile.zoneParty = nil
+    profile.zoneRaid = nil
+    profile.zoneArena = nil
+    profile.zoneBg = nil
+    profile.zoneScenario = nil
+    profile.zoneWorldBoss = nil
 
     -- Small fixups for upgrades:
     -- Ensure distances stay within per-client limits
@@ -304,12 +305,6 @@ function Database:ApplyMigrations(profile)
     profile.actionCamShoulderOutOfCombat = NormalizeBoolean(profile.actionCamShoulderOutOfCombat, PROFILE_DEFAULTS.actionCamShoulderOutOfCombat)
     profile.actionCamPitch = NormalizeBoolean(profile.actionCamPitch, PROFILE_DEFAULTS.actionCamPitch)
     profile.afkMode = NormalizeBoolean(profile.afkMode, PROFILE_DEFAULTS.afkMode)
-    profile.zoneParty = NormalizeBoolean(profile.zoneParty, PROFILE_DEFAULTS.zoneParty)
-    profile.zoneRaid = NormalizeBoolean(profile.zoneRaid, PROFILE_DEFAULTS.zoneRaid)
-    profile.zoneArena = NormalizeBoolean(profile.zoneArena, PROFILE_DEFAULTS.zoneArena)
-    profile.zoneBg = NormalizeBoolean(profile.zoneBg, PROFILE_DEFAULTS.zoneBg)
-    profile.zoneScenario = NormalizeBoolean(profile.zoneScenario, PROFILE_DEFAULTS.zoneScenario)
-    profile.zoneWorldBoss = NormalizeBoolean(profile.zoneWorldBoss, PROFILE_DEFAULTS.zoneWorldBoss)
     profile.enableDebugLogging = NormalizeBoolean(profile.enableDebugLogging, PROFILE_DEFAULTS.enableDebugLogging)
     profile.minimap.hide = NormalizeBoolean(profile.minimap.hide, false)
 

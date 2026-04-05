@@ -99,14 +99,6 @@ local function ContextText(value)
     return L["STATUS_CONTEXT_WORLD"] or "World"
 end
 
-local function ZoneSourceText(value)
-    if value == "raid" then return L["STATUS_ZONE_SOURCE_RAID"] or "Raid" end
-    if value == "party" then return L["STATUS_ZONE_SOURCE_PARTY"] or "Party" end
-    if value == "arena" then return L["STATUS_ZONE_SOURCE_ARENA"] or "Arena" end
-    if value == "bg" then return L["STATUS_ZONE_SOURCE_BG"] or "Battleground" end
-    if value == "scenario" then return L["STATUS_ZONE_SOURCE_SCENARIO"] or "Scenario / Delve" end
-    return L["STATUS_ZONE_SOURCE_WORLD"] or "World"
-end
 
 local DistanceKeyText
 
@@ -128,16 +120,13 @@ local function BuildLiveStatusText()
 
     return table.concat({
         string.format("%s: %s", L["STATUS_ZOOM_STATE"] or "Zoom State", StateText(snapshot.state)),
-        string.format("%s: %s", L["STATUS_CONTEXT"] or "Resolved Context", ContextText(snapshot.resolvedContext)),
-        string.format("%s: %s", L["STATUS_RAW_CONTEXT"] or "Raw Context", ContextText(snapshot.rawContext)),
-        string.format("%s: %s", L["STATUS_ZONE_SOURCE"] or "Zone Source", ZoneSourceText(snapshot.zoneSource)),
+        string.format("%s: %s", L["STATUS_CONTEXT"] or "Context", ContextText(snapshot.resolvedContext)),
         string.format("%s: %.1f", L["STATUS_TARGET_DISTANCE"] or "Target Distance", snapshot.targetYards or 0),
         string.format("%s: %s (%s)",
             L["STATUS_DISTANCE_SOURCE"] or "Distance Source",
             DistanceKeyText(snapshot.targetDistanceKey),
             distanceSourceLabel
         ),
-        string.format("%s: %s", L["STATUS_WORLD_FALLBACK"] or "Using World Fallback", BoolText(snapshot.usedWorldFallback)),
         string.format("%s: %s=%s, %s=%s, %s=%s, %s=%s, %s=%s",
             L["STATUS_REASON_FLAGS"] or "Reason Flags",
             L["STATUS_REASON_PLAYER"] or "Player",
@@ -150,21 +139,6 @@ local function BuildLiveStatusText()
             BoolText(snapshot.isMounted),
             L["STATUS_REASON_WORLD_BOSS"] or "World Boss",
             BoolText(snapshot.forceWorldBoss)
-        ),
-        string.format("%s: %s=%s, %s=%s, %s=%s, %s=%s, %s=%s, %s=%s",
-            L["STATUS_ZONE_FLAGS"] or "Zone Flags",
-            L["ZONE_PARTY"] or "Dungeons",
-            BoolText(snapshot.zoneFlags and snapshot.zoneFlags.party),
-            L["ZONE_RAID"] or "Raids",
-            BoolText(snapshot.zoneFlags and snapshot.zoneFlags.raid),
-            L["ZONE_ARENA"] or "Arenas",
-            BoolText(snapshot.zoneFlags and snapshot.zoneFlags.arena),
-            L["ZONE_BG"] or "Battlegrounds",
-            BoolText(snapshot.zoneFlags and snapshot.zoneFlags.bg),
-            L["ZONE_SCENARIO"] or "Scenarios / Delves",
-            BoolText(snapshot.zoneFlags and snapshot.zoneFlags.scenario),
-            L["ZONE_WORLD_BOSS"] or "World Bosses / Events",
-            BoolText(snapshot.zoneFlags and snapshot.zoneFlags.worldBoss)
         )
     }, "\n")
 end
@@ -582,72 +556,6 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("autoCombatZoom", val) end,
                         order = 11,
                         width = "full",
-                    },
-                    zoneHeader = {
-                        type = "header",
-                        name = L["ZONE_CONTEXT_HEADER"] or "Context Rules",
-                        order = 20,
-                    },
-                    zoneDesc = {
-                        type = "description",
-                        name = L["ZONE_CONTEXT_DESC"] or "These toggles decide whether party / raid / PvP content should use their own combat preset or fall back to the open-world combat distance.",
-                        order = 21,
-                    },
-                    zoneParty = {
-                        type = "toggle",
-                        name = L["ZONE_PARTY"],
-                        desc = L["ZONE_PARTY_DESC"],
-                        order = 22,
-                        get = function() return GetOption("zoneParty") end,
-                        set = function(_, v) SetOption("zoneParty", v) end,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
-                    },
-                    zoneRaid = {
-                        type = "toggle",
-                        name = L["ZONE_RAID"],
-                        desc = L["ZONE_RAID_DESC"],
-                        order = 23,
-                        get = function() return GetOption("zoneRaid") end,
-                        set = function(_, v) SetOption("zoneRaid", v) end,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
-                    },
-                    zoneArena = {
-                        type = "toggle",
-                        name = L["ZONE_ARENA"],
-                        desc = L["ZONE_ARENA_DESC"],
-                        order = 24,
-                        get = function() return GetOption("zoneArena") end,
-                        set = function(_, v) SetOption("zoneArena", v) end,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
-                    },
-                    zoneBg = {
-                        type = "toggle",
-                        name = L["ZONE_BG"],
-                        desc = L["ZONE_BG_DESC"],
-                        order = 25,
-                        get = function() return GetOption("zoneBg") end,
-                        set = function(_, v) SetOption("zoneBg", v) end,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
-                    },
-                    zoneScenario = {
-                        type = "toggle",
-                        name = L["ZONE_SCENARIO"],
-                        desc = L["ZONE_SCENARIO_DESC"],
-                        order = 26,
-                        hidden = function() return not SupportsScenarioZone() end,
-                        get = function() return GetOption("zoneScenario") end,
-                        set = function(_, v) SetOption("zoneScenario", v) end,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
-                    },
-                    zoneWorldBoss = {
-                        type = "toggle",
-                        name = L["ZONE_WORLD_BOSS"],
-                        desc = L["ZONE_WORLD_BOSS_DESC"],
-                        order = 27,
-                        width = "full",
-                        get = function() return GetOption("zoneWorldBoss") end,
-                        set = function(_, v) SetOption("zoneWorldBoss", v) end,
-                        disabled = function() return not GetOption("autoCombatZoom") end,
                     },
                     manualCombatHeader = {
                         type = "header",

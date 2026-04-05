@@ -596,75 +596,28 @@ local function GetCombatContextRaw()
     local inInstance, instanceType = IsInInstance()
 
     if inInstance then
-        if instanceType == "arena" then
-            return "pvp", "arena"
-        end
-
-        if instanceType == "pvp" then
-            return "pvp", "bg"
+        if instanceType == "arena" or instanceType == "pvp" then
+            return "pvp"
         end
 
         if instanceType == "raid" then
-            return "raid", "raid"
+            return "raid"
         end
 
-        if instanceType == "party" then
-            return "party", "party"
-        end
-
-        if instanceType == "scenario" then
-            return "party", "scenario"
+        if instanceType == "party" or instanceType == "scenario" then
+            return "party"
         end
     end
 
     if IsInRaid() then
-        return "raid", "raid"
+        return "raid"
     end
 
     if IsInGroup() then
-        return "party", "party"
+        return "party"
     end
 
-    return "world", "world"
-end
-
-local function ResolveCombatContext(db, rawContext, zoneSource)
-    if not db then
-        return rawContext or "world", false
-    end
-
-    if rawContext == "pvp" then
-        if zoneSource == "arena" and db.zoneArena == false then
-            return "world", true
-        end
-        if zoneSource == "bg" and db.zoneBg == false then
-            return "world", true
-        end
-        return "pvp", false
-    end
-
-    if rawContext == "raid" then
-        if db.zoneRaid == false then
-            return "world", true
-        end
-        return "raid", false
-    end
-
-    if rawContext == "party" then
-        if zoneSource == "scenario" then
-            if db.zoneScenario == false then
-                return "world", true
-            end
-            return "party", false
-        end
-
-        if db.zoneParty == false then
-            return "world", true
-        end
-        return "party", false
-    end
-
-    return "world", false
+    return "world"
 end
 
 local ShouldForceCombatZoom
@@ -688,8 +641,8 @@ local function BuildStatusSnapshot(db)
     local hasThreat = (threatStatus ~= nil and threatStatus > 0)
     local isMounted = IsInTravelForm()
     local forceCombatZoom = (db and ShouldForceCombatZoom(db)) and true or false
-    local rawContext, zoneSource = GetCombatContextRaw()
-    local resolvedContext, usedWorldFallback = ResolveCombatContext(db, rawContext, zoneSource)
+    local rawContext = GetCombatContextRaw()
+    local resolvedContext = rawContext
 
     local state = ZOOM_STATE_NONE
     if db and db.autoCombatZoom and ((playerInCombat or groupInCombat or hasThreat) or forceCombatZoom) then
@@ -729,8 +682,6 @@ local function BuildStatusSnapshot(db)
         state = state,
         rawContext = rawContext,
         resolvedContext = resolvedContext,
-        zoneSource = zoneSource,
-        usedWorldFallback = usedWorldFallback,
         targetYards = targetYards,
         targetDistanceKey = targetDistanceKey,
         targetSourceType = targetSourceType,
@@ -740,14 +691,6 @@ local function BuildStatusSnapshot(db)
         hasThreat = hasThreat,
         isMounted = isMounted,
         forceWorldBoss = forceCombatZoom,
-        zoneFlags = {
-            party = db and db.zoneParty and true or false,
-            raid = db and db.zoneRaid and true or false,
-            arena = db and db.zoneArena and true or false,
-            bg = db and db.zoneBg and true or false,
-            scenario = db and db.zoneScenario and true or false,
-            worldBoss = db and db.zoneWorldBoss and true or false,
-        },
     }
 end
 
@@ -762,7 +705,7 @@ ShouldForceCombatZoom = function(db)
         return false
     end
 
-    return db.zoneWorldBoss and IsEncounterInProgress() and true or false
+    return IsEncounterInProgress() and true or false
 end
 
 -- =====================================================================
