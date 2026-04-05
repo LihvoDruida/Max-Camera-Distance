@@ -299,3 +299,6 @@ L["STATUS_PENDING_RETURN_NONE"] = "No delayed return is pending."
 L["STATUS_PENDING_RETURN_ACTIVE"] = "%s: %s, %.1fs remaining (total %.1fs)."
 L["STATUS_RETURN_KIND_COMBAT"] = "Combat Return"
 L["STATUS_RETURN_KIND_MOUNT"] = "Mount Return"
+
+L["STATUS_CONTEXT_INACTIVE"] = "Inactive"
+L["STATUS_REASON_FORCED"] = "Forced Encounter"

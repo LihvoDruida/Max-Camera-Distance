@@ -96,7 +96,8 @@ local function ContextText(value)
     if value == "raid" then return L["STATUS_CONTEXT_RAID"] or "Raid" end
     if value == "party" then return L["STATUS_CONTEXT_PARTY"] or "Party" end
     if value == "pvp" then return L["STATUS_CONTEXT_PVP"] or "PvP" end
-    return L["STATUS_CONTEXT_WORLD"] or "World"
+    if value == "world" then return L["STATUS_CONTEXT_WORLD"] or "World" end
+    return L["STATUS_CONTEXT_INACTIVE"] or "Inactive"
 end
 
 local function PendingReturnText(snapshot)
@@ -136,9 +137,13 @@ local function BuildLiveStatusText()
     local triggerConfig = snapshot.triggerConfig or {}
     local activeTriggers = snapshot.activeTriggers or {}
 
+    local contextLabel = snapshot.state == "combat"
+        and ContextText(snapshot.resolvedContext)
+        or (L["STATUS_CONTEXT_INACTIVE"] or "Inactive")
+
     return table.concat({
         string.format("%s: %s", L["STATUS_ZOOM_STATE"] or "Zoom State", StateText(snapshot.state)),
-        string.format("%s: %s", L["STATUS_CONTEXT"] or "Context", ContextText(snapshot.resolvedContext)),
+        string.format("%s: %s", L["STATUS_CONTEXT"] or "Context", contextLabel),
         string.format("%s: %.1f", L["STATUS_TARGET_DISTANCE"] or "Target Distance", snapshot.targetYards or 0),
         string.format("%s: %s (%s)",
             L["STATUS_DISTANCE_SOURCE"] or "Distance Source",
@@ -162,7 +167,7 @@ local function BuildLiveStatusText()
             BoolText(activeTriggers.group),
             L["STATUS_REASON_THREAT"] or "Threat",
             BoolText(activeTriggers.threat),
-            L["STATUS_REASON_WORLD_BOSS"] or "World Boss",
+            L["STATUS_REASON_FORCED"] or "Forced Encounter",
             BoolText(activeTriggers.worldBoss)
         ),
         string.format("%s: %s=%s, %s=%s, %s=%s, %s=%s, %s=%s",
@@ -175,7 +180,7 @@ local function BuildLiveStatusText()
             BoolText(snapshot.hasThreat),
             L["STATUS_REASON_MOUNTED"] or "Mounted",
             BoolText(snapshot.isMounted),
-            L["STATUS_REASON_WORLD_BOSS"] or "World Boss",
+            L["STATUS_REASON_FORCED"] or "Forced Encounter",
             BoolText(snapshot.forceWorldBoss)
         ),
         string.format("%s: %s=%.1fs, %s=%.1fs, %s=%.1fs, %s=%.1fs",

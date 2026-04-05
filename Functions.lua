@@ -466,6 +466,9 @@ local function GetCombatReturnDelay(db, context)
         return db.raidCombatReturnDelay or 0
     elseif context == "party" then
         return db.partyCombatReturnDelay or 0
+    elseif context == "pvp" then
+        -- PvP currently follows the open-world return delay unless a dedicated PvP slider is added.
+        return db.worldCombatReturnDelay or 0
     end
 
     return db.worldCombatReturnDelay or 0
@@ -696,7 +699,7 @@ local function BuildStatusSnapshot(db)
 
     local signals = GetCombatSignals(db)
     local rawContext = signals.rawContext
-    local resolvedContext = rawContext
+    local resolvedContext = (combatActive and rawContext) or nil
     local combatActive, triggerConfig, activeTriggers = GetCombatActivation(db, signals)
 
     local state = ZOOM_STATE_NONE
