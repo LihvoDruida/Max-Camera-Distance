@@ -142,6 +142,7 @@ local watchedCVars = {
     CameraKeepCharacterCentered = true,
     cameraReduceUnexpectedMovement = true,
     cameraIndirectVisibility = true,
+    cameraIndirectOffset = true,
     cameraView = true,
 }
 

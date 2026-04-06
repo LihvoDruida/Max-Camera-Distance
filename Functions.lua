@@ -182,6 +182,8 @@ local function NormalizeManagedCVarValue(cvarName, value, db)
             return 1
         end
         return 0
+    elseif cvarName == "cameraIndirectOffset" then
+        return ClampNumber(value, 0, 10) or ((db and ClampNumber(db.cameraIndirectOffset, 0, 10)) or 10)
     elseif cvarName == "test_cameraOverShoulder" then
         return ClampNumber(value, 0, 2) or 0
     end
@@ -213,6 +215,7 @@ local function SanitizeRuntimeProfile(db)
     db.worldCombatReturnDelay = ClampNumber(db.worldCombatReturnDelay, 0, 10) or 0.4
     db.partyCombatReturnDelay = ClampNumber(db.partyCombatReturnDelay, 0, 10) or 0.8
     db.raidCombatReturnDelay = ClampNumber(db.raidCombatReturnDelay, 0, 10) or 1.2
+    db.cameraIndirectOffset = ClampNumber(db.cameraIndirectOffset, 0, 10) or 10
 end
 
 
@@ -466,9 +469,6 @@ local function GetCombatReturnDelay(db, context)
         return db.raidCombatReturnDelay or 0
     elseif context == "party" then
         return db.partyCombatReturnDelay or 0
-    elseif context == "pvp" then
-        -- PvP currently follows the open-world return delay unless a dedicated PvP slider is added.
-        return db.worldCombatReturnDelay or 0
     end
 
     return db.worldCombatReturnDelay or 0
@@ -699,7 +699,7 @@ local function BuildStatusSnapshot(db)
 
     local signals = GetCombatSignals(db)
     local rawContext = signals.rawContext
-    local resolvedContext = (combatActive and rawContext) or nil
+    local resolvedContext = rawContext
     local combatActive, triggerConfig, activeTriggers = GetCombatActivation(db, signals)
 
     local state = ZOOM_STATE_NONE
@@ -755,6 +755,9 @@ local function BuildStatusSnapshot(db)
         hasThreat = signals.hasThreat,
         isMounted = signals.isMounted,
         forceWorldBoss = signals.forceCombatZoom,
+        reduceUnexpectedMovement = (db and db.reduceUnexpectedMovement) and true or false,
+        indirectCollisionEnabled = (db and db.cameraIndirectVisibility) and true or false,
+        indirectCollisionOffset = (db and db.cameraIndirectOffset) or 10,
         triggerConfig = triggerConfig,
         activeTriggers = activeTriggers,
         worldCombatReturnDelay = (db and db.worldCombatReturnDelay) or 0,
@@ -888,6 +891,8 @@ function Functions:ShouldApplyOptionImmediately(key)
         return state == ZOOM_STATE_COMBAT and combatContext == "pvp" and GetDistancePresetId(db, key) == "manual"
     elseif key == "maxZoomFactor" then
         return not (db.autoCombatZoom or db.autoMountZoom) and GetDistancePresetId(db, key) == "manual"
+    elseif key == "cameraIndirectOffset" then
+        return true
     elseif DISTANCE_PRESET_BINDINGS[key] then
         local distanceKey = nil
         for boundDistanceKey, presetKey in pairs(DISTANCE_PRESET_BINDINGS) do
@@ -1053,6 +1058,7 @@ function Functions:AdjustCamera(forceNow)
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
     UpdateCVar("cameraPitchMoveSpeed", db.cameraPitchMoveSpeed)
     UpdateCVar("cameraIndirectVisibility", db.cameraIndirectVisibility and 1 or 0)
+    UpdateCVar("cameraIndirectOffset", db.cameraIndirectOffset or 10)
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
     
@@ -1146,6 +1152,13 @@ function Functions:OnCVarUpdate(_, cvarName, value)
             return
         end
         db.cameraIndirectVisibility = (desired == 1)
+    elseif cvarName == "cameraIndirectOffset" then
+        local desired = NormalizeManagedCVarValue(cvarName, db.cameraIndirectOffset, db)
+        if normalizedValue == nil or math_abs(numValue - desired) > 0.005 then
+            UpdateCVar(cvarName, desired)
+            return
+        end
+        db.cameraIndirectOffset = desired
     elseif cvarName == "resampleAlwaysSharpen" then
         local desired = db.resampleAlwaysSharpen and 1 or 0
         if numValue ~= desired then

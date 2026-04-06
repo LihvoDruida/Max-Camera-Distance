@@ -100,6 +100,7 @@ local defaultSoftTarget = SafeGetCVar("SoftTargetIconGameObject")
 
 local defaultReduceMove = SafeGetCVar("cameraReduceUnexpectedMovement")
 local defaultIndirect   = SafeGetCVar("cameraIndirectVisibility")
+local defaultIndirectOffset = SafeGetCVar("cameraIndirectOffset")
 
 -- ============================================================================
 -- PUBLIC CONSTANTS (used by Config/Functions)
@@ -165,14 +166,18 @@ local PROFILE_DEFAULTS = {
     raidCombatPreset = "manual",
     pvpCombatPreset = "manual",
 
+    zoneZoomFactor = MAX_YARDS, -- legacy key kept for migration only
+
     -- advanced (best-effort defaults from client when possible)
     reduceUnexpectedMovement = (defaultReduceMove == 1) or false,
     cameraIndirectVisibility = (defaultIndirect == nil) and true or (defaultIndirect == 1),
+    cameraIndirectOffset = Clamp(tonumber(defaultIndirectOffset) or 10, 0, 10),
 
     resampleAlwaysSharpen = (defaultSharpen == 1) or false,
     softTargetInteract = (defaultSoftTarget == 1) or false,
 
     -- actioncam / afk
+    actionCamShoulder = false, -- legacy key for migration
     actionCamShoulderInCombat = false,
     actionCamShoulderOutOfCombat = false,
     actionCamPitch = false,
@@ -211,13 +216,12 @@ function Database:ApplyMigrations(profile)
             profile.actionCamShoulderOutOfCombat = legacyShoulder
         end
     end
-    profile.actionCamShoulder = nil
 
-    if type(profile.debugLevel) ~= "table" then
+    if profile.debugLevel == nil then
         profile.debugLevel = CopyTableSafe(Database.DEFAULT_DEBUG_LEVEL)
     end
 
-    if type(profile.minimap) ~= "table" then
+    if profile.minimap == nil then
         profile.minimap = { hide = false }
     elseif profile.minimap.hide == nil then
         profile.minimap.hide = false
@@ -236,7 +240,7 @@ function Database:ApplyMigrations(profile)
     profile.maxZoomFactor = Clamp(tonumber(profile.maxZoomFactor) or MAX_YARDS, 1, MAX_YARDS)
     profile.minZoomFactor = Clamp(tonumber(profile.minZoomFactor) or BLIZZARD_DEFAULT_YARDS, 1, MAX_YARDS)
     profile.mountZoomFactor = Clamp(tonumber(profile.mountZoomFactor) or MAX_YARDS, 1, MAX_YARDS)
-    local legacyZoneZoomFactor = Clamp(tonumber(profile.zoneZoomFactor) or profile.maxZoomFactor or MAX_YARDS, 1, MAX_YARDS)
+    profile.zoneZoomFactor = Clamp(tonumber(profile.zoneZoomFactor) or profile.maxZoomFactor or MAX_YARDS, 1, MAX_YARDS)
 
     -- Combat distance split migration:
     -- old profile used maxZoomFactor for regular combat and zoneZoomFactor for raid/dungeon/pvp zones.
@@ -246,7 +250,7 @@ function Database:ApplyMigrations(profile)
         MAX_YARDS
     )
     local legacyGroupCombatZoom = Clamp(
-        tonumber(profile.groupCombatZoomFactor) or legacyZoneZoomFactor or profile.maxZoomFactor or MAX_YARDS,
+        tonumber(profile.groupCombatZoomFactor) or profile.zoneZoomFactor or profile.maxZoomFactor or MAX_YARDS,
         1,
         MAX_YARDS
     )
@@ -261,14 +265,13 @@ function Database:ApplyMigrations(profile)
         MAX_YARDS
     )
     profile.pvpCombatZoomFactor = Clamp(
-        tonumber(profile.pvpCombatZoomFactor) or legacyZoneZoomFactor or profile.maxZoomFactor or MAX_YARDS,
+        tonumber(profile.pvpCombatZoomFactor) or profile.zoneZoomFactor or profile.maxZoomFactor or MAX_YARDS,
         1,
         MAX_YARDS
     )
 
     -- Legacy split is migrated only once; it should not remain in runtime logic.
     profile.groupCombatZoomFactor = nil
-    profile.zoneZoomFactor = nil
 
     -- move speed is typically 1..50
     profile.moveViewDistance = Clamp(tonumber(profile.moveViewDistance) or defaultMoveSpeed, 1, 50)
@@ -312,6 +315,7 @@ function Database:ApplyMigrations(profile)
     profile.combatZoomOnThreat = NormalizeBoolean(profile.combatZoomOnThreat, PROFILE_DEFAULTS.combatZoomOnThreat)
     profile.reduceUnexpectedMovement = NormalizeBoolean(profile.reduceUnexpectedMovement, PROFILE_DEFAULTS.reduceUnexpectedMovement)
     profile.cameraIndirectVisibility = NormalizeBoolean(profile.cameraIndirectVisibility, PROFILE_DEFAULTS.cameraIndirectVisibility)
+    profile.cameraIndirectOffset = Clamp(tonumber(profile.cameraIndirectOffset) or PROFILE_DEFAULTS.cameraIndirectOffset, 0, 10)
     profile.resampleAlwaysSharpen = NormalizeBoolean(profile.resampleAlwaysSharpen, PROFILE_DEFAULTS.resampleAlwaysSharpen)
     profile.softTargetInteract = NormalizeBoolean(profile.softTargetInteract, PROFILE_DEFAULTS.softTargetInteract)
     profile.actionCamShoulderInCombat = NormalizeBoolean(profile.actionCamShoulderInCombat, PROFILE_DEFAULTS.actionCamShoulderInCombat)

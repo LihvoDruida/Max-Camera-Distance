@@ -96,8 +96,7 @@ local function ContextText(value)
     if value == "raid" then return L["STATUS_CONTEXT_RAID"] or "Raid" end
     if value == "party" then return L["STATUS_CONTEXT_PARTY"] or "Party" end
     if value == "pvp" then return L["STATUS_CONTEXT_PVP"] or "PvP" end
-    if value == "world" then return L["STATUS_CONTEXT_WORLD"] or "World" end
-    return L["STATUS_CONTEXT_INACTIVE"] or "Inactive"
+    return L["STATUS_CONTEXT_WORLD"] or "World"
 end
 
 local function PendingReturnText(snapshot)
@@ -118,6 +117,24 @@ end
 
 local DistanceKeyText
 
+local function BuildCollisionSummaryText()
+    local db = GetDB()
+    if not db then
+        return L["STATUS_UNAVAILABLE"] or "Live status is unavailable right now."
+    end
+
+    local enabledText = BoolText(db.cameraIndirectVisibility)
+    local offsetText = string.format("%.1f", db.cameraIndirectOffset or 10)
+    local smartPivotText = BoolText(db.reduceUnexpectedMovement)
+
+    return string.format(
+        L["COLLISION_SUMMARY_TEXT"] or "Reduced Camera Collision: %s\nCollision Sensitivity: %s\nReduce Unexpected Movement: %s\nThese settings are global and apply everywhere.",
+        enabledText,
+        offsetText,
+        smartPivotText
+    )
+end
+
 local function BuildLiveStatusText()
     if not (ns.Functions and ns.Functions.GetStatusSnapshot) then
         return L["STATUS_UNAVAILABLE"] or "Live status is unavailable right now."
@@ -137,14 +154,22 @@ local function BuildLiveStatusText()
     local triggerConfig = snapshot.triggerConfig or {}
     local activeTriggers = snapshot.activeTriggers or {}
 
-    local contextLabel = snapshot.state == "combat"
-        and ContextText(snapshot.resolvedContext)
-        or (L["STATUS_CONTEXT_INACTIVE"] or "Inactive")
-
     return table.concat({
         string.format("%s: %s", L["STATUS_ZOOM_STATE"] or "Zoom State", StateText(snapshot.state)),
-        string.format("%s: %s", L["STATUS_CONTEXT"] or "Context", contextLabel),
+        string.format("%s: %s", L["STATUS_CONTEXT"] or "Context", ContextText(snapshot.resolvedContext)),
         string.format("%s: %.1f", L["STATUS_TARGET_DISTANCE"] or "Target Distance", snapshot.targetYards or 0),
+        string.format("%s: %s",
+            L["STATUS_COLLISION_ENABLED"] or "Reduced Camera Collision",
+            BoolText(snapshot.indirectCollisionEnabled)
+        ),
+        string.format("%s: %.1f",
+            L["STATUS_COLLISION_OFFSET"] or "Collision Sensitivity",
+            snapshot.indirectCollisionOffset or 0
+        ),
+        string.format("%s: %s",
+            L["STATUS_SMART_PIVOT"] or "Reduce Unexpected Movement",
+            BoolText(snapshot.reduceUnexpectedMovement)
+        ),
         string.format("%s: %s (%s)",
             L["STATUS_DISTANCE_SOURCE"] or "Distance Source",
             DistanceKeyText(snapshot.targetDistanceKey),
@@ -167,7 +192,7 @@ local function BuildLiveStatusText()
             BoolText(activeTriggers.group),
             L["STATUS_REASON_THREAT"] or "Threat",
             BoolText(activeTriggers.threat),
-            L["STATUS_REASON_FORCED"] or "Forced Encounter",
+            L["STATUS_REASON_WORLD_BOSS"] or "World Boss",
             BoolText(activeTriggers.worldBoss)
         ),
         string.format("%s: %s=%s, %s=%s, %s=%s, %s=%s, %s=%s",
@@ -180,7 +205,7 @@ local function BuildLiveStatusText()
             BoolText(snapshot.hasThreat),
             L["STATUS_REASON_MOUNTED"] or "Mounted",
             BoolText(snapshot.isMounted),
-            L["STATUS_REASON_FORCED"] or "Forced Encounter",
+            L["STATUS_REASON_WORLD_BOSS"] or "World Boss",
             BoolText(snapshot.forceWorldBoss)
         ),
         string.format("%s: %s=%.1fs, %s=%.1fs, %s=%.1fs, %s=%.1fs",
@@ -809,21 +834,57 @@ function Config:SetupOptions()
                 name = L["ADVANCED_SETTINGS"],
                 order = 5,
                 args = {
+                    collisionHeader = {
+                        type = "header",
+                        name = L["COLLISION_HEADER"] or "Camera Collision",
+                        order = 1,
+                    },
+                    collisionDesc = {
+                        type = "description",
+                        name = L["COLLISION_DESC"] or "General camera collision behavior. These settings are global and apply everywhere, not per combat context.",
+                        order = 2,
+                    },
                     reduceMovement = {
                         type = "toggle",
                         name = L["REDUCE_UNEXPECTED_MOVEMENT"],
                         desc = L["REDUCE_UNEXPECTED_MOVEMENT_DESC"],
                         get = function() return GetOption("reduceUnexpectedMovement") end,
                         set = function(_, val) SetOption("reduceUnexpectedMovement", val) end,
-                        order = 1
+                        order = 3,
+                        width = "full",
                     },
                     indirectVis = {
                         type = "toggle",
                         name = L["INDIRECT_VISIBILITY"],
                         desc = L["INDIRECT_VISIBILITY_DESC"],
+                        hidden = function() return not HasCVar("cameraIndirectVisibility") end,
                         get = function() return GetOption("cameraIndirectVisibility") end,
                         set = function(_, val) SetOption("cameraIndirectVisibility", val) end,
-                        order = 2
+                        order = 4,
+                    },
+                    indirectOffset = {
+                        type = "range",
+                        name = L["INDIRECT_OFFSET"] or "Collision Sensitivity",
+                        desc = L["INDIRECT_OFFSET_DESC"] or "How strongly reduced camera collision should resist pushing the camera forward. Higher values tolerate more obstruction before the camera moves in.",
+                        hidden = function() return not HasCVar("cameraIndirectOffset") end,
+                        disabled = function() return not GetOption("cameraIndirectVisibility") end,
+                        min = 0,
+                        max = 10,
+                        step = 0.1,
+                        get = function() return GetOption("cameraIndirectOffset") end,
+                        set = function(_, val) SetOption("cameraIndirectOffset", val) end,
+                        order = 5,
+                    },
+                    collisionSummary = {
+                        type = "description",
+                        name = function() return BuildCollisionSummaryText() end,
+                        order = 6,
+                        width = "full",
+                    },
+                    visualHeader = {
+                        type = "header",
+                        name = L["VISUAL_UTILITY_HEADER"] or "Visual Utility",
+                        order = 20,
                     },
                     resampleAlwaysSharpen = {
                         type = "toggle",
@@ -832,7 +893,7 @@ function Config:SetupOptions()
                         hidden = function() return not SupportsFSRSharpen() end,
                         get = function() return GetOption("resampleAlwaysSharpen") end,
                         set = function(_, val) SetOption("resampleAlwaysSharpen", val) end,
-                        order = 3
+                        order = 21
                     },
                     softTargetInteract = {
                         type = "toggle",
@@ -841,7 +902,7 @@ function Config:SetupOptions()
                         hidden = function() return not SupportsSoftTargetIcons() end,
                         get = function() return GetOption("softTargetInteract") end,
                         set = function(_, val) SetOption("softTargetInteract", val) end,
-                        order = 4
+                        order = 22
                     },
                 },
             },
