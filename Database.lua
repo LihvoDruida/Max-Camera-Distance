@@ -101,6 +101,7 @@ local defaultSoftTarget = SafeGetCVar("SoftTargetIconGameObject")
 local defaultReduceMove = SafeGetCVar("cameraReduceUnexpectedMovement")
 local defaultIndirect   = SafeGetCVar("cameraIndirectVisibility")
 local defaultIndirectOffset = SafeGetCVar("cameraIndirectOffset")
+local defaultOccludedSilhouette = SafeGetCVar("occludedSilhouettePlayer")
 
 -- ============================================================================
 -- PUBLIC CONSTANTS (used by Config/Functions)
@@ -171,7 +172,8 @@ local PROFILE_DEFAULTS = {
     -- advanced (best-effort defaults from client when possible)
     reduceUnexpectedMovement = (defaultReduceMove == 1) or false,
     cameraIndirectVisibility = (defaultIndirect == nil) and true or (defaultIndirect == 1),
-    cameraIndirectOffset = Clamp(tonumber(defaultIndirectOffset) or 10, 0, 10),
+    cameraIndirectOffset = Clamp(tonumber(defaultIndirectOffset) or 1.5, 0, 10),
+    occludedSilhouettePlayer = (defaultOccludedSilhouette == 1) or false,
 
     resampleAlwaysSharpen = (defaultSharpen == 1) or false,
     softTargetInteract = (defaultSoftTarget == 1) or false,
@@ -316,6 +318,7 @@ function Database:ApplyMigrations(profile)
     profile.reduceUnexpectedMovement = NormalizeBoolean(profile.reduceUnexpectedMovement, PROFILE_DEFAULTS.reduceUnexpectedMovement)
     profile.cameraIndirectVisibility = NormalizeBoolean(profile.cameraIndirectVisibility, PROFILE_DEFAULTS.cameraIndirectVisibility)
     profile.cameraIndirectOffset = Clamp(tonumber(profile.cameraIndirectOffset) or PROFILE_DEFAULTS.cameraIndirectOffset, 0, 10)
+    profile.occludedSilhouettePlayer = NormalizeBoolean(profile.occludedSilhouettePlayer, PROFILE_DEFAULTS.occludedSilhouettePlayer)
     profile.resampleAlwaysSharpen = NormalizeBoolean(profile.resampleAlwaysSharpen, PROFILE_DEFAULTS.resampleAlwaysSharpen)
     profile.softTargetInteract = NormalizeBoolean(profile.softTargetInteract, PROFILE_DEFAULTS.softTargetInteract)
     profile.actionCamShoulderInCombat = NormalizeBoolean(profile.actionCamShoulderInCombat, PROFILE_DEFAULTS.actionCamShoulderInCombat)

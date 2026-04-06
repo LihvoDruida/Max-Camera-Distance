@@ -173,6 +173,7 @@ local function NormalizeManagedCVarValue(cvarName, value, db)
         return ClampNumber(value, 1, maxYards)
     elseif cvarName == "cameraReduceUnexpectedMovement"
         or cvarName == "cameraIndirectVisibility"
+        or cvarName == "occludedSilhouettePlayer"
         or cvarName == "resampleAlwaysSharpen"
         or cvarName == "SoftTargetIconGameObject"
         or cvarName == "CameraKeepCharacterCentered"
@@ -183,7 +184,7 @@ local function NormalizeManagedCVarValue(cvarName, value, db)
         end
         return 0
     elseif cvarName == "cameraIndirectOffset" then
-        return ClampNumber(value, 0, 10) or ((db and ClampNumber(db.cameraIndirectOffset, 0, 10)) or 10)
+        return ClampNumber(value, 0, 10) or ((db and ClampNumber(db.cameraIndirectOffset, 0, 10)) or 1.5)
     elseif cvarName == "test_cameraOverShoulder" then
         return ClampNumber(value, 0, 2) or 0
     end
@@ -215,7 +216,7 @@ local function SanitizeRuntimeProfile(db)
     db.worldCombatReturnDelay = ClampNumber(db.worldCombatReturnDelay, 0, 10) or 0.4
     db.partyCombatReturnDelay = ClampNumber(db.partyCombatReturnDelay, 0, 10) or 0.8
     db.raidCombatReturnDelay = ClampNumber(db.raidCombatReturnDelay, 0, 10) or 1.2
-    db.cameraIndirectOffset = ClampNumber(db.cameraIndirectOffset, 0, 10) or 10
+    db.cameraIndirectOffset = ClampNumber(db.cameraIndirectOffset, 0, 10) or 1.5
 end
 
 
@@ -757,7 +758,8 @@ local function BuildStatusSnapshot(db)
         forceWorldBoss = signals.forceCombatZoom,
         reduceUnexpectedMovement = (db and db.reduceUnexpectedMovement) and true or false,
         indirectCollisionEnabled = (db and db.cameraIndirectVisibility) and true or false,
-        indirectCollisionOffset = (db and db.cameraIndirectOffset) or 10,
+        indirectCollisionOffset = (db and db.cameraIndirectOffset) or 1.5,
+        occludedSilhouetteEnabled = (db and db.occludedSilhouettePlayer) and true or false,
         triggerConfig = triggerConfig,
         activeTriggers = activeTriggers,
         worldCombatReturnDelay = (db and db.worldCombatReturnDelay) or 0,
@@ -1058,7 +1060,8 @@ function Functions:AdjustCamera(forceNow)
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
     UpdateCVar("cameraPitchMoveSpeed", db.cameraPitchMoveSpeed)
     UpdateCVar("cameraIndirectVisibility", db.cameraIndirectVisibility and 1 or 0)
-    UpdateCVar("cameraIndirectOffset", db.cameraIndirectOffset or 10)
+    UpdateCVar("cameraIndirectOffset", db.cameraIndirectOffset or 1.5)
+    UpdateCVar("occludedSilhouettePlayer", db.occludedSilhouettePlayer and 1 or 0)
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
     
@@ -1159,6 +1162,13 @@ function Functions:OnCVarUpdate(_, cvarName, value)
             return
         end
         db.cameraIndirectOffset = desired
+    elseif cvarName == "occludedSilhouettePlayer" then
+        local desired = db.occludedSilhouettePlayer and 1 or 0
+        if numValue ~= desired then
+            UpdateCVar(cvarName, desired)
+            return
+        end
+        db.occludedSilhouettePlayer = (desired == 1)
     elseif cvarName == "resampleAlwaysSharpen" then
         local desired = db.resampleAlwaysSharpen and 1 or 0
         if numValue ~= desired then

@@ -152,6 +152,9 @@ end
 if Compat.HasCVar and Compat.HasCVar("test_cameraDynamicPitch") then
     watchedCVars.test_cameraDynamicPitch = true
 end
+if Compat.HasCVar and Compat.HasCVar("occludedSilhouettePlayer") then
+    watchedCVars.occludedSilhouettePlayer = true
+end
 if Compat.HasCVar and Compat.HasCVar("resampleAlwaysSharpen") then
     watchedCVars.resampleAlwaysSharpen = true
 end

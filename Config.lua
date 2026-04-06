@@ -124,13 +124,15 @@ local function BuildCollisionSummaryText()
     end
 
     local enabledText = BoolText(db.cameraIndirectVisibility)
-    local offsetText = string.format("%.1f", db.cameraIndirectOffset or 10)
+    local offsetText = string.format("%.1f", db.cameraIndirectOffset or 1.5)
+    local silhouetteText = BoolText(db.occludedSilhouettePlayer)
     local smartPivotText = BoolText(db.reduceUnexpectedMovement)
 
     return string.format(
-        L["COLLISION_SUMMARY_TEXT"] or "Reduced Camera Collision: %s\nCollision Sensitivity: %s\nReduce Unexpected Movement: %s\nThese settings are global and apply everywhere.",
+        L["COLLISION_SUMMARY_TEXT"] or "Reduced Camera Collision: %s\nCollision Sensitivity: %s\nShow Silhouette when Obstructed: %s\nReduce Unexpected Movement: %s\nThese settings are global and apply everywhere.",
         enabledText,
         offsetText,
+        silhouetteText,
         smartPivotText
     )
 end
@@ -165,6 +167,10 @@ local function BuildLiveStatusText()
         string.format("%s: %.1f",
             L["STATUS_COLLISION_OFFSET"] or "Collision Sensitivity",
             snapshot.indirectCollisionOffset or 0
+        ),
+        string.format("%s: %s",
+            L["STATUS_SILHOUETTE"] or "Show Silhouette when Obstructed",
+            BoolText(snapshot.occludedSilhouetteEnabled)
         ),
         string.format("%s: %s",
             L["STATUS_SMART_PIVOT"] or "Reduce Unexpected Movement",
@@ -865,7 +871,7 @@ function Config:SetupOptions()
                     indirectOffset = {
                         type = "range",
                         name = L["INDIRECT_OFFSET"] or "Collision Sensitivity",
-                        desc = L["INDIRECT_OFFSET_DESC"] or "How strongly reduced camera collision should resist pushing the camera forward. Higher values tolerate more obstruction before the camera moves in.",
+                        desc = L["INDIRECT_OFFSET_DESC"] or "Controls Blizzard's reduced camera collision sensitivity. 0.0 is the minimum, 10.0 is the maximum, and the game's default is 1.5.",
                         hidden = function() return not HasCVar("cameraIndirectOffset") end,
                         disabled = function() return not GetOption("cameraIndirectVisibility") end,
                         min = 0,
@@ -885,6 +891,16 @@ function Config:SetupOptions()
                         type = "header",
                         name = L["VISUAL_UTILITY_HEADER"] or "Visual Utility",
                         order = 20,
+                    },
+                    occludedSilhouettePlayer = {
+                        type = "toggle",
+                        name = L["OCCLUDED_SILHOUETTE_PLAYER"] or "Show Silhouette when Obstructed",
+                        desc = L["OCCLUDED_SILHOUETTE_PLAYER_DESC"] or "Turns on Blizzard's character silhouette when your player is blocked by objects. This is a global client setting and applies everywhere.",
+                        hidden = function() return not HasCVar("occludedSilhouettePlayer") end,
+                        get = function() return GetOption("occludedSilhouettePlayer") end,
+                        set = function(_, val) SetOption("occludedSilhouettePlayer", val) end,
+                        order = 21,
+                        width = "full",
                     },
                     resampleAlwaysSharpen = {
                         type = "toggle",
@@ -1095,6 +1111,80 @@ function Config:SetupOptions()
     end
 end
 
+local function ApplyHookTooltip(target, titleText, descText, pathText)
+    if not target or not target.SetScript then return end
+
+    target:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(titleText)
+        if descText and descText ~= "" then
+            GameTooltip:AddLine(descText, 1, 1, 1, true)
+        end
+        if pathText and pathText ~= "" then
+            GameTooltip:AddLine(pathText, 1, 0.82, 0, true)
+        end
+        GameTooltip:Show()
+    end)
+
+    target:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+end
+
+local function DisableSettingControl(child, titleText, descText, pathText)
+    if not child then return false end
+
+    local candidates = {
+        child.CheckboxControl and (child.CheckboxControl.Checkbox or child.CheckboxControl),
+        child.Checkbox,
+        child.Control and (child.Control.Checkbox or child.Control),
+        child.SliderWithSteppers,
+        child.Slider,
+        child.Dropdown,
+        child.Button,
+    }
+
+    local target = nil
+    for _, candidate in ipairs(candidates) do
+        if candidate then
+            target = candidate
+            break
+        end
+    end
+
+    if not target then return false end
+
+    if target.SetEnabled then
+        target:SetEnabled(false)
+    elseif target.SetEnabled_ then
+        target:SetEnabled_(false)
+    end
+
+    local tooltipTarget = target.Checkbox or target.Slider or target
+    ApplyHookTooltip(tooltipTarget, titleText, descText, pathText)
+    if child ~= tooltipTarget then
+        if child.EnableMouse then
+            child:EnableMouse(true)
+        end
+        ApplyHookTooltip(child, titleText, descText, pathText)
+    end
+    return true
+end
+
+local function IsSilhouetteSettingLabel(text)
+    if type(text) ~= "string" or text == "" then return false end
+
+    local exact1 = L["HOOK_SILHOUETTE_LABEL_OBSTRUCTED"] or "Show Silhouette when Obstructed"
+    local exact2 = L["HOOK_SILHOUETTE_LABEL_OBSCURED"] or "Show Silhouette when Obscured"
+    if text == exact1 or text == exact2 then
+        return true
+    end
+
+    local lowered = string.lower(text)
+    return lowered:find("silhouette", 1, true) ~= nil
+        and (lowered:find("obstruct", 1, true) ~= nil or lowered:find("obscur", 1, true) ~= nil)
+end
+
 -- =====================================================================
 -- BLIZZARD SETTINGS HOOK (Retail only, Dragonflight+ UI)
 -- =====================================================================
@@ -1105,43 +1195,29 @@ if IS_RETAIL
 
     local MOUSE_LOOK_SPEED = _G.MOUSE_LOOK_SPEED
     local CONTROLS_LABEL = _G.CONTROLS_LABEL
+    local COMBAT_LABEL = _G.COMBAT_LABEL or "Combat"
 
     hooksecurefunc(SettingsPanel.Container.SettingsList.ScrollBox, "Update", function(self)
         local header = SettingsPanel.Container.SettingsList.Header
         if not header or not header.Title or not header.Title.GetText then return end
 
         local headerText = header.Title:GetText()
-        if headerText ~= CONTROLS_LABEL then return end
-
         local scrollTarget = SettingsPanel.Container.SettingsList.ScrollBox.ScrollTarget
         if not scrollTarget or not scrollTarget.GetChildren then return end
 
         local children = { scrollTarget:GetChildren() }
         for _, child in ipairs(children) do
-            if child and child.Text and child.Text.GetText and (child.Text:GetText() == MOUSE_LOOK_SPEED) then
-                local slider = child.SliderWithSteppers or child.Slider
-                if slider then
-                    if slider.SetEnabled then
-                        slider:SetEnabled(false)
-                    elseif slider.SetEnabled_ then
-                        slider:SetEnabled_(false)
+            local childText = child and child.Text and child.Text.GetText and child.Text:GetText()
+            if childText then
+                if headerText == CONTROLS_LABEL and childText == MOUSE_LOOK_SPEED then
+                    if DisableSettingControl(child, L["HOOK_DISABLED_BY_ADDON"], L["HOOK_MOUSE_SPEED_DESC"], L["HOOK_MOUSE_SPEED_PATH"]) then
+                        break
                     end
-
-                    if slider.Slider and slider.Slider.SetScript then
-                        slider.Slider:SetScript("OnEnter", function(s)
-                            GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
-                            GameTooltip:SetText(L["HOOK_DISABLED_BY_ADDON"])
-                            GameTooltip:AddLine(L["HOOK_MOUSE_SPEED_DESC"], 1, 1, 1)
-                            GameTooltip:AddLine(L["HOOK_MOUSE_SPEED_PATH"], 1, 0.82, 0)
-                            GameTooltip:Show()
-                        end)
-
-                        slider.Slider:SetScript("OnLeave", function()
-                            GameTooltip:Hide()
-                        end)
+                elseif headerText == COMBAT_LABEL and IsSilhouetteSettingLabel(childText) then
+                    if DisableSettingControl(child, L["HOOK_DISABLED_BY_ADDON"], L["HOOK_SILHOUETTE_DESC"], L["HOOK_SILHOUETTE_PATH"]) then
+                        break
                     end
                 end
-                break
             end
         end
     end)
