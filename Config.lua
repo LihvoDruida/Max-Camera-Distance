@@ -811,7 +811,7 @@ function Config:SetupOptions()
                     dragonRacingRaceFirstPerson = {
                         type = "toggle",
                         name = L["DRAGON_RACE_FP_NAME"] or "First-Person during Dragonriding Races",
-                        desc = L["DRAGON_RACE_FP_DESC"] or "Temporarily switches to first-person when a Dragonriding race aura is active, then restores FlyCam/Smart Zoom control when the race ends.",
+                        desc = L["DRAGON_RACE_FP_DESC"] or "Temporarily switches to first-person when a Dragonriding race aura is active, then restores Smart Zoom control when the race ends.",
                         get = function() return GetOption("dragonRacingRaceFirstPerson") end,
                         set = function(_, val) SetOption("dragonRacingRaceFirstPerson", val) end,
                         order = 61.6,

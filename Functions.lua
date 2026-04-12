@@ -39,7 +39,6 @@ local UnitIsAFK             = UnitIsAFK
 local MoveViewRightStart    = MoveViewRightStart
 local MoveViewRightStop     = MoveViewRightStop
 local GetCameraZoom         = GetCameraZoom
-local SetView               = SetView
 local IsEncounterInProgress = IsEncounterInProgress
 local GetTime = GetTime
 
@@ -1014,6 +1013,13 @@ end)
 local shoulderRefreshToken = 0
 local raceFirstPersonApplied = false
 
+local function ApplyRaceFirstPersonZoom()
+    ApplyZoomCap(RACE_FIRST_PERSON_YARDS)
+    if LibCamera and LibCamera.SetZoomUsingCVar then
+        LibCamera:SetZoomUsingCVar(RACE_FIRST_PERSON_YARDS, 0.20)
+    end
+end
+
 local function GetShoulderOffsetZoomFactor(zoomLevel)
     local startOffset = 5.0
     local endOffset = 2.0
@@ -1031,7 +1037,7 @@ function Functions:ApplyShoulderOffset(force)
     local db = DB()
     if not db then return end
 
-    if not self:ShouldEnableShoulderNow() then
+    if raceFirstPersonApplied or not shoulderHandlerFrame:IsShown() then
         shoulderHandlerFrame.lastZoom = -1
         UpdateCVar("test_cameraOverShoulder", 0)
         return
@@ -1059,17 +1065,26 @@ function Functions:RequestShoulderRefresh()
     local myToken = shoulderRefreshToken
     shoulderHandlerFrame.lastZoom = -1
 
+    local function RefreshShoulderNow()
+        if ShoulderCompensation and ShoulderCompensation.Invalidate then
+            ShoulderCompensation:Invalidate()
+        end
+        Functions:ApplyShoulderOffset(true)
+        if ns.CVarGuard and ns.CVarGuard.Refresh then
+            ns.CVarGuard:Refresh(true)
+        end
+    end
+
+    if not (C_Timer and C_Timer.After) then
+        RefreshShoulderNow()
+        return
+    end
+
     local delays = { 0, 0.02, 0.08, 0.16 }
     for _, delay in ipairs(delays) do
         C_Timer.After(delay, function()
             if myToken ~= shoulderRefreshToken then return end
-            if ShoulderCompensation and ShoulderCompensation.Invalidate then
-                ShoulderCompensation:Invalidate()
-            end
-            Functions:ApplyShoulderOffset(true)
-            if ns.CVarGuard and ns.CVarGuard.Refresh then
-                ns.CVarGuard:Refresh(true)
-            end
+            RefreshShoulderNow()
         end)
     end
 end
@@ -1102,28 +1117,32 @@ function Functions:UpdateActionCam()
 
     local dragonRaceFirstPerson = self:ShouldUseDragonRacingFirstPerson(db)
 
-    if dragonRaceFirstPerson and not raceFirstPersonApplied and SetView then
-        pcall(SetView, 1)
-        raceFirstPersonApplied = true
-    elseif not dragonRaceFirstPerson and raceFirstPersonApplied then
-        raceFirstPersonApplied = false
-    end
-
     if dragonRaceFirstPerson then
-        shoulderHandlerFrame:Hide()
-        shoulderHandlerFrame.lastZoom = -1
-        UpdateCVar("test_cameraOverShoulder", 0)
-    elseif self:ShouldEnableShoulderNow() then
-        if SafeGetCVar("CameraKeepCharacterCentered") == 1 then
-            UpdateCVar("CameraKeepCharacterCentered", 0)
-            Functions:logMessage("warning", L["CONFLICT_FIX_MSG"] or "ActionCam: Disabled Keep Character Centered to prevent jitter.")
+        if not raceFirstPersonApplied then
+            raceFirstPersonApplied = true
         end
-        shoulderHandlerFrame:Show()
-        self:ApplyShoulderOffset(true)
-    else
+        ApplyRaceFirstPersonZoom()
         shoulderHandlerFrame:Hide()
         shoulderHandlerFrame.lastZoom = -1
         UpdateCVar("test_cameraOverShoulder", 0)
+    else
+        if raceFirstPersonApplied then
+            raceFirstPersonApplied = false
+            self:ScheduleStabilizedUpdate({ 0, 0.05, 0.20 }, true)
+        end
+
+        if self:ShouldEnableShoulderNow() then
+            if SafeGetCVar("CameraKeepCharacterCentered") == 1 then
+                UpdateCVar("CameraKeepCharacterCentered", 0)
+                Functions:logMessage("warning", L["CONFLICT_FIX_MSG"] or "ActionCam: Disabled Keep Character Centered to prevent jitter.")
+            end
+            shoulderHandlerFrame:Show()
+            self:ApplyShoulderOffset(true)
+        else
+            shoulderHandlerFrame:Hide()
+            shoulderHandlerFrame.lastZoom = -1
+            UpdateCVar("test_cameraOverShoulder", 0)
+        end
     end
 
     if ns.CVarGuard and ns.CVarGuard.Refresh then
