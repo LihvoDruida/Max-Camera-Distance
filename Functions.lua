@@ -505,17 +505,29 @@ function Functions:IsDragonRacingRaceActive()
         local issecretvalue = _G.isecretvalue
         local inRace = false
 
+        local function HasSafeDragonracingAuraSpellID(spellId)
+            if spellId == nil then
+                return false
+            end
+
+            if issecretvalue and issecretvalue(spellId) then
+                return false
+            end
+
+            local ok, result = pcall(function()
+                return DRAGONRACING_RACE_AURAS[spellId]
+            end)
+
+            return ok and result == true
+        end
+
         local function CheckAura(auraData)
             if canaccessvalue and not canaccessvalue(auraData) then
                 return
             end
 
             local spellId = auraData and auraData.spellId
-            if issecretvalue and issecretvalue(spellId) then
-                return
-            end
-
-            if spellId and DRAGONRACING_RACE_AURAS[spellId] then
+            if HasSafeDragonracingAuraSpellID(spellId) then
                 inRace = true
                 return true
             end
