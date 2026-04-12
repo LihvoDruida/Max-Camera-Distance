@@ -102,6 +102,7 @@ end
 local function MountZoomModeText(value)
     if value == "flying" then return L["MOUNT_ZOOM_MODE_FLYING"] or "Flying mounts only" end
     if value == "skyriding" then return L["MOUNT_ZOOM_MODE_SKYRIDING"] or "Skyriding only" end
+    if value == "forms" then return L["MOUNT_ZOOM_MODE_FORMS"] or "Travel forms only" end
     return L["MOUNT_ZOOM_MODE_ALL"] or "All mounts and travel forms"
 end
 
@@ -794,12 +795,13 @@ function Config:SetupOptions()
                     mountZoomMode = {
                         type = "select",
                         name = L["MOUNT_ZOOM_MODE_NAME"] or "Mount Zoom Mode",
-                        desc = L["MOUNT_ZOOM_MODE_DESC"] or "Choose whether mount zoom should apply to every mount/travel form, only to flying mounts, or only to Skyriding.",
+                        desc = L["MOUNT_ZOOM_MODE_DESC"] or "Choose whether mount zoom should apply to all mounts and travel forms, only to flying mounts, only to Skyriding, or only to travel forms.",
                         values = function()
                             return {
                                 all = L["MOUNT_ZOOM_MODE_ALL"] or "All mounts and travel forms",
                                 flying = L["MOUNT_ZOOM_MODE_FLYING"] or "Flying mounts only",
                                 skyriding = L["MOUNT_ZOOM_MODE_SKYRIDING"] or "Skyriding only",
+                                forms = L["MOUNT_ZOOM_MODE_FORMS"] or "Travel forms only",
                             }
                         end,
                         get = function() return GetOption("mountZoomMode") or "all" end,

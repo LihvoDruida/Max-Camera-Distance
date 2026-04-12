@@ -315,6 +315,7 @@ function Database:ApplyMigrations(profile)
         all = true,
         flying = true,
         skyriding = true,
+        forms = true,
     }
     if type(profile.mountZoomMode) ~= "string" or not VALID_MOUNT_ZOOM_MODES[profile.mountZoomMode] then
         profile.mountZoomMode = PROFILE_DEFAULTS.mountZoomMode

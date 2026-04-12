@@ -130,6 +130,7 @@ local FLYING_TRAVEL_BUFF_IDS = {
 local MOUNT_ZOOM_MODE_ALL = "all"
 local MOUNT_ZOOM_MODE_FLYING = "flying"
 local MOUNT_ZOOM_MODE_SKYRIDING = "skyriding"
+local MOUNT_ZOOM_MODE_FORMS = "forms"
 local RACE_FIRST_PERSON_YARDS = 1
 
 local IsInTravelForm
@@ -436,7 +437,7 @@ end
 
 function Functions:GetMountZoomMode(db)
     local mode = db and db.mountZoomMode
-    if mode == MOUNT_ZOOM_MODE_FLYING or mode == MOUNT_ZOOM_MODE_SKYRIDING then
+    if mode == MOUNT_ZOOM_MODE_FLYING or mode == MOUNT_ZOOM_MODE_SKYRIDING or mode == MOUNT_ZOOM_MODE_FORMS then
         return mode
     end
     return MOUNT_ZOOM_MODE_ALL
@@ -546,6 +547,45 @@ function Functions:IsFlyingTravelContext()
     return false
 end
 
+function Functions:IsTravelFormOnlyActive()
+    if LibMountInfo and LibMountInfo.IsMounted then
+        if LibMountInfo:IsMounted() then
+            return false
+        end
+    elseif IsMounted() then
+        return false
+    end
+
+    local formIndex = GetShapeshiftForm()
+    if formIndex and formIndex > 0 then
+        local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
+        if spellID and TRAVEL_FORM_IDS[spellID] then
+            return true
+        end
+    end
+
+    if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        for spellID in pairs(TRAVEL_BUFF_IDS) do
+            if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then
+                return true
+            end
+        end
+    else
+        local UnitBuff = _G.UnitBuff
+        if UnitBuff then
+            for i = 1, 40 do
+                local _, _, _, _, _, _, _, _, _, spellID = UnitBuff("player", i)
+                if not spellID then break end
+                if TRAVEL_BUFF_IDS[spellID] then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
 function Functions:ShouldUseMountZoom(db)
     if not IsInTravelForm() then
         return false
@@ -556,6 +596,8 @@ function Functions:ShouldUseMountZoom(db)
         return self:IsSkyriding() or self:IsDragonRacingRaceActive()
     elseif mode == MOUNT_ZOOM_MODE_FLYING then
         return self:IsFlyingTravelContext()
+    elseif mode == MOUNT_ZOOM_MODE_FORMS then
+        return self:IsTravelFormOnlyActive()
     end
 
     return true
