@@ -1,4 +1,4 @@
-local addonName = "Max_Camera_Distance"
+local addonName = ...
 local L = LibStub("AceLocale-3.0"):NewLocale(addonName, "zhCN")
 if not L then return end
 
@@ -307,3 +307,36 @@ L["HOOK_SILHOUETTE_DESC"] = "Character silhouette visibility is controlled in th
 L["HOOK_SILHOUETTE_PATH"] = "/mcd config -> Advanced Settings -> Visual Utility"
 L["HOOK_SILHOUETTE_LABEL_OBSTRUCTED"] = "Show Silhouette when Obstructed"
 L["HOOK_SILHOUETTE_LABEL_OBSCURED"] = "Show Silhouette when Obscured"
+
+
+-- 摄像机碰撞
+L["INDIRECT_OFFSET"] = "碰撞灵敏度"
+L["INDIRECT_OFFSET_DESC"] = "控制 Blizzard 的降低镜头碰撞灵敏度。0.0 为最小值，10.0 为最大值，游戏默认值为 1.5。数值越高，在镜头被拉近前可容忍的遮挡越多。"
+
+L["COLLISION_HEADER"] = "镜头碰撞"
+L["COLLISION_DESC"] = "镜头碰撞的通用行为。这些设置是全局的，在所有场景下生效，而不是按战斗情境区分。"
+L["COLLISION_SUMMARY_TEXT"] = "降低镜头碰撞：%s\n碰撞灵敏度：%s\n被遮挡时显示轮廓：%s\n减少意外移动：%s\n这些设置是全局的，在所有场景下生效。"
+L["VISUAL_UTILITY_HEADER"] = "视觉辅助"
+
+-- 坐骑 / 旅行形态模式
+L["MOUNT_ZOOM_MODE_NAME"] = "坐骑缩放模式"
+L["MOUNT_ZOOM_MODE_DESC"] = "选择自动坐骑缩放应用于所有坐骑和旅行形态、仅飞行坐骑、仅 Skyriding，或仅旅行形态。"
+L["MOUNT_ZOOM_MODE_ALL"] = "所有坐骑和旅行形态"
+L["MOUNT_ZOOM_MODE_FLYING"] = "仅飞行坐骑"
+L["MOUNT_ZOOM_MODE_SKYRIDING"] = "仅 Skyriding"
+L["MOUNT_ZOOM_MODE_FORMS"] = "仅旅行形态"
+
+L["DRAGON_RACE_FP_NAME"] = "Skyriding 竞速时启用第一人称"
+L["DRAGON_RACE_FP_DESC"] = "当 Skyriding 竞速光环激活时，临时切换为第一人称视角，并在竞速结束后恢复智能缩放控制。"
+
+-- 状态
+L["STATUS_COLLISION_ENABLED"] = "降低镜头碰撞"
+L["STATUS_COLLISION_OFFSET"] = "碰撞灵敏度"
+L["STATUS_SMART_PIVOT"] = "减少意外移动"
+L["STATUS_MOUNT_MODE"] = "坐骑缩放模式"
+L["STATUS_TRAVEL_SIGNALS"] = "旅行状态"
+L["STATUS_MOUNT_ZOOM_ACTIVE"] = "坐骑缩放已激活"
+L["STATUS_FLYING_MOUNT"] = "飞行坐骑"
+L["STATUS_SKYRIDING"] = "Skyriding"
+L["STATUS_DRAGON_RACE"] = "Skyriding 竞速"
+L["STATUS_DRAGON_RACE_FP"] = "竞速第一人称"

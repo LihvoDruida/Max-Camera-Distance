@@ -1,4 +1,4 @@
-local addonName = "Max_Camera_Distance"
+local addonName = ...
 local L = LibStub("AceLocale-3.0"):NewLocale(addonName, "deDE")
 
 if not L then return end
@@ -48,10 +48,6 @@ L["INDIRECT_VISIBILITY_DESC"] = "Steuert, wie die Kamera mit der Umgebung intera
 
 -- *** Messages & UI ***
 L["SETTINGS_CHANGED"] = "Kameraeinstellungen wurden geändert."
-L["SETTINGS_SET_TO_MAX"] = "Kameraeinstellungen auf Maximum gesetzt."
-L["SETTINGS_SET_TO_AVERAGE"] = "Kameraeinstellungen auf Durchschnitt gesetzt."
-L["SETTINGS_SET_TO_MIN"] = "Kameraeinstellungen auf Minimum gesetzt."
-L["SETTINGS_SET_TO_DEFAULT"] = "Kameraeinstellungen auf Standardwerte zurückgesetzt."
 L["SETTINGS_RESET"] = "Profil wurde auf Standardwerte zurückgesetzt."
 
 L["WARNING_TEXT"] = "Dieses Addon erweitert das Limit der Kameradistanz, um die Übersicht in Raids, Dungeons und PvP zu verbessern."
@@ -262,3 +258,36 @@ L["HOOK_SILHOUETTE_DESC"] = "Character silhouette visibility is controlled in th
 L["HOOK_SILHOUETTE_PATH"] = "/mcd config -> Advanced Settings -> Visual Utility"
 L["HOOK_SILHOUETTE_LABEL_OBSTRUCTED"] = "Show Silhouette when Obstructed"
 L["HOOK_SILHOUETTE_LABEL_OBSCURED"] = "Show Silhouette when Obscured"
+
+
+-- *** Camera Collision ***
+L["INDIRECT_OFFSET"] = "Kollisionsempfindlichkeit"
+L["INDIRECT_OFFSET_DESC"] = "Steuert Blizzards verringerte Kamera-Kollisionsempfindlichkeit. 0.0 ist das Minimum, 10.0 das Maximum, und der Spielstandard ist 1.5. Höhere Werte tolerieren mehr Hindernisse, bevor die Kamera heranzoomt."
+
+L["COLLISION_HEADER"] = "Kamerakollision"
+L["COLLISION_DESC"] = "Allgemeines Verhalten der Kamerakollision. Diese Einstellungen sind global und gelten überall, nicht pro Kampfkontext."
+L["COLLISION_SUMMARY_TEXT"] = "Reduzierte Kamerakollision: %s\nKollisionsempfindlichkeit: %s\nSilhouette bei Sichtbehinderung anzeigen: %s\nUnerwartete Bewegungen verringern: %s\nDiese Einstellungen sind global und gelten überall."
+L["VISUAL_UTILITY_HEADER"] = "Visuelle Hilfen"
+
+-- *** Mount / Travel Mode ***
+L["MOUNT_ZOOM_MODE_NAME"] = "Reittier-Zoommodus"
+L["MOUNT_ZOOM_MODE_DESC"] = "Wähle, ob Automatischer Reittier-Zoom für alle Reittiere und Reisegestalten, nur für fliegende Reittiere, nur für Skyriding oder nur für Reisegestalten gelten soll."
+L["MOUNT_ZOOM_MODE_ALL"] = "Alle Reittiere und Reisegestalten"
+L["MOUNT_ZOOM_MODE_FLYING"] = "Nur fliegende Reittiere"
+L["MOUNT_ZOOM_MODE_SKYRIDING"] = "Nur Skyriding"
+L["MOUNT_ZOOM_MODE_FORMS"] = "Nur Reisegestalten"
+
+L["DRAGON_RACE_FP_NAME"] = "Ego-Perspektive während Drachenreiten-Rennen"
+L["DRAGON_RACE_FP_DESC"] = "Wechselt vorübergehend in die Ego-Perspektive, solange eine Drachenreiten-Rennaura aktiv ist, und stellt nach dem Rennen wieder die Smart-Zoom-Steuerung her."
+
+-- *** Status ***
+L["STATUS_COLLISION_ENABLED"] = "Reduzierte Kamerakollision"
+L["STATUS_COLLISION_OFFSET"] = "Kollisionsempfindlichkeit"
+L["STATUS_SMART_PIVOT"] = "Unerwartete Bewegungen verringern"
+L["STATUS_MOUNT_MODE"] = "Reittier-Zoommodus"
+L["STATUS_TRAVEL_SIGNALS"] = "Reisesignale"
+L["STATUS_MOUNT_ZOOM_ACTIVE"] = "Reittier-Zoom aktiv"
+L["STATUS_FLYING_MOUNT"] = "Fliegendes Reittier"
+L["STATUS_SKYRIDING"] = "Skyriding"
+L["STATUS_DRAGON_RACE"] = "Drachenreiten-Rennen"
+L["STATUS_DRAGON_RACE_FP"] = "Rennen Ego-Perspektive"

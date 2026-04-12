@@ -1,4 +1,4 @@
-local addonName = "Max_Camera_Distance"
+local addonName = ...
 local L = LibStub("AceLocale-3.0"):NewLocale(addonName, "frFR")
 
 if not L then return end
@@ -48,10 +48,6 @@ L["INDIRECT_VISIBILITY_DESC"] = "Contrôle la façon dont la caméra interagit a
 
 -- *** Messages & UI ***
 L["SETTINGS_CHANGED"] = "Les paramètres de la caméra ont été modifiés."
-L["SETTINGS_SET_TO_MAX"] = "Paramètres de la caméra réglés sur les valeurs maximales."
-L["SETTINGS_SET_TO_AVERAGE"] = "Paramètres de la caméra réglés sur les valeurs moyennes."
-L["SETTINGS_SET_TO_MIN"] = "Paramètres de la caméra réglés sur les valeurs minimales."
-L["SETTINGS_SET_TO_DEFAULT"] = "Paramètres de la caméra réinitialisés aux valeurs par défaut."
 L["SETTINGS_RESET"] = "Le profil a été réinitialisé aux valeurs par défaut."
 
 L["WARNING_TEXT"] = "Cet addon étend la limite de distance de la caméra pour améliorer la visibilité lors des raids, donjons et PvP."
@@ -262,3 +258,36 @@ L["HOOK_SILHOUETTE_DESC"] = "Character silhouette visibility is controlled in th
 L["HOOK_SILHOUETTE_PATH"] = "/mcd config -> Advanced Settings -> Visual Utility"
 L["HOOK_SILHOUETTE_LABEL_OBSTRUCTED"] = "Show Silhouette when Obstructed"
 L["HOOK_SILHOUETTE_LABEL_OBSCURED"] = "Show Silhouette when Obscured"
+
+
+-- *** Collision caméra ***
+L["INDIRECT_OFFSET"] = "Sensibilité de collision"
+L["INDIRECT_OFFSET_DESC"] = "Contrôle la sensibilité réduite de collision caméra de Blizzard. 0.0 est le minimum, 10.0 le maximum, et la valeur par défaut du jeu est 1.5. Des valeurs plus élevées tolèrent davantage d'obstruction avant que la caméra ne se rapproche."
+
+L["COLLISION_HEADER"] = "Collision de la caméra"
+L["COLLISION_DESC"] = "Comportement général de collision de la caméra. Ces réglages sont globaux et s'appliquent partout, pas selon le contexte de combat."
+L["COLLISION_SUMMARY_TEXT"] = "Collision caméra réduite : %s\nSensibilité de collision : %s\nAfficher la silhouette en cas d'obstruction : %s\nRéduire les mouvements inattendus : %s\nCes réglages sont globaux et s'appliquent partout."
+L["VISUAL_UTILITY_HEADER"] = "Assistance visuelle"
+
+-- *** Mode monture / voyage ***
+L["MOUNT_ZOOM_MODE_NAME"] = "Mode de zoom des montures"
+L["MOUNT_ZOOM_MODE_DESC"] = "Choisissez si le zoom automatique des montures doit s'appliquer à toutes les montures et formes de voyage, uniquement aux montures volantes, uniquement au Skyriding, ou uniquement aux formes de voyage."
+L["MOUNT_ZOOM_MODE_ALL"] = "Toutes les montures et formes de voyage"
+L["MOUNT_ZOOM_MODE_FLYING"] = "Montures volantes uniquement"
+L["MOUNT_ZOOM_MODE_SKYRIDING"] = "Skyriding uniquement"
+L["MOUNT_ZOOM_MODE_FORMS"] = "Formes de voyage uniquement"
+
+L["DRAGON_RACE_FP_NAME"] = "Vue à la première personne pendant les courses de Skyriding"
+L["DRAGON_RACE_FP_DESC"] = "Bascule temporairement en vue à la première personne lorsqu'une aura de course de Skyriding est active, puis restaure le contrôle du zoom intelligent à la fin de la course."
+
+-- *** Statut ***
+L["STATUS_COLLISION_ENABLED"] = "Collision caméra réduite"
+L["STATUS_COLLISION_OFFSET"] = "Sensibilité de collision"
+L["STATUS_SMART_PIVOT"] = "Réduire les mouvements inattendus"
+L["STATUS_MOUNT_MODE"] = "Mode de zoom des montures"
+L["STATUS_TRAVEL_SIGNALS"] = "Signaux de déplacement"
+L["STATUS_MOUNT_ZOOM_ACTIVE"] = "Zoom de monture actif"
+L["STATUS_FLYING_MOUNT"] = "Monture volante"
+L["STATUS_SKYRIDING"] = "Skyriding"
+L["STATUS_DRAGON_RACE"] = "Course de Skyriding"
+L["STATUS_DRAGON_RACE_FP"] = "Course en première personne"
