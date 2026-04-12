@@ -26,6 +26,7 @@ local pairs    = pairs
 local print    = print
 
 local math_abs = math.abs
+local math_floor = math.floor
 local tinsert  = table.insert
 local strlower = string.lower
 
@@ -38,9 +39,16 @@ local GetShapeshiftFormInfo = GetShapeshiftFormInfo
 local UnitIsAFK             = UnitIsAFK
 local MoveViewRightStart    = MoveViewRightStart
 local MoveViewRightStop     = MoveViewRightStop
+local MoveViewLeftStart     = MoveViewLeftStart
+local MoveViewLeftStop      = MoveViewLeftStop
 local GetCameraZoom         = GetCameraZoom
 local IsEncounterInProgress = IsEncounterInProgress
 local GetTime = GetTime
+local UnitIsDead = UnitIsDead
+local UnitIsGhost = UnitIsGhost
+local UnitOnTaxi = UnitOnTaxi
+local IsFlying = IsFlying
+local CloseAllWindows = CloseAllWindows
 
 local IsInRaid             = IsInRaid
 local IsInGroup            = IsInGroup
@@ -74,12 +82,16 @@ local updateFrame = CreateFrame("Frame")
 updateFrame:Hide()
 
 -- AFK
-local wasAFK = false
-local savedYawSpeed = 180
-local AFK_YAW_SPEED = 4
+local afkActive = false
+local afkUIHidden = false
+local afkPendingToken = 0
+local afkSuppressUntilClear = false
+local afkResumeAfterCombat = false
+local AFK_DEFAULT_DELAY = 3
+local AFK_DEFAULT_SPEED = 0.5
 
 -- Frames
-local safeExitFrame = CreateFrame("Frame", "MCD_SafeExitFrame", UIParent)
+local safeExitFrame = CreateFrame("Frame", "MCD_SafeExitFrame", WorldFrame)
 local shoulderHandlerFrame = CreateFrame("Frame")
 
 -- =====================================================================
@@ -1040,17 +1052,306 @@ ShouldForceCombatZoom = function(db)
     return IsEncounterInProgress() and true or false
 end
 
+local function ClampAfkDelay(value)
+    value = tonumber(value)
+    if not value or value ~= value then
+        return AFK_DEFAULT_DELAY
+    end
+    return math.max(0, math.min(30, math_floor(value + 0.5)))
+end
+
+local function ClampAfkRotationSpeed(value)
+    value = tonumber(value)
+    if not value or value ~= value then
+        return AFK_DEFAULT_SPEED
+    end
+    value = math_floor(value * 10 + 0.5) / 10
+    return math.max(0.1, math.min(2.0, value))
+end
+
+local function NormalizeAfkDirection(value)
+    return (value == "left") and "left" or "right"
+end
+
+local function IsPlayerAFKSafe()
+    local ok, isAfk = pcall(function()
+        return tostring(UnitIsAFK("player")) == "true"
+    end)
+    return ok and isAfk or false
+end
+
+local function IsProfessionActivityBlockingAfk()
+    if not IS_RETAIL then
+        return false
+    end
+
+    if type(IsRecipeRepeating) == "function" and IsRecipeRepeating() then
+        return true
+    end
+
+    if _G.ProfessionsFrame and _G.ProfessionsFrame:IsShown() then
+        return true
+    end
+
+    if _G.ProfessionsCustomerOrdersFrame and _G.ProfessionsCustomerOrdersFrame:IsShown() then
+        return true
+    end
+
+    return false
+end
+
+local function StopAfkRotation()
+    MoveViewRightStop()
+    MoveViewLeftStop()
+end
+
+local function ShowUiAfterAfk()
+    if afkUIHidden then
+        UIParent:Show()
+        afkUIHidden = false
+    end
+    safeExitFrame:Hide()
+end
+
+local function ApplyAfkZoom(db)
+    if not db or db.afkZoomOut == false then return end
+
+    local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE)
+        or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local transition = math.max(0.2, math.min(4, tonumber(db.zoomTransitionTime) or 0.5))
+
+    ApplyZoomCap(maxYards)
+    if LibCamera and LibCamera.SetZoomUsingCVar then
+        LibCamera:SetZoomUsingCVar(maxYards, transition)
+    end
+end
+
+local function StartAfkRotation(db)
+    if not db then return end
+
+    local speed = ClampAfkRotationSpeed(db.afkRotationSpeed)
+    local direction = NormalizeAfkDirection(db.afkDirection)
+
+    StopAfkRotation()
+
+    if direction == "left" then
+        MoveViewLeftStart(speed)
+    else
+        MoveViewRightStart(speed)
+    end
+end
+
+local function CanEnterAfkMode(db)
+    if not db or not db.afkMode then
+        return false, "disabled"
+    end
+
+    if not IsPlayerAFKSafe() then
+        return false, "not_afk"
+    end
+
+    if UnitAffectingCombat("player") then
+        return false, "in_combat"
+    end
+
+    if UnitIsDead("player") or UnitIsGhost("player") then
+        return false, "dead"
+    end
+
+    if UnitOnTaxi and UnitOnTaxi("player") then
+        return false, "on_taxi"
+    end
+
+    if db.afkSkipMounted ~= false and IsMounted() then
+        return false, "mounted"
+    end
+
+    if db.afkSkipFlying ~= false and type(IsFlying) == "function" and IsFlying() then
+        return false, "flying"
+    end
+
+    if IsProfessionActivityBlockingAfk() then
+        return false, "professions"
+    end
+
+    return true, nil
+end
+
+local ExitAfkMode
+
+local function EnterAfkMode(db)
+    if afkActive or not db then return end
+
+    afkActive = true
+    afkResumeAfterCombat = false
+
+    ApplyAfkZoom(db)
+    StartAfkRotation(db)
+
+    if db.afkHideUI ~= false then
+        if CloseAllWindows then
+            CloseAllWindows()
+        end
+        UIParent:Hide()
+        afkUIHidden = true
+        safeExitFrame:Show()
+    else
+        ShowUiAfterAfk()
+    end
+
+    Functions:logMessage("info", L["AFK_ENTER_MSG"] or "AFK Mode: enabled (cinematic rotation).")
+end
+
+ExitAfkMode = function(reason, suppressUntilClear, restoreCamera)
+    afkPendingToken = afkPendingToken + 1
+
+    if suppressUntilClear then
+        afkSuppressUntilClear = true
+    end
+
+    local hadActiveAfk = afkActive or afkUIHidden
+
+    StopAfkRotation()
+    ShowUiAfterAfk()
+
+    afkActive = false
+
+    if hadActiveAfk then
+        Functions:logMessage("info", L["AFK_EXIT_MSG"] or "AFK Mode: disabled (restored UI and camera).")
+    end
+
+    if restoreCamera ~= false and ns.Functions and ns.Functions.AdjustCamera then
+        ns.Functions:AdjustCamera(true)
+    end
+end
+
+local function ScheduleAfkModeEntry(db)
+    afkPendingToken = afkPendingToken + 1
+    local token = afkPendingToken
+    local delay = ClampAfkDelay(db and db.afkDelay)
+
+    if delay <= 0 then
+        local currentDb = DB()
+        local canEnter = currentDb and CanEnterAfkMode(currentDb)
+        if canEnter and token == afkPendingToken then
+            EnterAfkMode(currentDb)
+        end
+        return
+    end
+
+    C_Timer.After(delay, function()
+        if token ~= afkPendingToken then return end
+
+        local currentDb = DB()
+        if not currentDb then return end
+
+        local canEnter = CanEnterAfkMode(currentDb)
+        if not canEnter then return end
+
+        EnterAfkMode(currentDb)
+    end)
+end
+
+function Functions:ManualExitAfkMode()
+    ExitAfkMode("manual_exit", true, true)
+end
+
+function Functions:RefreshAfkMode(force)
+    local db = DB()
+    if not db then return end
+
+    local isAfk = IsPlayerAFKSafe()
+    if not isAfk then
+        afkSuppressUntilClear = false
+    end
+
+    if not db.afkMode then
+        afkResumeAfterCombat = false
+        if afkActive or afkUIHidden then
+            ExitAfkMode("disabled", false, true)
+        else
+            afkPendingToken = afkPendingToken + 1
+        end
+        return
+    end
+
+    if not isAfk then
+        afkResumeAfterCombat = false
+        if afkActive or afkUIHidden then
+            ExitAfkMode("not_afk", false, true)
+        else
+            afkPendingToken = afkPendingToken + 1
+        end
+        return
+    end
+
+    if afkSuppressUntilClear then
+        afkPendingToken = afkPendingToken + 1
+        return
+    end
+
+    local canEnter, reason = CanEnterAfkMode(db)
+    if not canEnter then
+        if reason == "in_combat" then
+            afkResumeAfterCombat = (db.afkResumeAfterCombat ~= false) and true or false
+            if afkResumeAfterCombat == false and (afkActive or afkUIHidden) then
+                afkSuppressUntilClear = true
+            end
+        else
+            afkResumeAfterCombat = false
+        end
+
+        if afkActive or afkUIHidden then
+            ExitAfkMode(reason, false, true)
+        else
+            afkPendingToken = afkPendingToken + 1
+        end
+        return
+    end
+
+    afkResumeAfterCombat = false
+
+    if afkActive then
+        if force then
+            ApplyAfkZoom(db)
+            StartAfkRotation(db)
+            if db.afkHideUI ~= false then
+                if CloseAllWindows then
+                    CloseAllWindows()
+                end
+                UIParent:Hide()
+                afkUIHidden = true
+                safeExitFrame:Show()
+            else
+                ShowUiAfterAfk()
+            end
+        end
+        return
+    end
+
+    ScheduleAfkModeEntry(db)
+end
+
+function Functions:IsAfkModeActive()
+    return afkActive
+end
+
 -- =====================================================================
 -- 11) ACTIONCAM SHOULDER (dynamic shoulder offset + model compensation)
 -- =====================================================================
-tinsert(UISpecialFrames, safeExitFrame:GetName())
 safeExitFrame:Hide()
-
-safeExitFrame:SetScript("OnHide", function()
-    if wasAFK then
-        Functions:OnPlayerFlagsChanged()
+safeExitFrame:SetAllPoints(WorldFrame)
+safeExitFrame:SetFrameStrata("TOOLTIP")
+safeExitFrame:EnableKeyboard(true)
+if safeExitFrame.SetPropagateKeyboardInput then
+    safeExitFrame:SetPropagateKeyboardInput(false)
+end
+safeExitFrame:SetScript("OnKeyDown", function(_, key)
+    if key == "ESCAPE" then
+        Functions:ManualExitAfkMode()
     end
 end)
+tinsert(UISpecialFrames, safeExitFrame:GetName())
 
 local shoulderRefreshToken = 0
 local raceFirstPersonApplied = false
@@ -1524,39 +1825,11 @@ end
 -- 13) AFK (SAFE)
 -- =====================================================================
 function Functions:OnPlayerFlagsChanged()
-    local db = DB()
-    if not db or not db.afkMode then return end
+    Functions:RefreshAfkMode(false)
+end
 
-    local isAFK = UnitIsAFK("player")
-
-    if isAFK and not wasAFK then
-        wasAFK = true
-        Functions:logMessage("info", L["AFK_ENTER_MSG"] or "AFK Mode: enabled (cinematic rotation).")
-
-        savedYawSpeed = SafeGetCVar("cameraYawMoveSpeed") or 180
-        SafeSetCVar("cameraYawMoveSpeed", AFK_YAW_SPEED)
-        MoveViewRightStart()
-
-        local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
-        if LibCamera and LibCamera.SetZoomUsingCVar then
-            LibCamera:SetZoomUsingCVar(maxYards, 4.0)
-        end
-
-        UIParent:Hide()
-        safeExitFrame:Show()
-
-    elseif (not isAFK) and wasAFK then
-        wasAFK = false
-        Functions:logMessage("info", L["AFK_EXIT_MSG"] or "AFK Mode: disabled (restored UI and camera).")
-
-        MoveViewRightStop()
-        SafeSetCVar("cameraYawMoveSpeed", savedYawSpeed)
-
-        UIParent:Show()
-        safeExitFrame:Hide()
-
-        Functions:AdjustCamera(true)
-    end
+function Functions:OnAfkRelevantStateChanged()
+    Functions:RefreshAfkMode(false)
 end
 
 -- =====================================================================

@@ -63,7 +63,19 @@ local function SetOption(key, value)
         shouldApplyNow = ns.Functions:ShouldApplyOptionImmediately(key)
     end
 
-    if shouldApplyNow then
+    if key == "afkMode"
+        or key == "afkHideUI"
+        or key == "afkDelay"
+        or key == "afkDirection"
+        or key == "afkRotationSpeed"
+        or key == "afkSkipMounted"
+        or key == "afkSkipFlying"
+        or key == "afkResumeAfterCombat"
+        or key == "afkZoomOut" then
+        if ns.Functions and ns.Functions.RefreshAfkMode then
+            ns.Functions:RefreshAfkMode(true)
+        end
+    elseif shouldApplyNow then
         ApplyNow()
     end
 
@@ -1043,6 +1055,92 @@ function Config:SetupOptions()
                         get = function() return GetOption("afkMode") end,
                         set = function(_, val) SetOption("afkMode", val) end,
                         order = 11
+                    },
+                    afkHideUI = {
+                        type = "toggle",
+                        name = L["AFK_HIDE_UI_NAME"] or "Hide UI in AFK mode",
+                        desc = L["AFK_HIDE_UI_DESC"] or "Hides the full UI for a cinematic AFK mode. ESC safely restores it.",
+                        get = function() return GetOption("afkHideUI") end,
+                        set = function(_, val) SetOption("afkHideUI", val) end,
+                        disabled = function() return not GetOption("afkMode") end,
+                        order = 12
+                    },
+                    afkZoomOut = {
+                        type = "toggle",
+                        name = L["AFK_ZOOM_OUT_NAME"] or "Zoom out while AFK",
+                        desc = L["AFK_ZOOM_OUT_DESC"] or "Pushes the camera to the maximum managed distance when AFK mode starts.",
+                        get = function() return GetOption("afkZoomOut") end,
+                        set = function(_, val) SetOption("afkZoomOut", val) end,
+                        disabled = function() return not GetOption("afkMode") end,
+                        order = 13
+                    },
+                    afkDelay = {
+                        type = "range",
+                        name = L["AFK_DELAY_NAME"] or "Start delay",
+                        desc = L["AFK_DELAY_DESC"] or "How many seconds to wait after the game marks you AFK before the cinematic mode starts.",
+                        min = 0,
+                        max = 30,
+                        step = 1,
+                        get = function() return GetOption("afkDelay") end,
+                        set = function(_, val) SetOption("afkDelay", val) end,
+                        disabled = function() return not GetOption("afkMode") end,
+                        order = 14
+                    },
+                    afkDirection = {
+                        type = "select",
+                        name = L["AFK_DIRECTION_NAME"] or "Rotation direction",
+                        desc = L["AFK_DIRECTION_DESC"] or "Chooses the camera rotation direction used in AFK mode.",
+                        values = function()
+                            return {
+                                left = L["AFK_DIRECTION_LEFT"] or "Left",
+                                right = L["AFK_DIRECTION_RIGHT"] or "Right",
+                            }
+                        end,
+                        get = function() return GetOption("afkDirection") end,
+                        set = function(_, val) SetOption("afkDirection", val) end,
+                        disabled = function() return not GetOption("afkMode") end,
+                        order = 15
+                    },
+                    afkRotationSpeed = {
+                        type = "range",
+                        name = L["AFK_SPEED_NAME"] or "Rotation speed",
+                        desc = L["AFK_SPEED_DESC"] or "Normalized MoveView speed used by AFK rotation. Lower values are calmer.",
+                        min = 0.1,
+                        max = 2.0,
+                        step = 0.1,
+                        bigStep = 0.1,
+                        isPercent = false,
+                        get = function() return GetOption("afkRotationSpeed") end,
+                        set = function(_, val) SetOption("afkRotationSpeed", val) end,
+                        disabled = function() return not GetOption("afkMode") end,
+                        order = 16
+                    },
+                    afkSkipMounted = {
+                        type = "toggle",
+                        name = L["AFK_SKIP_MOUNTED_NAME"] or "Do not start on mounts",
+                        desc = L["AFK_SKIP_MOUNTED_DESC"] or "Prevents AFK mode from starting while mounted.",
+                        get = function() return GetOption("afkSkipMounted") end,
+                        set = function(_, val) SetOption("afkSkipMounted", val) end,
+                        disabled = function() return not GetOption("afkMode") end,
+                        order = 17
+                    },
+                    afkSkipFlying = {
+                        type = "toggle",
+                        name = L["AFK_SKIP_FLYING_NAME"] or "Do not start while flying",
+                        desc = L["AFK_SKIP_FLYING_DESC"] or "Prevents AFK mode from starting while the character is flying.",
+                        get = function() return GetOption("afkSkipFlying") end,
+                        set = function(_, val) SetOption("afkSkipFlying", val) end,
+                        disabled = function() return not GetOption("afkMode") end,
+                        order = 18
+                    },
+                    afkResumeAfterCombat = {
+                        type = "toggle",
+                        name = L["AFK_RESUME_AFTER_COMBAT_NAME"] or "Resume after combat",
+                        desc = L["AFK_RESUME_AFTER_COMBAT_DESC"] or "If AFK mode is interrupted by combat, it starts again after combat ends as long as you are still AFK.",
+                        get = function() return GetOption("afkResumeAfterCombat") end,
+                        set = function(_, val) SetOption("afkResumeAfterCombat", val) end,
+                        disabled = function() return not GetOption("afkMode") end,
+                        order = 19
                     },
                 }
             },

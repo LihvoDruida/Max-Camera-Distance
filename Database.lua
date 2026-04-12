@@ -186,6 +186,14 @@ local PROFILE_DEFAULTS = {
     actionCamShoulderOutOfCombat = false,
     actionCamPitch = false,
     afkMode = false,
+    afkHideUI = true,
+    afkDelay = 3,
+    afkDirection = "right",
+    afkRotationSpeed = 0.5,
+    afkSkipMounted = true,
+    afkSkipFlying = true,
+    afkResumeAfterCombat = true,
+    afkZoomOut = true,
 
 
     -- debug
@@ -338,6 +346,17 @@ function Database:ApplyMigrations(profile)
     profile.actionCamShoulderOutOfCombat = NormalizeBoolean(profile.actionCamShoulderOutOfCombat, PROFILE_DEFAULTS.actionCamShoulderOutOfCombat)
     profile.actionCamPitch = NormalizeBoolean(profile.actionCamPitch, PROFILE_DEFAULTS.actionCamPitch)
     profile.afkMode = NormalizeBoolean(profile.afkMode, PROFILE_DEFAULTS.afkMode)
+    profile.afkHideUI = NormalizeBoolean(profile.afkHideUI, PROFILE_DEFAULTS.afkHideUI)
+    profile.afkDelay = Clamp(tonumber(profile.afkDelay) or PROFILE_DEFAULTS.afkDelay, 0, 30)
+    if type(profile.afkDirection) ~= "string" or (profile.afkDirection ~= "left" and profile.afkDirection ~= "right") then
+        profile.afkDirection = PROFILE_DEFAULTS.afkDirection
+    end
+    profile.afkRotationSpeed = Clamp(tonumber(profile.afkRotationSpeed) or PROFILE_DEFAULTS.afkRotationSpeed, 0.1, 2.0)
+    profile.afkRotationSpeed = math.floor(profile.afkRotationSpeed * 10 + 0.5) / 10
+    profile.afkSkipMounted = NormalizeBoolean(profile.afkSkipMounted, PROFILE_DEFAULTS.afkSkipMounted)
+    profile.afkSkipFlying = NormalizeBoolean(profile.afkSkipFlying, PROFILE_DEFAULTS.afkSkipFlying)
+    profile.afkResumeAfterCombat = NormalizeBoolean(profile.afkResumeAfterCombat, PROFILE_DEFAULTS.afkResumeAfterCombat)
+    profile.afkZoomOut = NormalizeBoolean(profile.afkZoomOut, PROFILE_DEFAULTS.afkZoomOut)
     profile.enableDebugLogging = NormalizeBoolean(profile.enableDebugLogging, PROFILE_DEFAULTS.enableDebugLogging)
     profile.minimap.hide = NormalizeBoolean(profile.minimap.hide, false)
 

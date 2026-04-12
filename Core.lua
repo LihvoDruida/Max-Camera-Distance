@@ -204,15 +204,54 @@ eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
             ForceSmartUpdate()
         end)
     end
+
+    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
+        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
+    end
 end
 
-eventHandlers.PLAYER_REGEN_DISABLED = RequestSmartUpdate
-eventHandlers.PLAYER_REGEN_ENABLED = RequestSmartUpdate
-eventHandlers.PLAYER_DEAD = RequestSmartUpdate
-eventHandlers.PLAYER_ALIVE = RequestSmartUpdate
-eventHandlers.PLAYER_UNGHOST = RequestSmartUpdate
-eventHandlers.PLAYER_MOUNT_DISPLAY_CHANGED = RequestSmartUpdate
-eventHandlers.UPDATE_SHAPESHIFT_FORM = RequestSmartUpdate
+eventHandlers.PLAYER_REGEN_DISABLED = function(event)
+    RequestSmartUpdate(event)
+    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
+        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
+    end
+end
+eventHandlers.PLAYER_REGEN_ENABLED = function(event)
+    RequestSmartUpdate(event)
+    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
+        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
+    end
+end
+eventHandlers.PLAYER_DEAD = function(event)
+    RequestSmartUpdate(event)
+    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
+        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
+    end
+end
+eventHandlers.PLAYER_ALIVE = function(event)
+    RequestSmartUpdate(event)
+    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
+        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
+    end
+end
+eventHandlers.PLAYER_UNGHOST = function(event)
+    RequestSmartUpdate(event)
+    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
+        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
+    end
+end
+eventHandlers.PLAYER_MOUNT_DISPLAY_CHANGED = function(event)
+    RequestSmartUpdate(event)
+    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
+        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
+    end
+end
+eventHandlers.UPDATE_SHAPESHIFT_FORM = function(event)
+    RequestSmartUpdate(event)
+    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
+        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
+    end
+end
 eventHandlers.UNIT_MODEL_CHANGED = function(event, unit)
     if unit ~= "player" then return end
     RequestShoulderRefresh()
