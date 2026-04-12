@@ -4,6 +4,7 @@ local Functions = ns.Functions
 
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName, true) or {}
 local Compat = ns.Compat or {}
+local ShoulderCompensation = ns.ShoulderCompensation or {}
 
 local LibCamera    = LibStub("LibCamera-1.0", true)
 local LibMountInfo = LibStub("LibMountInfo-1.0", true)
@@ -186,7 +187,7 @@ local function NormalizeManagedCVarValue(cvarName, value, db)
     elseif cvarName == "cameraIndirectOffset" then
         return ClampNumber(value, 0, 10) or ((db and ClampNumber(db.cameraIndirectOffset, 0, 10)) or 1.5)
     elseif cvarName == "test_cameraOverShoulder" then
-        return ClampNumber(value, 0, 2) or 0
+        return ClampNumber(value, -15, 15) or 0
     end
 
     local num = tonumber(value)
@@ -789,7 +790,7 @@ ShouldForceCombatZoom = function(db)
 end
 
 -- =====================================================================
--- 11) ACTIONCAM SHOULDER (dynamic shoulder offset)
+-- 11) ACTIONCAM SHOULDER (dynamic shoulder offset + model compensation)
 -- =====================================================================
 tinsert(UISpecialFrames, safeExitFrame:GetName())
 safeExitFrame:Hide()
@@ -799,6 +800,8 @@ safeExitFrame:SetScript("OnHide", function()
         Functions:OnPlayerFlagsChanged()
     end
 end)
+
+local shoulderRefreshToken = 0
 
 local function GetShoulderOffsetZoomFactor(zoomLevel)
     local startOffset = 5.0
@@ -813,15 +816,56 @@ local function GetShoulderOffsetZoomFactor(zoomLevel)
     end
 end
 
-shoulderHandlerFrame.lastZoom = -1
-shoulderHandlerFrame:SetScript("OnUpdate", function(self)
-    local currentZoom = GetCameraZoom()
-    if math_abs(self.lastZoom - currentZoom) < 0.01 then return end
-    self.lastZoom = currentZoom
+function Functions:ApplyShoulderOffset(force)
+    local db = DB()
+    if not db then return end
 
-    local factor = GetShoulderOffsetZoomFactor(currentZoom)
+    if not self:ShouldEnableShoulderNow() then
+        shoulderHandlerFrame.lastZoom = -1
+        UpdateCVar("test_cameraOverShoulder", 0)
+        return
+    end
+
+    local currentZoom = GetCameraZoom()
+    if (not force) and math_abs(shoulderHandlerFrame.lastZoom - currentZoom) < 0.01 then
+        return
+    end
+    shoulderHandlerFrame.lastZoom = currentZoom
+
+    local zoomFactor = GetShoulderOffsetZoomFactor(currentZoom)
     local baseOffset = 1.0
-    UpdateCVar("test_cameraOverShoulder", baseOffset * factor)
+    local modelFactor = 1.0
+
+    if ShoulderCompensation and ShoulderCompensation.GetFactor then
+        modelFactor = ShoulderCompensation:GetFactor() or 1.0
+    end
+
+    UpdateCVar("test_cameraOverShoulder", baseOffset * zoomFactor * modelFactor)
+end
+
+function Functions:RequestShoulderRefresh()
+    shoulderRefreshToken = shoulderRefreshToken + 1
+    local myToken = shoulderRefreshToken
+    shoulderHandlerFrame.lastZoom = -1
+
+    local delays = { 0, 0.02, 0.08, 0.16 }
+    for _, delay in ipairs(delays) do
+        C_Timer.After(delay, function()
+            if myToken ~= shoulderRefreshToken then return end
+            if ShoulderCompensation and ShoulderCompensation.Invalidate then
+                ShoulderCompensation:Invalidate()
+            end
+            Functions:ApplyShoulderOffset(true)
+            if ns.CVarGuard and ns.CVarGuard.Refresh then
+                ns.CVarGuard:Refresh(true)
+            end
+        end)
+    end
+end
+
+shoulderHandlerFrame.lastZoom = -1
+shoulderHandlerFrame:SetScript("OnUpdate", function()
+    Functions:ApplyShoulderOffset(false)
 end)
 shoulderHandlerFrame:Hide()
 
@@ -851,8 +895,10 @@ function Functions:UpdateActionCam()
             Functions:logMessage("warning", L["CONFLICT_FIX_MSG"] or "ActionCam: Disabled Keep Character Centered to prevent jitter.")
         end
         shoulderHandlerFrame:Show()
+        self:ApplyShoulderOffset(true)
     else
         shoulderHandlerFrame:Hide()
+        shoulderHandlerFrame.lastZoom = -1
         UpdateCVar("test_cameraOverShoulder", 0)
     end
 

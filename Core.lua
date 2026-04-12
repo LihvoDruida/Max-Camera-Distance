@@ -58,6 +58,12 @@ local function ForceSmartUpdate()
     end
 end
 
+local function RequestShoulderRefresh()
+    if ns.Functions and ns.Functions.RequestShoulderRefresh then
+        SafeCall(ns.Functions.RequestShoulderRefresh, "RequestShoulderRefresh", ns.Functions)
+    end
+end
+
 local startupRefreshToken = 0
 
 local function ScheduleStartupCameraRefresh()
@@ -207,6 +213,37 @@ eventHandlers.PLAYER_ALIVE = RequestSmartUpdate
 eventHandlers.PLAYER_UNGHOST = RequestSmartUpdate
 eventHandlers.PLAYER_MOUNT_DISPLAY_CHANGED = RequestSmartUpdate
 eventHandlers.UPDATE_SHAPESHIFT_FORM = RequestSmartUpdate
+eventHandlers.UNIT_MODEL_CHANGED = function(event, unit)
+    if unit ~= "player" then return end
+    RequestShoulderRefresh()
+    RequestSmartUpdate()
+end
+
+eventHandlers.UNIT_AURA = function(event, unit)
+    if unit ~= "player" then return end
+    RequestShoulderRefresh()
+end
+
+eventHandlers.UNIT_ENTERING_VEHICLE = function(event, unit)
+    if unit ~= "player" then return end
+    RequestShoulderRefresh()
+    RequestSmartUpdate()
+end
+
+eventHandlers.UNIT_EXITING_VEHICLE = function(event, unit)
+    if unit ~= "player" then return end
+    RequestShoulderRefresh()
+    RequestSmartUpdate()
+end
+
+eventHandlers.UNIT_SPELLCAST_SUCCEEDED = function(event, unit)
+    if unit ~= "player" then return end
+    RequestShoulderRefresh()
+end
+
+eventHandlers.LOADING_SCREEN_DISABLED = function()
+    RequestShoulderRefresh()
+end
 eventHandlers.GROUP_ROSTER_UPDATE = RequestSmartUpdate
 eventHandlers.ENCOUNTER_START = ForceSmartUpdate
 eventHandlers.ENCOUNTER_END = ForceSmartUpdate
