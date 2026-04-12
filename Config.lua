@@ -99,6 +99,12 @@ local function ContextText(value)
     return L["STATUS_CONTEXT_WORLD"] or "World"
 end
 
+local function MountZoomModeText(value)
+    if value == "flying" then return L["MOUNT_ZOOM_MODE_FLYING"] or "Flying mounts only" end
+    if value == "skyriding" then return L["MOUNT_ZOOM_MODE_SKYRIDING"] or "Skyriding only" end
+    return L["MOUNT_ZOOM_MODE_ALL"] or "All mounts and travel forms"
+end
+
 local function PendingReturnText(snapshot)
     if not snapshot or not snapshot.pendingReturnActive then
         return L["STATUS_PENDING_RETURN_NONE"] or "No delayed return is pending."
@@ -213,6 +219,25 @@ local function BuildLiveStatusText()
             BoolText(snapshot.isMounted),
             L["STATUS_REASON_WORLD_BOSS"] or "World Boss",
             BoolText(snapshot.forceWorldBoss)
+        ),
+        string.format("%s: %s",
+            L["STATUS_MOUNT_MODE"] or "Mount Zoom Mode",
+            MountZoomModeText(snapshot.mountZoomMode)
+        ),
+        string.format("%s: %s=%s, %s=%s, %s=%s, %s=%s",
+            L["STATUS_TRAVEL_SIGNALS"] or "Travel Signals",
+            L["STATUS_MOUNT_ZOOM_ACTIVE"] or "Mount Zoom Active",
+            BoolText(snapshot.mountZoomActive),
+            L["STATUS_FLYING_MOUNT"] or "Flying Mount",
+            BoolText(snapshot.isFlyingMount),
+            L["STATUS_SKYRIDING"] or "Skyriding",
+            BoolText(snapshot.isSkyriding),
+            L["STATUS_DRAGON_RACE"] or "Dragonriding Race",
+            BoolText(snapshot.isDragonRacing)
+        ),
+        string.format("%s: %s",
+            L["STATUS_DRAGON_RACE_FP"] or "Race First Person",
+            BoolText(snapshot.dragonRacingFirstPerson)
         ),
         string.format("%s: %s=%.1fs, %s=%.1fs, %s=%.1fs, %s=%.1fs",
             L["STATUS_RETURN_DELAYS"] or "Return Delays",
@@ -765,6 +790,33 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("autoMountZoom", val) end,
                         order = 61,
                         width = "full"
+                    },
+                    mountZoomMode = {
+                        type = "select",
+                        name = L["MOUNT_ZOOM_MODE_NAME"] or "Mount Zoom Mode",
+                        desc = L["MOUNT_ZOOM_MODE_DESC"] or "Choose whether mount zoom should apply to every mount/travel form, only to flying mounts, or only to Skyriding.",
+                        values = function()
+                            return {
+                                all = L["MOUNT_ZOOM_MODE_ALL"] or "All mounts and travel forms",
+                                flying = L["MOUNT_ZOOM_MODE_FLYING"] or "Flying mounts only",
+                                skyriding = L["MOUNT_ZOOM_MODE_SKYRIDING"] or "Skyriding only",
+                            }
+                        end,
+                        get = function() return GetOption("mountZoomMode") or "all" end,
+                        set = function(_, val) SetOption("mountZoomMode", val) end,
+                        order = 61.5,
+                        disabled = function() return not GetOption("autoMountZoom") end,
+                        width = "full",
+                    },
+                    dragonRacingRaceFirstPerson = {
+                        type = "toggle",
+                        name = L["DRAGON_RACE_FP_NAME"] or "First-Person during Dragonriding Races",
+                        desc = L["DRAGON_RACE_FP_DESC"] or "Temporarily switches to first-person when a Dragonriding race aura is active, then restores FlyCam/Smart Zoom control when the race ends.",
+                        get = function() return GetOption("dragonRacingRaceFirstPerson") end,
+                        set = function(_, val) SetOption("dragonRacingRaceFirstPerson", val) end,
+                        order = 61.6,
+                        disabled = function() return not GetOption("autoMountZoom") end,
+                        width = "full",
                     },
                     mountZoomFactor = {
                         type = "range",

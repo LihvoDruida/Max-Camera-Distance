@@ -144,6 +144,8 @@ local PROFILE_DEFAULTS = {
     -- systems
     autoCombatZoom = false,
     autoMountZoom = false,
+    mountZoomMode = "all",
+    dragonRacingRaceFirstPerson = false,
     combatZoomOnPlayer = true,
     combatZoomOnGroup = true,
     combatZoomOnThreat = true,
@@ -309,9 +311,19 @@ function Database:ApplyMigrations(profile)
     profile.raidCombatPreset = NormalizePreset(profile.raidCombatPreset)
     profile.pvpCombatPreset = NormalizePreset(profile.pvpCombatPreset)
 
+    local VALID_MOUNT_ZOOM_MODES = {
+        all = true,
+        flying = true,
+        skyriding = true,
+    }
+    if type(profile.mountZoomMode) ~= "string" or not VALID_MOUNT_ZOOM_MODES[profile.mountZoomMode] then
+        profile.mountZoomMode = PROFILE_DEFAULTS.mountZoomMode
+    end
+
     -- Normalize booleans in case SavedVariables contain stale numeric/string values.
     profile.autoCombatZoom = NormalizeBoolean(profile.autoCombatZoom, PROFILE_DEFAULTS.autoCombatZoom)
     profile.autoMountZoom = NormalizeBoolean(profile.autoMountZoom, PROFILE_DEFAULTS.autoMountZoom)
+    profile.dragonRacingRaceFirstPerson = NormalizeBoolean(profile.dragonRacingRaceFirstPerson, PROFILE_DEFAULTS.dragonRacingRaceFirstPerson)
     profile.combatZoomOnPlayer = NormalizeBoolean(profile.combatZoomOnPlayer, PROFILE_DEFAULTS.combatZoomOnPlayer)
     profile.combatZoomOnGroup = NormalizeBoolean(profile.combatZoomOnGroup, PROFILE_DEFAULTS.combatZoomOnGroup)
     profile.combatZoomOnThreat = NormalizeBoolean(profile.combatZoomOnThreat, PROFILE_DEFAULTS.combatZoomOnThreat)

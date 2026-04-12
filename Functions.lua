@@ -15,6 +15,8 @@ local ACD          = LibStub("AceConfigDialog-3.0", true)
 -- =====================================================================
 local C_Timer     = C_Timer
 local C_UnitAuras = C_UnitAuras
+local C_MountJournal = _G.C_MountJournal
+local AuraUtil = _G.AuraUtil
 
 local pcall    = pcall
 local tonumber = tonumber
@@ -37,6 +39,7 @@ local UnitIsAFK             = UnitIsAFK
 local MoveViewRightStart    = MoveViewRightStart
 local MoveViewRightStop     = MoveViewRightStop
 local GetCameraZoom         = GetCameraZoom
+local SetView               = SetView
 local IsEncounterInProgress = IsEncounterInProgress
 local GetTime = GetTime
 
@@ -95,6 +98,42 @@ local TRAVEL_BUFF_IDS = {
     [221885]=true, [221886]=true, [221887]=true, [87840]=true, [392376]=true,
     [783]=true, [165962]=true, [276029]=true, [232323]=true, [2645]=true, [292651]=true
 }
+
+local FLYCAM_FLYING_MOUNT_TYPES = {
+    [242] = true,
+    [247] = true,
+    [248] = true,
+    [306] = true,
+    [398] = true,
+    [402] = true,
+    [407] = true,
+    [424] = true,
+    [436] = true,
+    [444] = true,
+}
+
+local DRAGONRACING_RACE_AURAS = {
+    [439239] = true,
+    [369968] = true,
+}
+
+local FLYING_TRAVEL_FORM_IDS = {
+    [33943] = true,
+    [40120] = true,
+    [165962] = true,
+}
+
+local FLYING_TRAVEL_BUFF_IDS = {
+    [276029] = true,
+    [165962] = true,
+}
+
+local MOUNT_ZOOM_MODE_ALL = "all"
+local MOUNT_ZOOM_MODE_FLYING = "flying"
+local MOUNT_ZOOM_MODE_SKYRIDING = "skyriding"
+local RACE_FIRST_PERSON_YARDS = 1
+
+local IsInTravelForm
 
 -- =====================================================================
 -- 4) DB helper
@@ -396,7 +435,146 @@ function Functions:IsSkyriding()
     return false
 end
 
-local function IsInTravelForm()
+function Functions:GetMountZoomMode(db)
+    local mode = db and db.mountZoomMode
+    if mode == MOUNT_ZOOM_MODE_FLYING or mode == MOUNT_ZOOM_MODE_SKYRIDING then
+        return mode
+    end
+    return MOUNT_ZOOM_MODE_ALL
+end
+
+function Functions:GetActiveMountID()
+    if not IS_RETAIL or not IsMounted() or not C_MountJournal or not C_MountJournal.GetMountIDs then
+        return nil
+    end
+
+    local mountIDs = C_MountJournal.GetMountIDs()
+    if not mountIDs then return nil end
+
+    for _, mountID in ipairs(mountIDs) do
+        local _, _, _, isActive = C_MountJournal.GetMountInfoByID(mountID)
+        if isActive then
+            return mountID
+        end
+    end
+
+    return nil
+end
+
+function Functions:IsFlyingMountActive()
+    local mountID = self:GetActiveMountID()
+    if not mountID or not C_MountJournal or not C_MountJournal.GetMountInfoExtraByID then
+        return false, nil, mountID
+    end
+
+    local _, _, _, _, mountTypeID = C_MountJournal.GetMountInfoExtraByID(mountID)
+    if mountTypeID and FLYCAM_FLYING_MOUNT_TYPES[mountTypeID] then
+        return true, mountTypeID, mountID
+    end
+
+    return false, mountTypeID, mountID
+end
+
+function Functions:IsDragonRacingRaceActive()
+    if not IsMounted() then
+        return false
+    end
+
+    if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        for spellID in pairs(DRAGONRACING_RACE_AURAS) do
+            if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then
+                return true
+            end
+        end
+    end
+
+    if AuraUtil and AuraUtil.ForEachAura then
+        local canaccessvalue = _G.canaccessvalue
+        local issecretvalue = _G.isecretvalue
+        local inRace = false
+
+        local function CheckAura(auraData)
+            if canaccessvalue and not canaccessvalue(auraData) then
+                return
+            end
+
+            local spellId = auraData and auraData.spellId
+            if issecretvalue and issecretvalue(spellId) then
+                return
+            end
+
+            if spellId and DRAGONRACING_RACE_AURAS[spellId] then
+                inRace = true
+                return true
+            end
+        end
+
+        AuraUtil.ForEachAura("player", "HELPFUL", nil, CheckAura, true)
+        if inRace then
+            return true
+        end
+    end
+
+    return false
+end
+
+function Functions:IsFlyingTravelContext()
+    if self:IsSkyriding() then
+        return true
+    end
+
+    local isFlyingMount = self:IsFlyingMountActive()
+    if isFlyingMount then
+        return true
+    end
+
+    local formIndex = GetShapeshiftForm()
+    if formIndex and formIndex > 0 then
+        local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
+        if spellID and FLYING_TRAVEL_FORM_IDS[spellID] then
+            return true
+        end
+    end
+
+    if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        for spellID in pairs(FLYING_TRAVEL_BUFF_IDS) do
+            if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+function Functions:ShouldUseMountZoom(db)
+    if not IsInTravelForm() then
+        return false
+    end
+
+    local mode = self:GetMountZoomMode(db)
+    if mode == MOUNT_ZOOM_MODE_SKYRIDING then
+        return self:IsSkyriding() or self:IsDragonRacingRaceActive()
+    elseif mode == MOUNT_ZOOM_MODE_FLYING then
+        return self:IsFlyingTravelContext()
+    end
+
+    return true
+end
+
+function Functions:ShouldUseDragonRacingFirstPerson(db)
+    if not (db and db.dragonRacingRaceFirstPerson) then
+        return false
+    end
+
+    if not self:IsDragonRacingRaceActive() then
+        return false
+    end
+
+    return self:IsFlyingTravelContext()
+end
+
+function IsInTravelForm()
     if LibMountInfo and LibMountInfo.IsMounted then
         if LibMountInfo:IsMounted() then return true end
     else
@@ -665,11 +843,29 @@ end
 
 local function GetCombatSignals(db)
     local threatStatus = UnitThreatSituation("player")
+    local mountedRaw = IsInTravelForm()
+    local mountZoomActive = mountedRaw and Functions:ShouldUseMountZoom(db) or false
+    local isSkyriding = mountedRaw and Functions:IsSkyriding() or false
+    local isDragonRacing = mountedRaw and Functions:IsDragonRacingRaceActive() or false
+    local isFlyingMount, mountTypeID, activeMountID = false, nil, nil
+
+    if mountedRaw then
+        isFlyingMount, mountTypeID, activeMountID = Functions:IsFlyingMountActive()
+    end
+
     return {
         playerInCombat = UnitAffectingCombat("player") and true or false,
         groupInCombat = Functions:IsGroupInCombat(),
         hasThreat = (threatStatus ~= nil and threatStatus > 0) and true or false,
-        isMounted = IsInTravelForm(),
+        isMounted = mountedRaw,
+        mountZoomActive = mountZoomActive,
+        isSkyriding = isSkyriding,
+        isDragonRacing = isDragonRacing,
+        isFlyingMount = isFlyingMount and true or false,
+        mountTypeID = mountTypeID,
+        activeMountID = activeMountID,
+        mountZoomMode = Functions:GetMountZoomMode(db),
+        dragonRacingFirstPerson = Functions:ShouldUseDragonRacingFirstPerson(db),
         forceCombatZoom = (db and ShouldForceCombatZoom(db)) and true or false,
         rawContext = GetCombatContextRaw(),
     }
@@ -707,7 +903,7 @@ local function BuildStatusSnapshot(db)
     local state = ZOOM_STATE_NONE
     if db and db.autoCombatZoom and combatActive then
         state = ZOOM_STATE_COMBAT
-    elseif db and db.autoMountZoom and signals.isMounted then
+    elseif db and db.autoMountZoom and signals.mountZoomActive then
         state = ZOOM_STATE_MOUNT
     end
 
@@ -726,8 +922,14 @@ local function BuildStatusSnapshot(db)
         targetPresetId = presetId
     elseif state == ZOOM_STATE_MOUNT then
         targetDistanceKey = "mountZoomFactor"
-        targetYards, targetSourceType, targetPresetId = GetDistanceValue(db, targetDistanceKey)
-        targetYards = targetYards or db.mountZoomFactor or db.maxZoomFactor or maxYards
+        if signals.dragonRacingFirstPerson then
+            targetYards = RACE_FIRST_PERSON_YARDS
+            targetSourceType = "dragonrace_first_person"
+            targetPresetId = "dragonrace_first_person"
+        else
+            targetYards, targetSourceType, targetPresetId = GetDistanceValue(db, targetDistanceKey)
+            targetYards = targetYards or db.mountZoomFactor or db.maxZoomFactor or maxYards
+        end
     elseif db.autoCombatZoom then
         targetDistanceKey = "minZoomFactor"
         targetYards, targetSourceType, targetPresetId = GetDistanceValue(db, targetDistanceKey)
@@ -756,6 +958,14 @@ local function BuildStatusSnapshot(db)
         groupInCombat = signals.groupInCombat,
         hasThreat = signals.hasThreat,
         isMounted = signals.isMounted,
+        mountZoomActive = signals.mountZoomActive,
+        mountZoomMode = signals.mountZoomMode,
+        isFlyingMount = signals.isFlyingMount,
+        isSkyriding = signals.isSkyriding,
+        isDragonRacing = signals.isDragonRacing,
+        dragonRacingFirstPerson = signals.dragonRacingFirstPerson,
+        activeMountID = signals.activeMountID,
+        mountTypeID = signals.mountTypeID,
         forceWorldBoss = signals.forceCombatZoom,
         reduceUnexpectedMovement = (db and db.reduceUnexpectedMovement) and true or false,
         indirectCollisionEnabled = (db and db.cameraIndirectVisibility) and true or false,
@@ -802,6 +1012,7 @@ safeExitFrame:SetScript("OnHide", function()
 end)
 
 local shoulderRefreshToken = 0
+local raceFirstPersonApplied = false
 
 local function GetShoulderOffsetZoomFactor(zoomLevel)
     local startOffset = 5.0
@@ -889,7 +1100,20 @@ function Functions:UpdateActionCam()
 
     UpdateCVar("test_cameraDynamicPitch", db.actionCamPitch and 1 or 0)
 
-    if self:ShouldEnableShoulderNow() then
+    local dragonRaceFirstPerson = self:ShouldUseDragonRacingFirstPerson(db)
+
+    if dragonRaceFirstPerson and not raceFirstPersonApplied and SetView then
+        pcall(SetView, 1)
+        raceFirstPersonApplied = true
+    elseif not dragonRaceFirstPerson and raceFirstPersonApplied then
+        raceFirstPersonApplied = false
+    end
+
+    if dragonRaceFirstPerson then
+        shoulderHandlerFrame:Hide()
+        shoulderHandlerFrame.lastZoom = -1
+        UpdateCVar("test_cameraOverShoulder", 0)
+    elseif self:ShouldEnableShoulderNow() then
         if SafeGetCVar("CameraKeepCharacterCentered") == 1 then
             UpdateCVar("CameraKeepCharacterCentered", 0)
             Functions:logMessage("warning", L["CONFLICT_FIX_MSG"] or "ActionCam: Disabled Keep Character Centered to prevent jitter.")

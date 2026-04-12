@@ -222,6 +222,9 @@ end
 eventHandlers.UNIT_AURA = function(event, unit)
     if unit ~= "player" then return end
     RequestShoulderRefresh()
+    if IsMounted and IsMounted() then
+        RequestSmartUpdate()
+    end
 end
 
 eventHandlers.UNIT_ENTERING_VEHICLE = function(event, unit)
