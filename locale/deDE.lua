@@ -23,17 +23,15 @@ L["PITCH_MOVE_SPEED_DESC"] = "Passt die Geschwindigkeit der vertikalen Kamerabew
 
 -- *** Combat Settings ***
 L["COMBAT_SETTINGS"] = "Intelligenter Kampf-Zoom"
-L["COMBAT_SETTINGS_WARNING"] = "|cff0070deDieser Bereich ermöglicht es der Kamera, die Distanz automatisch zu ändern, je nachdem, ob du dich im Kampf befindest oder nicht.|r"
+L["COMBAT_SETTINGS_WARNING"] = "|cffffd100Systemlogik:|r Die Kameradistanz wird automatisch an deinen Zustand angepasst.
 
+|cffffd100Priorität:|r |cffff5555Kampf|r  >  |cff66ccffReittier|r  >  |cffffffffNormalzustand|r"
 L["AUTO_ZOOM_COMBAT"] = "Intelligenten Kampf-Zoom aktivieren"
-L["AUTO_ZOOM_COMBAT_DESC"] = "Wenn aktiviert, zoomt die Kamera bei Kampfbeginn automatisch heraus und nach Kampfende wieder hinein."
-
+L["AUTO_ZOOM_COMBAT_DESC"] = "Zoomt beim Kampfbeginn automatisch auf die konfigurierte Distanz heraus. |cffff5555Höchste Priorität.|r"
 L["MAX_COMBAT_ZOOM_FACTOR"] = "Distanz im Kampf"
-L["MAX_COMBAT_ZOOM_FACTOR_DESC"] = "Die gewünschte Kameradistanz, während du dich IM KAMPF befindest."
-
+L["MAX_COMBAT_ZOOM_FACTOR_DESC"] = "Ziel-Kameradistanz, während du |cffff5555IM KAMPF|r bist."
 L["MIN_COMBAT_ZOOM_FACTOR"] = "Distanz außerhalb des Kampfes"
-L["MIN_COMBAT_ZOOM_FACTOR_DESC"] = "Die gewünschte Kameradistanz, wenn du dich NICHT im Kampf befindest (Ruhemodus)."
-
+L["MIN_COMBAT_ZOOM_FACTOR_DESC"] = "Ziel-Kameradistanz, wenn du |cffffffffNICHT im Kampf|r und |cff66ccffNICHT aufgesessen|r bist."
 L["DISMOUNT_DELAY"] = "Verzögerung nach Kampfende"
 L["DISMOUNT_DELAY_DESC"] = "Zeit in Sekunden, die nach dem Verlassen des Kampfes gewartet wird, bevor die Kamera wieder hineinzoomt."
 
@@ -53,8 +51,7 @@ L["INDIRECT_VISIBILITY_DESC"] = "Steuert, wie die Kamera mit der Umgebung intera
 L["SETTINGS_CHANGED"] = "Kameraeinstellungen wurden geändert."
 L["SETTINGS_RESET"] = "Profil wurde auf Standardwerte zurückgesetzt."
 
-L["WARNING_TEXT"] = "Dieses Addon erweitert das Limit der Kameradistanz, um die Übersicht in Raids, Dungeons und PvP zu verbessern."
-
+L["WARNING_TEXT"] = "|cffffd100Achtung:|r Dieses Addon erweitert das Limit der Kameradistanz über den Standard-Schieberegler von Blizzard hinaus, um die Übersicht in Raids, Dungeons und PvP zu verbessern."
 L["RELOAD_BUTTON"] = "UI neu laden"
 L["RELOAD_BUTTON_DESC"] = "Lädt das Benutzerinterface neu, um kritische Änderungen anzuwenden."
 
@@ -64,8 +61,7 @@ L["RESET_BUTTON_DESC"] = "Setzt alle Einstellungen in diesem Profil auf die Stan
 -- *** Debug Settings ***
 L["DEBUG_SETTINGS"] = "Debug-Einstellungen"
 L["ENABLE_DEBUG_LOGGING"] = "Logging aktivieren"
-L["ENABLE_DEBUG_LOGGING_DESC"] = "Gibt Debug-Informationen im Chatfenster aus."
-
+L["ENABLE_DEBUG_LOGGING_DESC"] = "Gibt Debug-Informationen zu Zustandswechseln |cffff5555(Kampf/Reittier/AFK)|r und CVar-Aktualisierungen im Chat aus."
 L["DEBUG_LEVEL"] = "Debug-Level"
 L["DEBUG_LEVEL_DESC"] = "Wähle die Ausführlichkeit der Protokolle."
 L["DEBUG_LEVEL_ERROR"] = "Fehler"
@@ -101,26 +97,27 @@ L["PROFILES_MISSING_LIB_DESC"] = "AceDBOptions-3.0 wurde nicht gefunden, daher s
 -- Added missing fallback keys to keep UI complete
 L["VERSION_PREFIX"] = "Version: "
 L["ZOOM_TRANSITION"] = "Transition Smoothness"
-L["ZOOM_TRANSITION_DESC"] = "Time in seconds to smoothly transition between camera distances (Combat/Mount/Normal). Higher values mean slower, smoother movement."
+L["ZOOM_TRANSITION_DESC"] = "Zeit in Sekunden für einen sanften Übergang zwischen Kameradistanzen |cffff5555(Kampf)|r, |cff66ccffReittier|r und |cffffffffNormalzustand|r. Höhere Werte bedeuten eine langsamere, weichere Bewegung."
 L["DB_NOT_READY"] = "Database not initialized yet."
 L["SHOW_MINIMAP_BUTTON"] = "Show Minimap Button"
 L["SHOW_MINIMAP_BUTTON_DESC"] = "Toggles the minimap icon."
 L["ENABLED"] = "|cff00ff00Enabled|r"
 L["DISABLED"] = "|cffff0000Disabled|r"
 L["ZONES_HEADER"] = "Combat Zones"
-L["ZONES_DESC"] = "Select zones where the addon will |cff00ff00force max combat zoom|r.\n|cff888888Disable zones to keep camera control more relaxed.|r"
+L["ZONES_DESC"] = "Wähle Zonen, in denen das Addon |cff00ff00maximalen Kampf-Zoom erzwingt|r.
+|cff888888Deaktiviere einzelne Zonen für ein sanfteres Kameraverhalten.|r"
 L["ZONE_PARTY"] = "Dungeons"
 L["ZONE_RAID"] = "Raids"
 L["ZONE_ARENA"] = "Arenas"
 L["ZONE_BG"] = "Battlegrounds"
 L["ZONE_SCENARIO"] = "Scenarios / Delves"
 L["ZONE_WORLD"] = "Open World Combat"
-L["ZONE_WORLD_DESC"] = "Zooms out for ANY combat in the open world. Warning: may feel aggressive while questing."
+L["ZONE_WORLD_DESC"] = "Zoomt bei |cffff5555JEDEM Kampf|r in der offenen Welt heraus. |cffffd100Warnung:|r kann sich beim Questen zu aggressiv anfühlen."
 L["ZONE_WORLD_BOSS"] = "World Bosses / Events"
 L["ZONE_WORLD_BOSS_DESC"] = "Zooms out only during boss encounters in the open world (IsEncounterInProgress)."
 L["MOUNT_SETTINGS_HEADER"] = "Mount & Travel Settings"
 L["AUTO_MOUNT_ZOOM"] = "Enable Auto Zoom on Mount"
-L["AUTO_MOUNT_ZOOM_DESC"] = "Automatically zooms out when mounted or in travel form (Druid/Shaman/Evoker). Active only when NOT in combat."
+L["AUTO_MOUNT_ZOOM_DESC"] = "Zoomt automatisch heraus, wenn du aufgesessen bist oder dich in Reisegestalt befindest (Druide/Schamane/Rufer). Aktiv nur |cffffffffaußerhalb des Kampfes|r."
 L["MOUNT_ZOOM_FACTOR"] = "Mount Distance"
 L["MOUNT_ZOOM_FACTOR_DESC"] = "Target camera distance while mounted/traveling."
 L["SMART_ZOOM_MSG"] = "Smart Zoom: state=%s, target=%.1f yards"
@@ -140,14 +137,14 @@ L["ACTION_CAM_PITCH_NAME"] = "Dynamic Pitch"
 L["ACTION_CAM_PITCH_DESC"] = "Adjusts camera angle based on movement (test_cameraDynamicPitch)."
 L["CONFLICT_FIX_MSG"] = "ActionCam: Disabled 'Keep Character Centered' to prevent camera jitter."
 L["AFK_MODE_HEADER"] = "AFK Mode"
-L["AFK_MODE_DESC_SAFE"] = "|cff00ff00Safe Mode:|r If the UI is hidden, pressing |cffffd100ESC|r will immediately restore it and exit AFK mode."
+L["AFK_MODE_DESC_SAFE"] = "|cff00ff00Sicherer Modus:|r Wenn das UI ausgeblendet ist, stellt |cffffd100ESC|r es sofort wieder her und beendet den AFK-Modus."
 L["AFK_MODE_ENABLE"] = "Enable AFK Rotation"
 L["AFK_MODE_ENABLE_DESC"] = "Automatically zooms out and rotates the camera while AFK. Hides UI for cinematic effect."
 L["AFK_ENTER_MSG"] = "AFK Mode: enabled (cinematic rotation)."
 L["AFK_EXIT_MSG"] = "AFK Mode: disabled (restored UI and camera)."
 L["CMD_USAGE"] = "Usage: /mcd config | autozoom | automount"
 L["ZOOM_SET_MESSAGE"] = "Zoom set to %s (%.1f yards)"
-L["HOOK_DISABLED_BY_ADDON"] = "|cffff0000Disabled by MaxCameraDistance|r"
+L["HOOK_DISABLED_BY_ADDON"] = "|cffff0000Durch MaxCameraDistance deaktiviert|r"
 L["HOOK_MOUSE_SPEED_DESC"] = "Mouse look speed is controlled separately (Horizontal/Vertical) in the addon settings:"
 L["HOOK_MOUSE_SPEED_PATH"] = "/mcd config -> General Settings"
 
@@ -196,7 +193,7 @@ L["STATUS_REASON_WORLD_BOSS"] = "World Boss"
 
 L["PRESET_SETTINGS"] = "Presets"
 L["PRESET_SECTION_HEADER"] = "Distance Presets"
-L["PRESET_SECTION_DESC"] = "Presets convert high-level choices into real distances. If a preset other than Manual is selected, the matching slider is locked automatically."
+L["PRESET_SECTION_DESC"] = "Voreinstellungen wandeln allgemeine Auswahl in echte Distanzen um. Wenn ein anderes Preset als |cffffd100Manuell|r gewählt ist, wird der passende Schieberegler automatisch |cffff5555gesperrt|r."
 L["PRESET_MANUAL_GROUP_HEADER"] = "Manual / Normal"
 L["PRESET_COMBAT_GROUP_HEADER"] = "Combat Presets"
 L["PRESET_MOUNT_GROUP_HEADER"] = "Mount / Travel"
@@ -211,7 +208,7 @@ L["PRESET_STATUS_MANUAL"] = "Manual control is active. Slider value: %.1f yd."
 L["PRESET_STATUS_LOCKED"] = "Preset: %s. Effective distance: %.1f yd. Matching manual control is locked until you switch back to Manual."
 L["PRESET_UNKNOWN"] = "Unknown"
 L["MANUAL_SECTION_HEADER"] = "Manual Camera Controls"
-L["MANUAL_SECTION_DESC"] = "Manual controls stay available only when the matching preset is set to Manual."
+L["MANUAL_SECTION_DESC"] = "Manuelle Steuerungen bleiben nur verfügbar, wenn das passende Preset auf |cffffd100Manuell|r steht."
 L["MANUAL_COMBAT_HEADER"] = "Manual Distances"
 L["MANUAL_COMBAT_DESC"] = "These sliders are used only when their matching preset is set to Manual."
 L["MANUAL_MAX_PRESET"] = "Manual Max Distance Preset"
@@ -227,7 +224,7 @@ L["STATUS_DISTANCE_SOURCE"] = "Distance Source"
 
 L["DEBUG_SETTINGS"] = "Status & Debug"
 L["DEBUG_LOGGING_HEADER"] = "Chat Logging"
-L["DEBUG_LOGGING_DESC"] = "These options control what gets printed to chat. Live Status above is always available even with logging disabled."
+L["DEBUG_LOGGING_DESC"] = "Diese Optionen steuern, was im Chat ausgegeben wird. Der Block |cffffd100Live-Status|r oben ist auch bei deaktivierter Protokollierung immer verfügbar."
 L["COMBAT_TRIGGER_HEADER"] = "Combat Triggers"
 L["COMBAT_TRIGGER_DESC"] = "Choose which events are allowed to activate combat zoom."
 L["COMBAT_TRIGGER_PLAYER"] = "Zoom when I enter combat"
@@ -240,7 +237,7 @@ L["STATUS_TRIGGER_RULES"] = "Trigger Rules"
 L["STATUS_ACTIVE_TRIGGERS"] = "Active Triggers"
 
 
-L["DELAY_HEADER_DESC"] = "Combat zoom-out is instant. Returning to Normal is delayed per context to avoid camera flicker."
+L["DELAY_HEADER_DESC"] = "Das Herauszoomen im Kampf erfolgt sofort. Die Rückkehr zu |cffffffffNormal|r wird je nach Kontext verzögert, um Kameraflackern zu vermeiden."
 L["WORLD_COMBAT_RETURN_DELAY"] = "Open World Return Delay"
 L["WORLD_COMBAT_RETURN_DELAY_DESC"] = "Delay before returning to Normal after open-world combat ends."
 L["PARTY_COMBAT_RETURN_DELAY"] = "Party Return Delay"
@@ -265,11 +262,14 @@ L["HOOK_SILHOUETTE_LABEL_OBSCURED"] = "Show Silhouette when Obscured"
 
 -- *** Camera Collision ***
 L["INDIRECT_OFFSET"] = "Kollisionsempfindlichkeit"
-L["INDIRECT_OFFSET_DESC"] = "Steuert Blizzards verringerte Kamera-Kollisionsempfindlichkeit. 0.0 ist das Minimum, 10.0 das Maximum, und der Spielstandard ist 1.5. Höhere Werte tolerieren mehr Hindernisse, bevor die Kamera heranzoomt."
-
+L["INDIRECT_OFFSET_DESC"] = "Steuert Blizzards verringerte Empfindlichkeit der Kamerakollision. |cff66ccff0.0|r ist das Minimum, |cffff555510.0|r das Maximum und der Spielstandard ist |cffffd1001.5|r. Höhere Werte tolerieren mehr Hindernisse, bevor die Kamera heranzoomt."
 L["COLLISION_HEADER"] = "Kamerakollision"
-L["COLLISION_DESC"] = "Allgemeines Verhalten der Kamerakollision. Diese Einstellungen sind global und gelten überall, nicht pro Kampfkontext."
-L["COLLISION_SUMMARY_TEXT"] = "Reduzierte Kamerakollision: %s\nKollisionsempfindlichkeit: %s\nSilhouette bei Sichtbehinderung anzeigen: %s\nUnerwartete Bewegungen verringern: %s\nDiese Einstellungen sind global und gelten überall."
+L["COLLISION_DESC"] = "Allgemeines Verhalten der Kamerakollision. Diese Einstellungen sind |cffffd100global|r und gelten überall, nicht nur pro Kampfkontext."
+L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffReduzierte Kamerakollision:|r %s
+|cff66ccffKollisionsempfindlichkeit:|r %s
+|cff66ccffSilhouette bei Sichtbehinderung anzeigen:|r %s
+|cff66ccffUnerwartete Bewegungen verringern:|r %s
+|cff888888Diese Einstellungen sind global und gelten überall.|r"
 L["VISUAL_UTILITY_HEADER"] = "Visuelle Hilfen"
 
 -- *** Mount / Travel Mode ***
@@ -297,7 +297,7 @@ L["STATUS_DRAGON_RACE_FP"] = "Rennen Ego-Perspektive"
 
 
 L["AFK_HIDE_UI_NAME"] = "UI im AFK ausblenden"
-L["AFK_HIDE_UI_DESC"] = "Blendet das gesamte Interface für einen cineastischen AFK-Modus aus. ESC stellt es sicher wieder her, ohne auf das Zurücksetzen des AFK-Flags zu warten."
+L["AFK_HIDE_UI_DESC"] = "Blendet das gesamte Interface für einen cineastischen AFK-Modus aus. |cffffd100ESC|r stellt es sicher wieder her, ohne auf das Zurücksetzen des AFK-Flags zu warten."
 L["AFK_ZOOM_OUT_NAME"] = "Kamera im AFK herauszoomen"
 L["AFK_ZOOM_OUT_DESC"] = "Schiebt die Kamera beim Eintritt in den AFK-Modus auf die maximal verwaltete Distanz."
 L["AFK_DELAY_NAME"] = "Startverzögerung"
@@ -315,7 +315,7 @@ L["AFK_SKIP_FLYING_DESC"] = "Verhindert, dass der AFK-Modus startet, solange dei
 L["AFK_RESUME_AFTER_COMBAT_NAME"] = "Nach Kampf fortsetzen"
 L["AFK_RESUME_AFTER_COMBAT_DESC"] = "Wenn der AFK-Modus durch Kampf unterbrochen wurde, wird er nach Kampffende erneut aktiviert, falls du noch AFK bist."
 L["ZOOM_RESTORE_SETTING"] = "Zoom-Wiederherstellung"
-L["ZOOM_RESTORE_SETTING_DESC"] = "Legt fest, wie Smart Zoom einen zuvor verwendeten Zoomwert wiederherstellt. Nie = immer die konfigurierten Ziele verwenden. Adaptiv = den letzten Zoom nur wiederherstellen, wenn du in den Zustand zurückkehrst, aus dem du gerade gekommen bist. Immer = immer den zuletzt gespeicherten Zoom dieses Zustands bevorzugen, wenn er innerhalb der Zustandsgrenze liegt."
+L["ZOOM_RESTORE_SETTING_DESC"] = "Legt fest, wie Smart Zoom einen zuvor verwendeten Zoomwert wiederherstellt. |cffffd100Nie|r = immer die konfigurierten Ziele verwenden. |cffffd100Adaptiv|r = den letzten Zoom nur wiederherstellen, wenn du in den Zustand zurückkehrst, aus dem du gerade gekommen bist. |cffffd100Immer|r = immer den zuletzt gespeicherten Zoom dieses Zustands bevorzugen, wenn er innerhalb der Zustandsgrenze liegt."
 L["ZOOM_RESTORE_NEVER"] = "Nie"
 L["ZOOM_RESTORE_ADAPTIVE"] = "Adaptiv"
 L["ZOOM_RESTORE_ALWAYS"] = "Immer"
@@ -324,10 +324,11 @@ L["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "Wenn Smart Zoom für Reittier oder Kampf 
 L["STATUS_DYNAMIC_BEHAVIOR"] = "Dynamisches Verhalten"
 
 L["LANGUAGE_SETTING"] = 'Addon-Sprache'
-L["LANGUAGE_SETTING_DESC"] = 'Wähle die Sprache des Addons. "Client-Standard" folgt der Sprache des Spielclients. Nach dem Ändern dieser Option wird die Benutzeroberfläche sofort neu geladen.'
+L["LANGUAGE_SETTING_DESC"] = "Wähle die Sprache des Addons. |cffffd100Client-Standard|r folgt der Sprache des Spielclients. Die Benutzeroberfläche wird nach dem Ändern dieser Option |cffff5555sofort neu geladen|r."
 L["LANGUAGE_CLIENT_DEFAULT"] = 'Client-Standard'
 L["ADDON_TITLE"] = 'Max Camera Distance'
 L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Klicken, um die Einstellungen zu öffnen'
+L["SETTINGS_APPLIED_FULL"] = "|cff00ff00Angewendet|r — Distanz: %.1f |cff888888(Übergang %.2fs)|r"
 
 if AceTable then
     for key, value in pairs(L) do

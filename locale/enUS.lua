@@ -19,8 +19,7 @@ L["MOVE_VIEW_DISTANCE"] = "Zoom Speed"
 L["MOVE_VIEW_DISTANCE_DESC"] = "How fast the camera zooms in and out when using the mouse wheel or hotkeys."
 
 L["ZOOM_TRANSITION"] = "Transition Smoothness"
-L["ZOOM_TRANSITION_DESC"] = "Time in seconds to smoothly transition between camera distances (Combat/Mount/Normal). Higher values mean slower, smoother movement."
-
+L["ZOOM_TRANSITION_DESC"] = "Time in seconds to smoothly transition between camera distances |cffff5555(Combat)|r, |cff66ccffMount|r, and |cffffffffNormal|r. Higher values mean slower, smoother movement."
 L["YAW_MOVE_SPEED"] = "Horizontal Rotation Speed"
 L["YAW_MOVE_SPEED_DESC"] = "Adjust the speed of horizontal camera rotation (Yaw) when turning with the mouse."
 
@@ -28,8 +27,7 @@ L["PITCH_MOVE_SPEED"] = "Vertical Rotation Speed"
 L["PITCH_MOVE_SPEED_DESC"] = "Adjust the speed of vertical camera rotation (Pitch) when looking up or down."
 
 -- UI / Profile
-L["WARNING_TEXT"] = "This addon extends the camera distance limit beyond the default UI slider to improve visibility in raids, dungeons, and PvP."
-
+L["WARNING_TEXT"] = "|cffffd100Warning:|r this addon extends the camera distance limit beyond the default Blizzard slider to improve visibility in raids, dungeons, and PvP."
 L["RELOAD_BUTTON"] = "Reload UI"
 L["RELOAD_BUTTON_DESC"] = "Reloads the user interface to apply critical changes."
 
@@ -52,22 +50,20 @@ L["DISABLED"] = "|cffff0000Disabled|r"
 -- Smart Zoom (Combat & Mount)
 -- ============================================================================
 L["COMBAT_SETTINGS"] = "Smart Zoom System"
-L["COMBAT_SETTINGS_WARNING"] = "|cffffd100System Logic:|r Automatically adjusts camera distance based on your state.\n\n|cffffd100Priority:|r |cffff5555Combat|r  >  |cff66ccffMount|r  >  |cffffffffNormal|r"
+L["COMBAT_SETTINGS_WARNING"] = "|cffffd100System Logic:|r Camera distance adjusts automatically based on your state.
 
+|cffffd100Priority:|r |cffff5555Combat|r  >  |cff66ccffMount|r  >  |cffffffffNormal|r"
 -- Combat
 L["AUTO_ZOOM_COMBAT"] = "Enable Smart Combat Zoom"
-L["AUTO_ZOOM_COMBAT_DESC"] = "Automatically zooms out to the configured distance when entering combat. (Highest Priority)"
-
+L["AUTO_ZOOM_COMBAT_DESC"] = "Automatically zooms out to the configured distance when entering combat. |cffff5555Highest priority.|r"
 L["MAX_COMBAT_ZOOM_FACTOR"] = "Combat Distance"
-L["MAX_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while you are IN combat."
-
+L["MAX_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while you are |cffff5555IN combat|r."
 L["MIN_COMBAT_ZOOM_FACTOR"] = "Normal Distance"
-L["MIN_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while OUT of combat and NOT mounted."
-
+L["MIN_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while |cffffffffOUT of combat|r and |cff66ccffNOT mounted|r."
 -- Zones
 L["ZONES_HEADER"] = "Combat Zones"
-L["ZONES_DESC"] = "Select zones where the addon will |cff00ff00force max combat zoom|r.\n|cff888888Disable zones to keep camera control more relaxed.|r"
-
+L["ZONES_DESC"] = "Select zones where the addon will |cff00ff00force max combat zoom|r.
+|cff888888Disable zones to keep camera control more relaxed.|r"
 L["ZONE_PARTY"] = "Dungeons"
 L["ZONE_RAID"] = "Raids"
 L["ZONE_ARENA"] = "Arenas"
@@ -76,16 +72,14 @@ L["ZONE_SCENARIO"] = "Scenarios / Delves"
 
 -- (Missing in your snippet but referenced by options in some setups)
 L["ZONE_WORLD"] = "Open World Combat"
-L["ZONE_WORLD_DESC"] = "Zooms out for ANY combat in the open world. Warning: may feel aggressive while questing."
-
+L["ZONE_WORLD_DESC"] = "Zooms out for |cffff5555ANY combat|r in the open world. |cffffd100Warning:|r may feel aggressive while questing."
 L["ZONE_WORLD_BOSS"] = "World Bosses / Events"
 L["ZONE_WORLD_BOSS_DESC"] = "Zooms out only during boss encounters in the open world (IsEncounterInProgress)."
 
 -- Mount / Travel
 L["MOUNT_SETTINGS_HEADER"] = "Mount & Travel Settings"
 L["AUTO_MOUNT_ZOOM"] = "Enable Auto Zoom on Mount"
-L["AUTO_MOUNT_ZOOM_DESC"] = "Automatically zooms out when mounted or in travel form (Druid/Shaman/Evoker). Active only when NOT in combat."
-
+L["AUTO_MOUNT_ZOOM_DESC"] = "Automatically zooms out when mounted or in travel form (Druid/Shaman/Evoker). Active only |cffffffffout of combat|r."
 L["MOUNT_ZOOM_FACTOR"] = "Mount Distance"
 L["MOUNT_ZOOM_FACTOR_DESC"] = "Target camera distance while mounted/traveling."
 
@@ -108,10 +102,14 @@ L["REDUCE_UNEXPECTED_MOVEMENT_DESC"] = "Reduces camera jumps when the camera col
 L["INDIRECT_VISIBILITY"] = "Reduced Camera Collision"
 L["INDIRECT_VISIBILITY_DESC"] = "Turns on Blizzard's reduced camera collision behavior. This is a global client setting and applies everywhere."
 L["INDIRECT_OFFSET"] = "Collision Sensitivity"
-L["INDIRECT_OFFSET_DESC"] = "Controls Blizzard's reduced camera collision sensitivity. 0.0 is the minimum, 10.0 is the maximum, and the game's default is 1.5. Higher values tolerate more obstruction before the camera moves in."
+L["INDIRECT_OFFSET_DESC"] = "Controls Blizzard's reduced camera collision sensitivity. |cff66ccff0.0|r is the minimum, |cffff555510.0|r is the maximum, and the game's default is |cffffd1001.5|r. Higher values tolerate more obstruction before the camera moves in."
 L["COLLISION_HEADER"] = "Camera Collision"
-L["COLLISION_DESC"] = "General camera collision behavior. These settings are global and apply everywhere, not per combat context."
-L["COLLISION_SUMMARY_TEXT"] = "Reduced Camera Collision: %s\nCollision Sensitivity: %s\nShow Silhouette when Obstructed: %s\nReduce Unexpected Movement: %s\nThese settings are global and apply everywhere."
+L["COLLISION_DESC"] = "General camera collision behavior. These settings are |cffffd100global|r and apply everywhere, not per combat context."
+L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffReduced Camera Collision:|r %s
+|cff66ccffCollision Sensitivity:|r %s
+|cff66ccffShow Silhouette when Obstructed:|r %s
+|cff66ccffReduce Unexpected Movement:|r %s
+|cff888888These settings are global and apply everywhere.|r"
 L["VISUAL_UTILITY_HEADER"] = "Visual Utility"
 
 L["RESAMPLE_ALWAYS_SHARPEN"] = "Always Sharpen (FSR)"
@@ -149,7 +147,7 @@ L["AFK_MODE_DESC_SAFE"] = "|cff00ff00Safe Mode:|r If the UI is hidden, pressing 
 L["AFK_MODE_ENABLE"] = "Enable AFK Rotation"
 L["AFK_MODE_ENABLE_DESC"] = "Automatically zooms out and rotates the camera while AFK. Uses safe state checks and does not overwrite your yaw-speed CVar."
 L["AFK_HIDE_UI_NAME"] = "Hide UI in AFK mode"
-L["AFK_HIDE_UI_DESC"] = "Hides the full UI for a cinematic AFK mode. ESC safely restores it without waiting for the AFK flag to clear."
+L["AFK_HIDE_UI_DESC"] = "Hides the full UI for a cinematic AFK mode. |cffffd100ESC|r safely restores it without waiting for the AFK flag to clear."
 L["AFK_ZOOM_OUT_NAME"] = "Zoom out while AFK"
 L["AFK_ZOOM_OUT_DESC"] = "Pushes the camera to the maximum managed distance when AFK mode starts."
 L["AFK_DELAY_NAME"] = "Start delay"
@@ -191,8 +189,7 @@ L["HOOK_MOUSE_SPEED_PATH"] = "/mcd config -> General Settings"
 -- ============================================================================
 L["DEBUG_SETTINGS"] = "Debug Settings"
 L["ENABLE_DEBUG_LOGGING"] = "Enable Logging"
-L["ENABLE_DEBUG_LOGGING_DESC"] = "Prints debug information to chat about state changes (Combat/Mount/AFK) and CVar updates."
-
+L["ENABLE_DEBUG_LOGGING_DESC"] = "Prints debug information to chat about state changes |cffff5555(Combat/Mount/AFK)|r and CVar updates."
 L["DEBUG_LEVEL"] = "Debug Level"
 L["DEBUG_LEVEL_DESC"] = "Select the verbosity of logs."
 L["DEBUG_LEVEL_ERROR"] = "Error"
@@ -275,7 +272,7 @@ L["STATUS_REASON_WORLD_BOSS"] = "World Boss"
 
 L["PRESET_SETTINGS"] = "Presets"
 L["PRESET_SECTION_HEADER"] = "Distance Presets"
-L["PRESET_SECTION_DESC"] = "Presets convert high-level choices into real distances. If a preset other than Manual is selected, the matching slider is locked automatically."
+L["PRESET_SECTION_DESC"] = "Presets convert high-level choices into real distances. If a preset other than |cffffd100Manual|r is selected, the matching slider is |cffff5555locked|r automatically."
 L["PRESET_MANUAL_GROUP_HEADER"] = "Manual / Normal"
 L["PRESET_COMBAT_GROUP_HEADER"] = "Combat Presets"
 L["PRESET_MOUNT_GROUP_HEADER"] = "Mount / Travel"
@@ -290,7 +287,7 @@ L["PRESET_STATUS_MANUAL"] = "Manual control is active. Slider value: %.1f yd."
 L["PRESET_STATUS_LOCKED"] = "Preset: %s. Effective distance: %.1f yd. Matching manual control is locked until you switch back to Manual."
 L["PRESET_UNKNOWN"] = "Unknown"
 L["MANUAL_SECTION_HEADER"] = "Manual Camera Controls"
-L["MANUAL_SECTION_DESC"] = "Manual controls stay available only when the matching preset is set to Manual."
+L["MANUAL_SECTION_DESC"] = "Manual controls stay available only when the matching preset is set to |cffffd100Manual|r."
 L["MANUAL_COMBAT_HEADER"] = "Manual Distances"
 L["MANUAL_COMBAT_DESC"] = "These sliders are used only when their matching preset is set to Manual."
 L["MANUAL_MAX_PRESET"] = "Manual Max Distance Preset"
@@ -306,7 +303,7 @@ L["STATUS_DISTANCE_SOURCE"] = "Distance Source"
 
 L["DEBUG_SETTINGS"] = "Status & Debug"
 L["DEBUG_LOGGING_HEADER"] = "Chat Logging"
-L["DEBUG_LOGGING_DESC"] = "These options control what gets printed to chat. Live Status above is always available even with logging disabled."
+L["DEBUG_LOGGING_DESC"] = "These options control what gets printed to chat. The |cffffd100Live Status|r block above is always available even with logging disabled."
 L["COMBAT_TRIGGER_HEADER"] = "Combat Triggers"
 L["COMBAT_TRIGGER_DESC"] = "Choose which events are allowed to activate combat zoom."
 L["COMBAT_TRIGGER_PLAYER"] = "Zoom when I enter combat"
@@ -319,7 +316,7 @@ L["STATUS_TRIGGER_RULES"] = "Trigger Rules"
 L["STATUS_ACTIVE_TRIGGERS"] = "Active Triggers"
 
 
-L["DELAY_HEADER_DESC"] = "Combat zoom-out is instant. Returning to Normal is delayed per context to avoid camera flicker."
+L["DELAY_HEADER_DESC"] = "Combat zoom-out is instant. Returning to |cffffffffNormal|r is delayed per context to avoid camera flicker."
 L["WORLD_COMBAT_RETURN_DELAY"] = "Open World Return Delay"
 L["WORLD_COMBAT_RETURN_DELAY_DESC"] = "Delay before returning to Normal after open-world combat ends."
 L["PARTY_COMBAT_RETURN_DELAY"] = "Party Return Delay"
@@ -359,7 +356,7 @@ L["STATUS_DRAGON_RACE_FP"] = "Race First Person"
 
 
 L["ZOOM_RESTORE_SETTING"] = "Restore Zoom Behavior"
-L["ZOOM_RESTORE_SETTING_DESC"] = "Controls how Smart Zoom restores a previously used zoom value. Never = always use configured targets. Adaptive = restore the last zoom only when returning to the state you came from. Always = always prefer the last stored zoom for that state when it fits within the state cap."
+L["ZOOM_RESTORE_SETTING_DESC"] = "Controls how Smart Zoom restores a previously used zoom value. |cffffd100Never|r = always use configured targets. |cffffd100Adaptive|r = restore the last zoom only when returning to the state you came from. |cffffd100Always|r = always prefer the last stored zoom for that state when it fits within the state cap."
 L["ZOOM_RESTORE_NEVER"] = "Never"
 L["ZOOM_RESTORE_ADAPTIVE"] = "Adaptive"
 L["ZOOM_RESTORE_ALWAYS"] = "Always"
@@ -368,10 +365,11 @@ L["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "When Smart Zoom is active for Mount or Co
 L["STATUS_DYNAMIC_BEHAVIOR"] = "Dynamic Behavior"
 
 L["LANGUAGE_SETTING"] = 'Addon Language'
-L["LANGUAGE_SETTING_DESC"] = 'Choose the addon language. Client Default follows the game client language. The UI reloads immediately after changing this option.'
+L["LANGUAGE_SETTING_DESC"] = "Choose the addon language. |cffffd100Client Default|r follows the game client language. The UI |cffff5555reloads immediately|r after changing this option."
 L["LANGUAGE_CLIENT_DEFAULT"] = 'Client Default'
 L["ADDON_TITLE"] = 'Max Camera Distance'
 L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Click to open settings'
+L["SETTINGS_APPLIED_FULL"] = "|cff00ff00Applied|r — distance: %.1f |cff888888(transition %.2fs)|r"
 
 if AceTable then
     for key, value in pairs(L) do
