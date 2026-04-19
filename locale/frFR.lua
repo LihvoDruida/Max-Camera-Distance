@@ -23,9 +23,7 @@ L["PITCH_MOVE_SPEED_DESC"] = "Règle la vitesse du mouvement vertical de la cam�
 
 -- *** Combat Settings ***
 L["COMBAT_SETTINGS"] = "Zoom de combat intelligent"
-L["COMBAT_SETTINGS_WARNING"] = "|cffffd100Logique du système :|r la distance de la caméra s'ajuste automatiquement selon votre état.
-
-|cffffd100Priorité :|r |cffff5555Combat|r  >  |cff66ccffMonture|r  >  |cffffffffNormal|r"
+L["COMBAT_SETTINGS_WARNING"] = "|cffffd100Logique du système :|r la distance de la caméra s\'ajuste automatiquement selon votre état.\n\n|cffffd100Priorité :|r |cffff5555Combat|r  >  |cff66ccffMonture|r  >  |cffffffffNormal|r"
 L["AUTO_ZOOM_COMBAT"] = "Activer le zoom de combat intelligent"
 L["AUTO_ZOOM_COMBAT_DESC"] = "Éloigne automatiquement la caméra jusqu'à la distance configurée à l'entrée en combat. |cffff5555Priorité la plus élevée.|r"
 L["MAX_COMBAT_ZOOM_FACTOR"] = "Distance en combat"
@@ -104,8 +102,7 @@ L["SHOW_MINIMAP_BUTTON_DESC"] = "Toggles the minimap icon."
 L["ENABLED"] = "|cff00ff00Enabled|r"
 L["DISABLED"] = "|cffff0000Disabled|r"
 L["ZONES_HEADER"] = "Combat Zones"
-L["ZONES_DESC"] = "Sélectionnez les zones où l'addon |cff00ff00forcera le zoom de combat maximal|r.
-|cff888888Désactivez certaines zones pour un comportement de caméra plus souple.|r"
+L["ZONES_DESC"] = "Sélectionnez les zones où l\'addon |cff00ff00forcera le zoom de combat maximal|r.\n|cff888888Désactivez certaines zones pour un comportement de caméra plus souple.|r"
 L["ZONE_PARTY"] = "Dungeons"
 L["ZONE_RAID"] = "Raids"
 L["ZONE_ARENA"] = "Arenas"
@@ -265,11 +262,7 @@ L["INDIRECT_OFFSET"] = "Sensibilité de collision"
 L["INDIRECT_OFFSET_DESC"] = "Contrôle la sensibilité réduite de collision caméra de Blizzard. |cff66ccff0.0|r est le minimum, |cffff555510.0|r le maximum, et la valeur par défaut du jeu est |cffffd1001.5|r. Des valeurs plus élevées tolèrent davantage d'obstruction avant que la caméra ne se rapproche."
 L["COLLISION_HEADER"] = "Collision de la caméra"
 L["COLLISION_DESC"] = "Comportement général de collision de la caméra. Ces réglages sont |cffffd100globaux|r et s'appliquent partout, pas seulement selon le contexte de combat."
-L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffCollision caméra réduite :|r %s
-|cff66ccffSensibilité de collision :|r %s
-|cff66ccffAfficher la silhouette en cas d'obstruction :|r %s
-|cff66ccffRéduire les mouvements inattendus :|r %s
-|cff888888Ces réglages sont globaux et s'appliquent partout.|r"
+L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffCollision caméra réduite :|r %s\n|cff66ccffDécalage de collision :|r %s\n|cff66ccffAfficher la silhouette en cas d\'obstruction :|r %s\n|cff66ccffRéduire les mouvements inattendus :|r %s\n|cff888888Ces réglages sont globaux et s\'appliquent partout.|r"
 L["VISUAL_UTILITY_HEADER"] = "Assistance visuelle"
 
 -- *** Mode monture / voyage ***

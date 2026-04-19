@@ -50,9 +50,7 @@ L["DISABLED"] = "|cffff0000Disabled|r"
 -- Smart Zoom (Combat & Mount)
 -- ============================================================================
 L["COMBAT_SETTINGS"] = "Smart Zoom System"
-L["COMBAT_SETTINGS_WARNING"] = "|cffffd100System Logic:|r Camera distance adjusts automatically based on your state.
-
-|cffffd100Priority:|r |cffff5555Combat|r  >  |cff66ccffMount|r  >  |cffffffffNormal|r"
+L["COMBAT_SETTINGS_WARNING"] = "|cffffd100System Logic:|r Camera distance adjusts automatically based on your state.\n\n|cffffd100Priority:|r |cffff5555Combat|r  >  |cff66ccffMount|r  >  |cffffffffNormal|r"
 -- Combat
 L["AUTO_ZOOM_COMBAT"] = "Enable Smart Combat Zoom"
 L["AUTO_ZOOM_COMBAT_DESC"] = "Automatically zooms out to the configured distance when entering combat. |cffff5555Highest priority.|r"
@@ -62,8 +60,7 @@ L["MIN_COMBAT_ZOOM_FACTOR"] = "Normal Distance"
 L["MIN_COMBAT_ZOOM_FACTOR_DESC"] = "Target camera distance while |cffffffffOUT of combat|r and |cff66ccffNOT mounted|r."
 -- Zones
 L["ZONES_HEADER"] = "Combat Zones"
-L["ZONES_DESC"] = "Select zones where the addon will |cff00ff00force max combat zoom|r.
-|cff888888Disable zones to keep camera control more relaxed.|r"
+L["ZONES_DESC"] = "Select zones where the addon will |cff00ff00force max combat zoom|r.\n|cff888888Disable zones to keep camera control more relaxed.|r"
 L["ZONE_PARTY"] = "Dungeons"
 L["ZONE_RAID"] = "Raids"
 L["ZONE_ARENA"] = "Arenas"
@@ -105,11 +102,7 @@ L["INDIRECT_OFFSET"] = "Collision Sensitivity"
 L["INDIRECT_OFFSET_DESC"] = "Controls Blizzard's reduced camera collision sensitivity. |cff66ccff0.0|r is the minimum, |cffff555510.0|r is the maximum, and the game's default is |cffffd1001.5|r. Higher values tolerate more obstruction before the camera moves in."
 L["COLLISION_HEADER"] = "Camera Collision"
 L["COLLISION_DESC"] = "General camera collision behavior. These settings are |cffffd100global|r and apply everywhere, not per combat context."
-L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffReduced Camera Collision:|r %s
-|cff66ccffCollision Sensitivity:|r %s
-|cff66ccffShow Silhouette when Obstructed:|r %s
-|cff66ccffReduce Unexpected Movement:|r %s
-|cff888888These settings are global and apply everywhere.|r"
+L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffReduced Camera Collision:|r %s\n|cff66ccffCollision Offset:|r %s\n|cff66ccffShow Silhouette when Obstructed:|r %s\n|cff66ccffReduce Unexpected Movement:|r %s\n|cff888888These settings are global and apply everywhere.|r"
 L["VISUAL_UTILITY_HEADER"] = "Visual Utility"
 
 L["RESAMPLE_ALWAYS_SHARPEN"] = "Always Sharpen (FSR)"

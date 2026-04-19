@@ -50,9 +50,7 @@ L["DISABLED"] = "|cffff0000已禁用|r"
 -- 智能缩放（战斗 & 坐骑）
 -- ============================================================================
 L["COMBAT_SETTINGS"] = "智能缩放系统"
-L["COMBAT_SETTINGS_WARNING"] = "|cffffd100系统逻辑：|r 根据你的状态自动调整镜头距离。
-
-|cffffd100优先级：|r |cffff5555战斗|r  >  |cff66ccff坐骑|r  >  |cffffffff常规|r"
+L["COMBAT_SETTINGS_WARNING"] = "|cffffd100系统逻辑：|r 根据你的状态自动调整镜头距离。\n\n|cffffd100优先级：|r |cffff5555战斗|r  >  |cff66ccff坐骑|r  >  |cffffffff常规|r"
 -- 战斗
 L["AUTO_ZOOM_COMBAT"] = "启用战斗智能缩放"
 L["AUTO_ZOOM_COMBAT_DESC"] = "进入战斗时自动缩放到设定距离。|cffff5555最高优先级。|r"
@@ -62,8 +60,7 @@ L["MIN_COMBAT_ZOOM_FACTOR"] = "常规距离"
 L["MIN_COMBAT_ZOOM_FACTOR_DESC"] = "处于 |cffffffff非战斗|r 且 |cff66ccff未骑乘|r 状态时的目标镜头距离。"
 -- 区域设置
 L["ZONES_HEADER"] = "战斗区域"
-L["ZONES_DESC"] = "选择插件将 |cff00ff00强制启用最大战斗缩放|r 的区域。
-|cff888888禁用某些区域可让镜头控制更宽松。|r"
+L["ZONES_DESC"] = "选择插件将 |cff00ff00强制启用最大战斗缩放|r 的区域。\n|cff888888禁用某些区域可让镜头控制更宽松。|r"
 L["ZONE_PARTY"] = "地下城"
 L["ZONE_RAID"] = "团队副本"
 L["ZONE_ARENA"] = "竞技场"
@@ -311,11 +308,7 @@ L["INDIRECT_OFFSET"] = "碰撞灵敏度"
 L["INDIRECT_OFFSET_DESC"] = "控制 Blizzard 的降低镜头碰撞灵敏度。|cff66ccff0.0|r 为最小值，|cffff555510.0|r 为最大值，游戏默认值为 |cffffd1001.5|r。数值越高，在镜头被拉近前可容忍的遮挡越多。"
 L["COLLISION_HEADER"] = "镜头碰撞"
 L["COLLISION_DESC"] = "镜头碰撞的通用行为。这些设置是 |cffffd100全局|r 的，会在所有场景下生效，而不是按战斗情境区分。"
-L["COLLISION_SUMMARY_TEXT"] = "|cff66ccff降低镜头碰撞：|r %s
-|cff66ccff碰撞灵敏度：|r %s
-|cff66ccff被遮挡时显示轮廓：|r %s
-|cff66ccff减少意外移动：|r %s
-|cff888888这些设置是全局的，在所有场景下生效。|r"
+L["COLLISION_SUMMARY_TEXT"] = "|cff66ccff降低镜头碰撞：|r %s\n|cff66ccff碰撞偏移：|r %s\n|cff66ccff遮挡时显示轮廓：|r %s\n|cff66ccff减少意外移动：|r %s\n|cff888888这些设置是全局的，在所有场景下生效。|r"
 L["VISUAL_UTILITY_HEADER"] = "视觉辅助"
 
 -- 坐骑 / 旅行形态模式

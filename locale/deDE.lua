@@ -23,9 +23,7 @@ L["PITCH_MOVE_SPEED_DESC"] = "Passt die Geschwindigkeit der vertikalen Kamerabew
 
 -- *** Combat Settings ***
 L["COMBAT_SETTINGS"] = "Intelligenter Kampf-Zoom"
-L["COMBAT_SETTINGS_WARNING"] = "|cffffd100Systemlogik:|r Die Kameradistanz wird automatisch an deinen Zustand angepasst.
-
-|cffffd100Priorität:|r |cffff5555Kampf|r  >  |cff66ccffReittier|r  >  |cffffffffNormalzustand|r"
+L["COMBAT_SETTINGS_WARNING"] = "|cffffd100Systemlogik:|r Die Kameradistanz wird automatisch an deinen Zustand angepasst.\n\n|cffffd100Priorität:|r |cffff5555Kampf|r  >  |cff66ccffReittier|r  >  |cffffffffNormalzustand|r"
 L["AUTO_ZOOM_COMBAT"] = "Intelligenten Kampf-Zoom aktivieren"
 L["AUTO_ZOOM_COMBAT_DESC"] = "Zoomt beim Kampfbeginn automatisch auf die konfigurierte Distanz heraus. |cffff5555Höchste Priorität.|r"
 L["MAX_COMBAT_ZOOM_FACTOR"] = "Distanz im Kampf"
@@ -104,8 +102,7 @@ L["SHOW_MINIMAP_BUTTON_DESC"] = "Toggles the minimap icon."
 L["ENABLED"] = "|cff00ff00Enabled|r"
 L["DISABLED"] = "|cffff0000Disabled|r"
 L["ZONES_HEADER"] = "Combat Zones"
-L["ZONES_DESC"] = "Wähle Zonen, in denen das Addon |cff00ff00maximalen Kampf-Zoom erzwingt|r.
-|cff888888Deaktiviere einzelne Zonen für ein sanfteres Kameraverhalten.|r"
+L["ZONES_DESC"] = "Wähle Zonen, in denen das Addon |cff00ff00maximalen Kampf-Zoom erzwingt|r.\n|cff888888Deaktiviere einzelne Zonen für ein sanfteres Kameraverhalten.|r"
 L["ZONE_PARTY"] = "Dungeons"
 L["ZONE_RAID"] = "Raids"
 L["ZONE_ARENA"] = "Arenas"
@@ -265,11 +262,7 @@ L["INDIRECT_OFFSET"] = "Kollisionsempfindlichkeit"
 L["INDIRECT_OFFSET_DESC"] = "Steuert Blizzards verringerte Empfindlichkeit der Kamerakollision. |cff66ccff0.0|r ist das Minimum, |cffff555510.0|r das Maximum und der Spielstandard ist |cffffd1001.5|r. Höhere Werte tolerieren mehr Hindernisse, bevor die Kamera heranzoomt."
 L["COLLISION_HEADER"] = "Kamerakollision"
 L["COLLISION_DESC"] = "Allgemeines Verhalten der Kamerakollision. Diese Einstellungen sind |cffffd100global|r und gelten überall, nicht nur pro Kampfkontext."
-L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffReduzierte Kamerakollision:|r %s
-|cff66ccffKollisionsempfindlichkeit:|r %s
-|cff66ccffSilhouette bei Sichtbehinderung anzeigen:|r %s
-|cff66ccffUnerwartete Bewegungen verringern:|r %s
-|cff888888Diese Einstellungen sind global und gelten überall.|r"
+L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffReduzierte Kamerakollision:|r %s\n|cff66ccffKollisions-Offset:|r %s\n|cff66ccffSilhouette bei Verdeckung anzeigen:|r %s\n|cff66ccffUnerwartete Bewegungen reduzieren:|r %s\n|cff888888Diese Einstellungen sind global und gelten überall.|r"
 L["VISUAL_UTILITY_HEADER"] = "Visuelle Hilfen"
 
 -- *** Mount / Travel Mode ***
