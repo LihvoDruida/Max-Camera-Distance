@@ -1,6 +1,10 @@
-local addonName = ...
-local L = LibStub("AceLocale-3.0"):NewLocale(addonName, "enUS", true, true)
-if not L then return end
+local addonName, ns = ...
+ns.LocaleData = ns.LocaleData or {}
+local L = {}
+ns.LocaleData["enUS"] = L
+
+local AceLocale = LibStub("AceLocale-3.0", true)
+local AceTable = AceLocale and AceLocale:NewLocale(addonName, "enUS", true, true)
 
 -- ============================================================================
 -- General
@@ -362,3 +366,15 @@ L["ZOOM_RESTORE_ALWAYS"] = "Always"
 L["RESPECT_MANUAL_STATE_ZOOM"] = "Respect Manual Zoom in Smart States"
 L["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "When Smart Zoom is active for Mount or Combat, manual mouse-wheel zoom is preserved until the state changes instead of being forced back every refresh."
 L["STATUS_DYNAMIC_BEHAVIOR"] = "Dynamic Behavior"
+
+L["LANGUAGE_SETTING"] = 'Addon Language'
+L["LANGUAGE_SETTING_DESC"] = 'Choose the addon language. Client Default follows the game client language. The UI reloads immediately after changing this option.'
+L["LANGUAGE_CLIENT_DEFAULT"] = 'Client Default'
+L["ADDON_TITLE"] = 'Max Camera Distance'
+L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Click to open settings'
+
+if AceTable then
+    for key, value in pairs(L) do
+        AceTable[key] = value
+    end
+end

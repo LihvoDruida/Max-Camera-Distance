@@ -1,7 +1,10 @@
-local addonName = ...
-local L = LibStub("AceLocale-3.0"):NewLocale(addonName, "deDE")
+local addonName, ns = ...
+ns.LocaleData = ns.LocaleData or {}
+local L = {}
+ns.LocaleData["deDE"] = L
 
-if not L then return end
+local AceLocale = LibStub("AceLocale-3.0", true)
+local AceTable = AceLocale and AceLocale:NewLocale(addonName, "deDE")
 
 -- *** General Settings ***
 L["GENERAL_SETTINGS"] = "Allgemeine Einstellungen"
@@ -319,3 +322,15 @@ L["ZOOM_RESTORE_ALWAYS"] = "Immer"
 L["RESPECT_MANUAL_STATE_ZOOM"] = "Manuellen Zoom in Smart-Zuständen respektieren"
 L["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "Wenn Smart Zoom für Reittier oder Kampf aktiv ist, bleibt manueller Mausrad-Zoom bis zum Zustandswechsel erhalten, statt bei jeder Aktualisierung zurückgesetzt zu werden."
 L["STATUS_DYNAMIC_BEHAVIOR"] = "Dynamisches Verhalten"
+
+L["LANGUAGE_SETTING"] = 'Addon-Sprache'
+L["LANGUAGE_SETTING_DESC"] = 'Wähle die Sprache des Addons. "Client-Standard" folgt der Sprache des Spielclients. Nach dem Ändern dieser Option wird die Benutzeroberfläche sofort neu geladen.'
+L["LANGUAGE_CLIENT_DEFAULT"] = 'Client-Standard'
+L["ADDON_TITLE"] = 'Max Camera Distance'
+L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Klicken, um die Einstellungen zu öffnen'
+
+if AceTable then
+    for key, value in pairs(L) do
+        AceTable[key] = value
+    end
+end

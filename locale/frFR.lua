@@ -1,7 +1,10 @@
-local addonName = ...
-local L = LibStub("AceLocale-3.0"):NewLocale(addonName, "frFR")
+local addonName, ns = ...
+ns.LocaleData = ns.LocaleData or {}
+local L = {}
+ns.LocaleData["frFR"] = L
 
-if not L then return end
+local AceLocale = LibStub("AceLocale-3.0", true)
+local AceTable = AceLocale and AceLocale:NewLocale(addonName, "frFR")
 
 -- *** General Settings ***
 L["GENERAL_SETTINGS"] = "Paramètres généraux"
@@ -319,3 +322,15 @@ L["ZOOM_RESTORE_ALWAYS"] = "Toujours"
 L["RESPECT_MANUAL_STATE_ZOOM"] = "Respecter le zoom manuel dans les états intelligents"
 L["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "Lorsque Smart Zoom est actif pour la monture ou le combat, le zoom manuel à la molette est conservé jusqu'au changement d'état au lieu d'être réinitialisé à chaque mise à jour."
 L["STATUS_DYNAMIC_BEHAVIOR"] = "Comportement dynamique"
+
+L["LANGUAGE_SETTING"] = "Langue de l'addon"
+L["LANGUAGE_SETTING_DESC"] = "Choisissez la langue de l'addon. « Langue du client » suit la langue du jeu. L'interface est rechargée immédiatement après la modification de cette option."
+L["LANGUAGE_CLIENT_DEFAULT"] = 'Langue du client'
+L["ADDON_TITLE"] = 'Max Camera Distance'
+L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Cliquez pour ouvrir les paramètres'
+
+if AceTable then
+    for key, value in pairs(L) do
+        AceTable[key] = value
+    end
+end

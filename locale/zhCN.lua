@@ -1,6 +1,10 @@
-local addonName = ...
-local L = LibStub("AceLocale-3.0"):NewLocale(addonName, "zhCN")
-if not L then return end
+local addonName, ns = ...
+ns.LocaleData = ns.LocaleData or {}
+local L = {}
+ns.LocaleData["zhCN"] = L
+
+local AceLocale = LibStub("AceLocale-3.0", true)
+local AceTable = AceLocale and AceLocale:NewLocale(addonName, "zhCN")
 
 -- ============================================================================
 -- 通用设置
@@ -368,3 +372,15 @@ L["ZOOM_RESTORE_ALWAYS"] = "始终"
 L["RESPECT_MANUAL_STATE_ZOOM"] = "在智能状态中保留手动缩放"
 L["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "当 Smart Zoom 在坐骑或战斗状态下生效时，鼠标滚轮手动缩放会一直保留到状态发生变化，而不是在每次刷新时被强制改回去。"
 L["STATUS_DYNAMIC_BEHAVIOR"] = "动态行为"
+
+L["LANGUAGE_SETTING"] = '插件语言'
+L["LANGUAGE_SETTING_DESC"] = '选择插件语言。“客户端默认”会跟随游戏客户端语言。修改此选项后界面会立即重载。'
+L["LANGUAGE_CLIENT_DEFAULT"] = '客户端默认'
+L["ADDON_TITLE"] = 'Max Camera Distance'
+L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = '点击打开设置'
+
+if AceTable then
+    for key, value in pairs(L) do
+        AceTable[key] = value
+    end
+end

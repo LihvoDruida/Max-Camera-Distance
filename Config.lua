@@ -3,7 +3,21 @@ ns.Config = ns.Config or {}
 local Config = ns.Config
 
 -- Libs
-local L = LibStub("AceLocale-3.0"):GetLocale(addonName, true) or {}
+
+local L = setmetatable({}, {
+    __index = function(_, key)
+        if ns.Locale and ns.Locale.Get then
+            return ns.Locale:Get(key)
+        end
+        local aceLocale = LibStub("AceLocale-3.0", true)
+        local tbl = aceLocale and aceLocale:GetLocale(addonName, true)
+        local value = tbl and tbl[key]
+        if value ~= nil then
+            return value
+        end
+        return key
+    end,
+})
 local AceConfig = LibStub("AceConfig-3.0", true)
 local AceConfigDialog = LibStub("AceConfigDialog-3.0", true)
 local AceDBOptions = LibStub("AceDBOptions-3.0", true)
@@ -34,6 +48,43 @@ end
 
 local function GetDatabaseObject()
     return (ns.Database and ns.Database.db) or nil
+end
+
+local function GetLanguageChoices()
+    if ns.Locale and ns.Locale.GetOptionsValues then
+        return ns.Locale:GetOptionsValues()
+    end
+    return {
+        client = "Client Default",
+        enUS = "English",
+        ukUA = "Українська",
+        deDE = "Deutsch",
+        frFR = "Français",
+        zhCN = "简体中文",
+    }
+end
+
+local function GetLanguageOption()
+    local db = GetDB()
+    if not db or type(db.language) ~= "string" then
+        return "client"
+    end
+    return db.language
+end
+
+local function SetLanguageOption(value)
+    local db = GetDB()
+    if not db then return end
+
+    local normalized = type(value) == "string" and value or "client"
+    if ns.Locale and ns.Locale.SetOverride then
+        ns.Locale:SetOverride(normalized)
+    else
+        db.language = normalized
+    end
+
+    Config:NotifyChange()
+    SafeReload()
 end
 
 local function ApplyNow()
@@ -403,7 +454,7 @@ function Config:SetupOptions()
     local hasQuestWatch = (C_QuestLog and C_QuestLog.GetNumQuestWatches) and true or false
 
     local options = {
-        name = "Max Camera Distance",
+        name = L["ADDON_TITLE"] or "Max Camera Distance",
         type = "group",
         args = {
             header = {
@@ -478,6 +529,22 @@ function Config:SetupOptions()
                             if ns.Core and ns.Core.RefreshMinimapButton then
                                 ns.Core:RefreshMinimapButton()
                             end
+                        end,
+                    },
+                    languageOverride = {
+                        type = "select",
+                        name = L["LANGUAGE_SETTING"] or "Addon Language",
+                        desc = L["LANGUAGE_SETTING_DESC"] or "Choose the addon language. Client Default follows the game client language. The UI reloads immediately after changing this option.",
+                        order = 5,
+                        width = "double",
+                        values = function()
+                            return GetLanguageChoices()
+                        end,
+                        get = function()
+                            return GetLanguageOption()
+                        end,
+                        set = function(_, value)
+                            SetLanguageOption(value)
                         end,
                     },
                 },
@@ -1291,7 +1358,7 @@ function Config:SetupOptions()
     AceConfig:RegisterOptionsTable(addonName, options)
 
     if AceConfigDialog and AceConfigDialog.AddToBlizOptions then
-        local rootCategoryName = "Max Camera Distance"
+        local rootCategoryName = L["ADDON_TITLE"] or "Max Camera Distance"
         AceConfigDialog:AddToBlizOptions(addonName, rootCategoryName)
         AceConfigDialog:AddToBlizOptions(addonName, L["PROFILES"] or "Profiles", rootCategoryName, "profiles")
     end

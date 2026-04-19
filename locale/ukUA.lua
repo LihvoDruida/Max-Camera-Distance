@@ -1,6 +1,10 @@
-local addonName = ...
-local Locals = LibStub("AceLocale-3.0"):NewLocale(addonName, "ukUA")
-if not Locals then return end
+local addonName, ns = ...
+ns.LocaleData = ns.LocaleData or {}
+local Locals = {}
+ns.LocaleData["ukUA"] = Locals
+
+local AceLocale = LibStub("AceLocale-3.0", true)
+local AceTable = AceLocale and AceLocale:NewLocale(addonName, "ukUA")
 
 Locals["SETTINGS_SET_TO_MAX"] = "Параметри камери встановлені на максимальні значення."
 Locals["SETTINGS_SET_TO_AVERAGE"] = "Параметри камери встановлені на середні значення."
@@ -54,3 +58,15 @@ Locals["ZOOM_RESTORE_ALWAYS"] = "Завжди"
 Locals["RESPECT_MANUAL_STATE_ZOOM"] = "Поважати ручний зум у smart-станах"
 Locals["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "Коли Smart Zoom активний для маунта або бою, ручний зум колесом миші зберігається до зміни стану, а не скидається при кожному оновленні."
 Locals["STATUS_DYNAMIC_BEHAVIOR"] = "Динамічна поведінка"
+
+Locals["LANGUAGE_SETTING"] = 'Мова адона'
+Locals["LANGUAGE_SETTING_DESC"] = 'Виберіть мову адона. Варіант "Мова клієнта" автоматично використовує мову гри. Після зміни цього параметра інтерфейс одразу перезавантажується.'
+Locals["LANGUAGE_CLIENT_DEFAULT"] = 'Мова клієнта'
+Locals["ADDON_TITLE"] = 'Max Camera Distance'
+Locals["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Натисніть, щоб відкрити налаштування'
+
+if AceTable then
+    for key, value in pairs(Locals) do
+        AceTable[key] = value
+    end
+end

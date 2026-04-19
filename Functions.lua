@@ -2,7 +2,21 @@ local addonName, ns = ...
 ns.Functions = ns.Functions or {}
 local Functions = ns.Functions
 
-local L = LibStub("AceLocale-3.0"):GetLocale(addonName, true) or {}
+
+local L = setmetatable({}, {
+    __index = function(_, key)
+        if ns.Locale and ns.Locale.Get then
+            return ns.Locale:Get(key)
+        end
+        local aceLocale = LibStub("AceLocale-3.0", true)
+        local tbl = aceLocale and aceLocale:GetLocale(addonName, true)
+        local value = tbl and tbl[key]
+        if value ~= nil then
+            return value
+        end
+        return key
+    end,
+})
 local Compat = ns.Compat or {}
 local ShoulderCompensation = ns.ShoulderCompensation or {}
 

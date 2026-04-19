@@ -3,6 +3,20 @@ ns.Core = ns.Core or {}
 local Core = ns.Core
 local frame = CreateFrame("Frame")
 local Compat = ns.Compat or {}
+local L = setmetatable({}, {
+    __index = function(_, key)
+        if ns.Locale and ns.Locale.Get then
+            return ns.Locale:Get(key)
+        end
+        local aceLocale = LibStub("AceLocale-3.0", true)
+        local tbl = aceLocale and aceLocale:GetLocale(addonName, true)
+        local value = tbl and tbl[key]
+        if value ~= nil then
+            return value
+        end
+        return key
+    end,
+})
 
 local IS_RETAIL = Compat.IS_RETAIL and true or false
 
@@ -117,7 +131,7 @@ local function InitMinimapButton()
     local minimapDataObj = LDB:NewDataObject(addonName, {
         type = "launcher",
         icon = myIcon,
-        label = "Max Camera Distance",
+        label = L["ADDON_TITLE"] or "Max Camera Distance",
 
         OnClick = function(_, button)
             if ACD then
@@ -128,8 +142,8 @@ local function InitMinimapButton()
         end,
 
         OnTooltipShow = function(tooltip)
-            tooltip:AddLine("|cFF87CEFA" .. "Max Camera Distance" .. "|r")
-            tooltip:AddLine("|cffffffffClick|r to open settings")
+            tooltip:AddLine("|cFF87CEFA" .. (L["ADDON_TITLE"] or "Max Camera Distance") .. "|r")
+            tooltip:AddLine(L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] or "Click to open settings")
         end,
     })
 

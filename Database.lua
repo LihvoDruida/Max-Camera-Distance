@@ -200,6 +200,9 @@ local PROFILE_DEFAULTS = {
     afkZoomOut = true,
 
 
+    -- localization
+    language = "client",
+
     -- debug
     enableDebugLogging = false,
     debugLevel = CopyTableSafe(Database.DEFAULT_DEBUG_LEVEL),
@@ -364,6 +367,18 @@ function Database:ApplyMigrations(profile)
     profile.enableDebugLogging = NormalizeBoolean(profile.enableDebugLogging, PROFILE_DEFAULTS.enableDebugLogging)
     profile.minimap.hide = NormalizeBoolean(profile.minimap.hide, false)
 
+    local VALID_LANGUAGES = {
+        client = true,
+        enUS = true,
+        deDE = true,
+        frFR = true,
+        zhCN = true,
+        ukUA = true,
+    }
+    if type(profile.language) ~= "string" or not VALID_LANGUAGES[profile.language] then
+        profile.language = "client"
+    end
+
     for level, defaultValue in pairs(Database.DEFAULT_DEBUG_LEVEL) do
         profile.debugLevel[level] = NormalizeBoolean(profile.debugLevel[level], defaultValue)
     end
@@ -446,8 +461,16 @@ function Database:OnProfileUpdate(reason)
         ns.Functions:logMessage("info", tostring(reason) .. ". Re-applying settings...")
     end
 
+    if ns.Locale and ns.Locale.GetActiveLocale then
+        ns.Locale:GetActiveLocale()
+    end
+
     if ns.Core and ns.Core.RefreshMinimapButton then
         ns.Core:RefreshMinimapButton()
+    end
+
+    if ns.Config and ns.Config.NotifyChange then
+        ns.Config:NotifyChange()
     end
 
     if ns.Functions and ns.Functions.AdjustCamera then
