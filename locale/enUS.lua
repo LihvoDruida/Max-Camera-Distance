@@ -352,3 +352,13 @@ L["STATUS_FLYING_MOUNT"] = "Flying Mount"
 L["STATUS_SKYRIDING"] = "Skyriding"
 L["STATUS_DRAGON_RACE"] = "Dragonriding Race"
 L["STATUS_DRAGON_RACE_FP"] = "Race First Person"
+
+
+L["ZOOM_RESTORE_SETTING"] = "Restore Zoom Behavior"
+L["ZOOM_RESTORE_SETTING_DESC"] = "DynamicCam-inspired restore logic. Never = always use configured targets. Adaptive = restore the last zoom only when returning to the state you came from. Always = always prefer the last stored zoom for that state when it fits within the state cap."
+L["ZOOM_RESTORE_NEVER"] = "Never"
+L["ZOOM_RESTORE_ADAPTIVE"] = "Adaptive"
+L["ZOOM_RESTORE_ALWAYS"] = "Always"
+L["RESPECT_MANUAL_STATE_ZOOM"] = "Respect Manual Zoom in Smart States"
+L["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "When Smart Zoom is active for Mount or Combat, manual mouse-wheel zoom is preserved until the state changes instead of being forced back every refresh."
+L["STATUS_DYNAMIC_BEHAVIOR"] = "Dynamic Behavior"

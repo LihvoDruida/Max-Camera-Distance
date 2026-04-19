@@ -73,7 +73,12 @@ local pendingReturnInfo = nil
 local lastCombatContext = "world"
 local lastAutoAppliedZoomYards = nil
 local lastAutoAppliedAt = 0
-local mountManualOverride = false
+local stateManualOverride = {
+    [ZOOM_STATE_MOUNT] = false,
+    [ZOOM_STATE_COMBAT] = false,
+}
+local lastZoomByState = {}
+local lastStateSource = {}
 
 -- token that invalidates old delayed transitions (fixes “sticky states”)
 local stateToken = 0
@@ -1053,6 +1058,10 @@ local function BuildStatusSnapshot(db)
         pendingReturnKind = pendingReturnKind,
         pendingReturnDelay = pendingReturnDelay,
         pendingReturnRemaining = pendingReturnRemaining,
+        zoomRestoreSetting = (db and db.zoomRestoreSetting) or "adaptive",
+        respectManualStateZoom = (db and db.respectManualStateZoom ~= false) and true or false,
+        mountManualOverride = stateManualOverride[ZOOM_STATE_MOUNT] and true or false,
+        combatManualOverride = stateManualOverride[ZOOM_STATE_COMBAT] and true or false,
     }
 end
 
@@ -1519,36 +1528,91 @@ local function ComputeDesiredState(db)
     return snapshot.state, snapshot.targetYards, snapshot
 end
 
-local function ClearMountManualOverride()
-    mountManualOverride = false
+local function ClearStateManualOverride(state)
+    if state then
+        stateManualOverride[state] = false
+        return
+    end
+
+    for stateKey in pairs(stateManualOverride) do
+        stateManualOverride[stateKey] = false
+    end
 end
 
-local function HasMountManualOverride(targetYards, transitionTime)
-    if currentZoomState ~= ZOOM_STATE_MOUNT then
+local function SaveCurrentZoomForState(state)
+    if not state then return end
+    local currentZoom = GetCameraZoom and GetCameraZoom()
+    if currentZoom == nil then return end
+    lastZoomByState[state] = currentZoom
+end
+
+local function RememberStateSource(newState, oldState)
+    if not newState then return end
+    lastStateSource[newState] = oldState
+end
+
+local function GetRestoreZoomTarget(db, oldState, newState, targetYards)
+    if not db or not newState or not targetYards then return nil end
+
+    local restoreSetting = tostring(db.zoomRestoreSetting or "adaptive")
+    if restoreSetting == "never" then
+        return nil
+    end
+
+    local savedZoom = lastZoomByState[newState]
+    if savedZoom == nil then
+        return nil
+    end
+
+    if savedZoom > (targetYards + 0.35) then
+        return nil
+    end
+
+    if restoreSetting == "always" then
+        return math.min(savedZoom, targetYards)
+    end
+
+    if lastStateSource[newState] ~= oldState then
+        return nil
+    end
+
+    return math.min(savedZoom, targetYards)
+end
+
+local function HasStateManualOverride(state, targetYards, transitionTime, db)
+    if currentZoomState ~= state then
+        return false
+    end
+
+    if not db or db.respectManualStateZoom == false then
+        return false
+    end
+
+    if state ~= ZOOM_STATE_MOUNT and state ~= ZOOM_STATE_COMBAT then
         return false
     end
 
     local currentZoom = GetCameraZoom and GetCameraZoom()
     if currentZoom == nil or targetYards == nil then
-        return mountManualOverride
+        return stateManualOverride[state]
     end
 
     if lastAutoAppliedZoomYards ~= nil and math_abs(targetYards - lastAutoAppliedZoomYards) > 0.1 then
-        mountManualOverride = false
+        stateManualOverride[state] = false
         return false
     end
 
     local now = GetTime and GetTime() or 0
     local settleWindow = (transitionTime or 0) + 0.25
     if lastAutoAppliedAt and (now - lastAutoAppliedAt) < settleWindow then
-        return mountManualOverride
+        return stateManualOverride[state]
     end
 
     if math_abs(currentZoom - targetYards) > 0.35 then
-        mountManualOverride = true
+        stateManualOverride[state] = true
     end
 
-    return mountManualOverride
+    return stateManualOverride[state]
 end
 
 function Functions:ShouldApplyOptionImmediately(key)
@@ -1619,10 +1683,25 @@ function Functions:UpdateSmartZoomState(event)
         lastCombatContext = snapshot.resolvedContext
     end
 
-    if previousState ~= ZOOM_STATE_MOUNT and newState == ZOOM_STATE_MOUNT then
-        ClearMountManualOverride()
-    elseif previousState == ZOOM_STATE_MOUNT and newState ~= ZOOM_STATE_MOUNT then
-        ClearMountManualOverride()
+    local stateChanged = (newState ~= previousState)
+    if stateChanged then
+        SaveCurrentZoomForState(previousState)
+        RememberStateSource(newState, previousState)
+
+        if newState == ZOOM_STATE_MOUNT or newState == ZOOM_STATE_COMBAT then
+            ClearStateManualOverride(newState)
+        end
+        if previousState == ZOOM_STATE_MOUNT or previousState == ZOOM_STATE_COMBAT then
+            ClearStateManualOverride(previousState)
+        end
+    end
+
+    local appliedTargetYards = targetYards
+    if stateChanged then
+        local restoredTarget = GetRestoreZoomTarget(db, previousState, newState, targetYards)
+        if restoredTarget ~= nil then
+            appliedTargetYards = restoredTarget
+        end
     end
 
     -- If going INTO combat or mount, always cancel pending “zoom-in”
@@ -1635,7 +1714,7 @@ function Functions:UpdateSmartZoomState(event)
     -- or when we explicitly force a manual refresh.
     local stateSame = (newState == currentZoomState)
     local capAligned = IsZoomCapAligned(targetYards)
-    if stateSame and newState == ZOOM_STATE_MOUNT and HasMountManualOverride(targetYards, transitionTime) then
+    if stateSame and HasStateManualOverride(newState, targetYards, transitionTime, db) then
         if not capAligned then
             ApplyZoomCap(targetYards)
         end
@@ -1669,8 +1748,8 @@ function Functions:UpdateSmartZoomState(event)
 
         if delay <= 0 then
             pendingReturnInfo = nil
-            ApplyZoomTransition(targetYards, transitionTime)
-            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, targetYards))
+            ApplyZoomTransition(appliedTargetYards, transitionTime)
+            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, appliedTargetYards))
             NotifyConfigChanged()
             return
         end
@@ -1682,13 +1761,13 @@ function Functions:UpdateSmartZoomState(event)
             local liveDb = DB()
             if not liveDb then return end
 
-            local nowState, nowYards = ComputeDesiredState(liveDb)
+            local nowState = ComputeDesiredState(liveDb)
             if nowState ~= ZOOM_STATE_NONE then
                 return
             end
 
-            ApplyZoomTransition(nowYards, transitionTime)
-            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", nowState, nowYards))
+            ApplyZoomTransition(appliedTargetYards, transitionTime)
+            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", ZOOM_STATE_NONE, appliedTargetYards))
             NotifyConfigChanged()
         end)
         pendingReturnInfo = {
@@ -1700,11 +1779,11 @@ function Functions:UpdateSmartZoomState(event)
         NotifyConfigChanged()
     else
         pendingReturnInfo = nil
-        ApplyZoomTransition(targetYards, transitionTime)
+        ApplyZoomTransition(appliedTargetYards, transitionTime)
         if snapshot and snapshot.resolvedContext then
-            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, targetYards) .. " [" .. tostring(snapshot.resolvedContext) .. "]")
+            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, appliedTargetYards) .. " [" .. tostring(snapshot.resolvedContext) .. "]")
         else
-            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, targetYards))
+            Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, appliedTargetYards))
         end
         NotifyConfigChanged()
     end

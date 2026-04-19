@@ -266,6 +266,15 @@ local function BuildLiveStatusText()
         string.format("%s: %s",
             L["STATUS_PENDING_RETURN"] or "Pending Return",
             PendingReturnText(snapshot)
+        ),
+        string.format("%s: %s=%s, %s=%s, %s=%s",
+            L["STATUS_DYNAMIC_BEHAVIOR"] or "Dynamic Behavior",
+            L["ZOOM_RESTORE_SETTING"] or "Restore Zoom",
+            tostring(snapshot.zoomRestoreSetting or "adaptive"),
+            L["STATUS_STATE_MOUNT"] or "Mount",
+            BoolText(snapshot.mountManualOverride),
+            L["STATUS_STATE_COMBAT"] or "Combat",
+            BoolText(snapshot.combatManualOverride)
         )
     }, "\n")
 end
@@ -843,6 +852,31 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("mountZoomFactor", val) end,
                         order = 62,
                         disabled = function() return not GetOption("autoMountZoom") or IsManualControlLocked("mountZoomFactor") end
+                    },
+                    zoomRestoreSetting = {
+                        type = "select",
+                        name = L["ZOOM_RESTORE_SETTING"] or "Restore Zoom Behavior",
+                        desc = L["ZOOM_RESTORE_SETTING_DESC"] or "DynamicCam-inspired restore logic. Never = always use configured targets. Adaptive = restore the last zoom only when returning to the state you came from. Always = always prefer the last stored zoom for that state when it fits within the state cap.",
+                        values = function()
+                            return {
+                                never = L["ZOOM_RESTORE_NEVER"] or "Never",
+                                adaptive = L["ZOOM_RESTORE_ADAPTIVE"] or "Adaptive",
+                                always = L["ZOOM_RESTORE_ALWAYS"] or "Always",
+                            }
+                        end,
+                        get = function() return GetOption("zoomRestoreSetting") or "adaptive" end,
+                        set = function(_, val) SetOption("zoomRestoreSetting", val) end,
+                        order = 63,
+                        width = "full",
+                    },
+                    respectManualStateZoom = {
+                        type = "toggle",
+                        name = L["RESPECT_MANUAL_STATE_ZOOM"] or "Respect Manual Zoom in Smart States",
+                        desc = L["RESPECT_MANUAL_STATE_ZOOM_DESC"] or "When Smart Zoom is active for Mount or Combat, manual mouse-wheel zoom is preserved until the state changes instead of being forced back every refresh.",
+                        get = function() return GetOption("respectManualStateZoom") end,
+                        set = function(_, val) SetOption("respectManualStateZoom", val) end,
+                        order = 64,
+                        width = "full",
                     },
                     delayHeader = { type = "header", name = L["DELAY_HEADER"], order = 80 },
                     delayDesc = {

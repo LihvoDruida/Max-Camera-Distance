@@ -160,6 +160,10 @@ local PROFILE_DEFAULTS = {
     partyCombatReturnDelay = 0.8,
     raidCombatReturnDelay = 1.2,
 
+    -- DynamicCam-inspired behavior
+    zoomRestoreSetting = "adaptive", -- never / adaptive / always
+    respectManualStateZoom = true,
+
     -- distance presets (manual keeps the matching slider active)
     manualMaxPreset = "manual",
     normalZoomPreset = "manual",

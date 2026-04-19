@@ -43,3 +43,13 @@ Locals["AFK_RESUME_AFTER_COMBAT_NAME"] = "Відновлювати після б
 Locals["AFK_RESUME_AFTER_COMBAT_DESC"] = "Якщо бій перервав AFK-режим, він знову ввімкнеться після завершення бою, якщо ви все ще AFK."
 Locals["AFK_ENTER_MSG"] = "AFK режим: увімкнено (кінематографічне обертання)."
 Locals["AFK_EXIT_MSG"] = "AFK режим: вимкнено (інтерфейс і камера відновлені)."
+
+
+Locals["ZOOM_RESTORE_SETTING"] = "Поведінка відновлення зуму"
+Locals["ZOOM_RESTORE_SETTING_DESC"] = "Логіка, натхненна DynamicCam. Ніколи = завжди використовувати налаштовані цілі. Адаптивно = відновлювати останній зум лише при поверненні в стан, з якого ви щойно прийшли. Завжди = завжди намагатися використати останній збережений зум цього стану, якщо він не виходить за його межі."
+Locals["ZOOM_RESTORE_NEVER"] = "Ніколи"
+Locals["ZOOM_RESTORE_ADAPTIVE"] = "Адаптивно"
+Locals["ZOOM_RESTORE_ALWAYS"] = "Завжди"
+Locals["RESPECT_MANUAL_STATE_ZOOM"] = "Поважати ручний зум у smart-станах"
+Locals["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "Коли Smart Zoom активний для маунта або бою, ручний зум колесом миші зберігається до зміни стану, а не скидається при кожному оновленні."
+Locals["STATUS_DYNAMIC_BEHAVIOR"] = "Динамічна поведінка"
