@@ -71,6 +71,9 @@ local transitionTimer = nil
 local isInternalUpdate = false
 local pendingReturnInfo = nil
 local lastCombatContext = "world"
+local lastAutoAppliedZoomYards = nil
+local lastAutoAppliedAt = 0
+local mountManualOverride = false
 
 -- token that invalidates old delayed transitions (fixes “sticky states”)
 local stateToken = 0
@@ -756,6 +759,9 @@ local function IsZoomCapAligned(targetYards)
 end
 
 local function ApplyZoomTransition(targetYards, transitionTime)
+    lastAutoAppliedZoomYards = targetYards
+    lastAutoAppliedAt = (GetTime and GetTime() or 0)
+
     local targetFactor = targetYards / CONVERSION_RATIO
     local currentFactor = SafeGetCVar("cameraDistanceMaxZoomFactor")
 
@@ -1513,6 +1519,38 @@ local function ComputeDesiredState(db)
     return snapshot.state, snapshot.targetYards, snapshot
 end
 
+local function ClearMountManualOverride()
+    mountManualOverride = false
+end
+
+local function HasMountManualOverride(targetYards, transitionTime)
+    if currentZoomState ~= ZOOM_STATE_MOUNT then
+        return false
+    end
+
+    local currentZoom = GetCameraZoom and GetCameraZoom()
+    if currentZoom == nil or targetYards == nil then
+        return mountManualOverride
+    end
+
+    if lastAutoAppliedZoomYards ~= nil and math_abs(targetYards - lastAutoAppliedZoomYards) > 0.1 then
+        mountManualOverride = false
+        return false
+    end
+
+    local now = GetTime and GetTime() or 0
+    local settleWindow = (transitionTime or 0) + 0.25
+    if lastAutoAppliedAt and (now - lastAutoAppliedAt) < settleWindow then
+        return mountManualOverride
+    end
+
+    if math_abs(currentZoom - targetYards) > 0.35 then
+        mountManualOverride = true
+    end
+
+    return mountManualOverride
+end
+
 function Functions:ShouldApplyOptionImmediately(key)
     local db = DB()
     if not db then return true end
@@ -1575,9 +1613,16 @@ function Functions:UpdateSmartZoomState(event)
     local previousState = currentZoomState
     local previousCombatContext = lastCombatContext
     local newState, targetYards, snapshot = ComputeDesiredState(db)
+    local transitionTime = db.zoomTransitionTime or 0.5
 
     if snapshot and snapshot.resolvedContext and newState == ZOOM_STATE_COMBAT then
         lastCombatContext = snapshot.resolvedContext
+    end
+
+    if previousState ~= ZOOM_STATE_MOUNT and newState == ZOOM_STATE_MOUNT then
+        ClearMountManualOverride()
+    elseif previousState == ZOOM_STATE_MOUNT and newState ~= ZOOM_STATE_MOUNT then
+        ClearMountManualOverride()
     end
 
     -- If going INTO combat or mount, always cancel pending “zoom-in”
@@ -1590,6 +1635,13 @@ function Functions:UpdateSmartZoomState(event)
     -- or when we explicitly force a manual refresh.
     local stateSame = (newState == currentZoomState)
     local capAligned = IsZoomCapAligned(targetYards)
+    if stateSame and newState == ZOOM_STATE_MOUNT and HasMountManualOverride(targetYards, transitionTime) then
+        if not capAligned then
+            ApplyZoomCap(targetYards)
+        end
+        NotifyConfigChanged()
+        return
+    end
     if stateSame and capAligned and event ~= "manual_update" then
         NotifyConfigChanged()
         return
@@ -1598,8 +1650,6 @@ function Functions:UpdateSmartZoomState(event)
     -- Any change invalidates old delayed timers
     stateToken = stateToken + 1
     currentZoomState = newState
-
-    local transitionTime = db.zoomTransitionTime or 0.5
 
     if newState == ZOOM_STATE_NONE and event ~= "manual_update" then
         local delay = 0
