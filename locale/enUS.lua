@@ -355,7 +355,7 @@ L["STATUS_DRAGON_RACE_FP"] = "Race First Person"
 
 
 L["ZOOM_RESTORE_SETTING"] = "Restore Zoom Behavior"
-L["ZOOM_RESTORE_SETTING_DESC"] = "DynamicCam-inspired restore logic. Never = always use configured targets. Adaptive = restore the last zoom only when returning to the state you came from. Always = always prefer the last stored zoom for that state when it fits within the state cap."
+L["ZOOM_RESTORE_SETTING_DESC"] = "Controls how Smart Zoom restores a previously used zoom value. Never = always use configured targets. Adaptive = restore the last zoom only when returning to the state you came from. Always = always prefer the last stored zoom for that state when it fits within the state cap."
 L["ZOOM_RESTORE_NEVER"] = "Never"
 L["ZOOM_RESTORE_ADAPTIVE"] = "Adaptive"
 L["ZOOM_RESTORE_ALWAYS"] = "Always"

@@ -160,7 +160,7 @@ local PROFILE_DEFAULTS = {
     partyCombatReturnDelay = 0.8,
     raidCombatReturnDelay = 1.2,
 
-    -- DynamicCam-inspired behavior
+    -- Smart Zoom restore behavior
     zoomRestoreSetting = "adaptive", -- never / adaptive / always
     respectManualStateZoom = true,
 

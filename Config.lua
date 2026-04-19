@@ -856,7 +856,7 @@ function Config:SetupOptions()
                     zoomRestoreSetting = {
                         type = "select",
                         name = L["ZOOM_RESTORE_SETTING"] or "Restore Zoom Behavior",
-                        desc = L["ZOOM_RESTORE_SETTING_DESC"] or "DynamicCam-inspired restore logic. Never = always use configured targets. Adaptive = restore the last zoom only when returning to the state you came from. Always = always prefer the last stored zoom for that state when it fits within the state cap.",
+                        desc = L["ZOOM_RESTORE_SETTING_DESC"] or "Controls how Smart Zoom restores a previously used zoom value. Never = always use configured targets. Adaptive = restore the last zoom only when returning to the state you came from. Always = always prefer the last stored zoom for that state when it fits within the state cap.",
                         values = function()
                             return {
                                 never = L["ZOOM_RESTORE_NEVER"] or "Never",
