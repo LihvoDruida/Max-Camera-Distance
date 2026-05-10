@@ -5,6 +5,9 @@ ns.CVarMonitor = CVarGuard -- legacy alias for older modules
 
 local type = type
 local tonumber = tonumber
+local tostring = tostring
+local pcall = pcall
+local select = select
 local hooksecurefunc = hooksecurefunc
 
 local Compat = ns.Compat or {}
@@ -13,12 +16,17 @@ local C_CVar = C_CVar
 local internalWriteDepth = 0
 local isInitialized = false
 
+local REDUCE_UNEXPECTED_MOVEMENT_CVARS = {
+    "cameraReduceUnexpectedMovement",
+    "CameraReduceUnexpectedMovement",
+}
+
 local savedUserValues = {
     CameraKeepCharacterCentered = nil,
     cameraReduceUnexpectedMovement = nil,
 }
 
--- Cache of current guard state to avoid repeated force/restore work
+-- Cache of current guard state to avoid repeated force/restore work.
 local stateCache = {
     blockKeepCentered = nil,
     blockReduceUnexpectedMovement = nil,
@@ -32,15 +40,35 @@ local function DB()
     return (ns.Database and ns.Database.db and ns.Database.db.profile) or nil
 end
 
+local function NormalizeCVarName(name)
+    if name == "CameraReduceUnexpectedMovement" then
+        return "cameraReduceUnexpectedMovement"
+    end
+    return name
+end
+
+local function GetCVarLookupNames(name)
+    local canonical = NormalizeCVarName(name)
+    if canonical == "cameraReduceUnexpectedMovement" then
+        return REDUCE_UNEXPECTED_MOVEMENT_CVARS
+    end
+    return canonical
+end
+
 local function SafeGetCVar(name)
-    if Compat.SafeGetCVarNumber then
+    if Compat.SafeGetCVarNumberAny then
+        local value = Compat.SafeGetCVarNumberAny(GetCVarLookupNames(name))
+        return value
+    elseif Compat.SafeGetCVarNumber then
         return Compat.SafeGetCVarNumber(name)
     end
     return nil
 end
 
 local function SafeSetCVar(name, value)
-    if Compat.SafeSetCVar then
+    if Compat.SafeSetCVarAny then
+        return Compat.SafeSetCVarAny(GetCVarLookupNames(name), value)
+    elseif Compat.SafeSetCVar then
         return Compat.SafeSetCVar(name, value)
     end
     return false
@@ -55,9 +83,9 @@ local function SetManagedCVar(name, value)
     end
 
     internalWriteDepth = internalWriteDepth + 1
-    SafeSetCVar(name, value)
+    local ok = SafeSetCVar(name, value)
     internalWriteDepth = internalWriteDepth - 1
-    return true
+    return ok and true or false
 end
 
 local function IsInternalWrite()
@@ -66,12 +94,25 @@ end
 
 local function IsShoulderActive()
     local v = SafeGetCVar("test_cameraOverShoulder")
-    return v ~= nil and v ~= 0
+    return v ~= nil and (v > 0.0001 or v < -0.0001)
 end
 
 local function IsDynamicPitchActive()
     local v = SafeGetCVar("test_cameraDynamicPitch")
     return v ~= nil and v == 1
+end
+
+local function GetCameraViewDefault()
+    local value = nil
+    if Compat.SafeGetCVarDefault then
+        value = tonumber(Compat.SafeGetCVarDefault("cameraView"))
+    end
+    return value or 1
+end
+
+local function IsValidCameraView(value)
+    local num = tonumber(value)
+    return num == 1 or num == 2 or num == 3 or num == 4 or num == 5
 end
 
 function CVarGuard:ShouldBlockKeepCentered()
@@ -83,11 +124,12 @@ function CVarGuard:ShouldBlockReduceUnexpectedMovement()
 end
 
 function CVarGuard:CaptureUserValue(name)
-    local current = SafeGetCVar(name)
+    local canonical = NormalizeCVarName(name)
+    local current = SafeGetCVar(canonical)
     if current == nil then return end
 
-    if savedUserValues[name] == nil then
-        savedUserValues[name] = current
+    if savedUserValues[canonical] == nil then
+        savedUserValues[canonical] = current
     end
 end
 
@@ -206,11 +248,21 @@ end
 
 function CVarGuard:OnExternalCVarSet(cvar, value)
     if IsInternalWrite() then return end
+    if type(cvar) ~= "string" then return end
+
+    cvar = NormalizeCVarName(cvar)
+
+    if cvar == "cameraView" then
+        if not IsValidCameraView(value) then
+            SetManagedCVar("cameraView", GetCameraViewDefault())
+        end
+        return
+    end
 
     if cvar == "CameraKeepCharacterCentered" then
         local num = tonumber(value)
 
-        if num == 1 or value == true then
+        if num == 1 or value == true or value == "true" then
             if self:ShouldBlockKeepCentered() then
                 self:CaptureUserValue("CameraKeepCharacterCentered")
                 SetManagedCVar("CameraKeepCharacterCentered", 0)
@@ -218,7 +270,7 @@ function CVarGuard:OnExternalCVarSet(cvar, value)
             else
                 savedUserValues.CameraKeepCharacterCentered = 1
             end
-        elseif num == 0 or value == false then
+        elseif num == 0 or value == false or value == "false" then
             if not self:ShouldBlockKeepCentered() then
                 savedUserValues.CameraKeepCharacterCentered = 0
             end
@@ -230,7 +282,7 @@ function CVarGuard:OnExternalCVarSet(cvar, value)
     if cvar == "cameraReduceUnexpectedMovement" then
         local num = tonumber(value)
 
-        if num == 1 or value == true then
+        if num == 1 or value == true or value == "true" then
             if self:ShouldBlockReduceUnexpectedMovement() then
                 self:CaptureUserValue("cameraReduceUnexpectedMovement")
                 SetManagedCVar("cameraReduceUnexpectedMovement", 0)
@@ -238,7 +290,7 @@ function CVarGuard:OnExternalCVarSet(cvar, value)
             else
                 savedUserValues.cameraReduceUnexpectedMovement = 1
             end
-        elseif num == 0 or value == false then
+        elseif num == 0 or value == false or value == "false" then
             if not self:ShouldBlockReduceUnexpectedMovement() then
                 savedUserValues.cameraReduceUnexpectedMovement = 0
             end
@@ -257,28 +309,35 @@ function CVarGuard:InvalidateCache()
     stateCache.blockReduceUnexpectedMovement = nil
 end
 
+local function SafeOnExternalCVarSet(cvar, value)
+    local ok, err = pcall(CVarGuard.OnExternalCVarSet, CVarGuard, cvar, value)
+    if not ok and ns.Functions and ns.Functions.logMessage then
+        ns.Functions:logMessage("error", "CVarGuard error: " .. tostring(err))
+    end
+end
+
 function CVarGuard:Init()
     if isInitialized then return end
     isInitialized = true
 
-    if type(_G.SetCVar) == "function" then
-        hooksecurefunc("SetCVar", function(cvar, value)
-            CVarGuard:OnExternalCVarSet(cvar, value)
+    if type(_G.SetCVar) == "function" and type(hooksecurefunc) == "function" then
+        pcall(hooksecurefunc, "SetCVar", function(cvar, value)
+            SafeOnExternalCVarSet(cvar, value)
         end)
     end
 
-    if C_CVar and C_CVar.SetCVar then
-        hooksecurefunc(C_CVar, "SetCVar", function(...)
+    if C_CVar and C_CVar.SetCVar and type(hooksecurefunc) == "function" then
+        pcall(hooksecurefunc, C_CVar, "SetCVar", function(...)
             local argc = select("#", ...)
             local cvar, value
 
-            if argc >= 3 then
+            if argc >= 3 and select(1, ...) == C_CVar then
                 cvar, value = select(2, ...)
             else
                 cvar, value = ...
             end
 
-            CVarGuard:OnExternalCVarSet(cvar, value)
+            SafeOnExternalCVarSet(cvar, value)
         end)
     end
 

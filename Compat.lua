@@ -10,6 +10,7 @@ local C_CVar = C_CVar
 local C_UI = C_UI
 local C_AddOns = C_AddOns
 local GetCVar = GetCVar
+local GetCVarDefault = GetCVarDefault
 local SetCVar = SetCVar
 local ReloadUI = ReloadUI
 local GetAddOnMetadata = GetAddOnMetadata
@@ -60,6 +61,74 @@ end
 function Compat.SafeGetCVarNumber(name)
     local value = Compat.SafeGetCVar(name)
     return value ~= nil and tonumber(value) or nil
+end
+
+function Compat.SafeGetCVarDefault(name)
+    if C_CVar and C_CVar.GetCVarDefault then
+        local ok, val = pcall(C_CVar.GetCVarDefault, name)
+        if ok and val ~= nil then
+            return val
+        end
+    end
+
+    if type(GetCVarDefault) == 'function' then
+        local ok, val = pcall(GetCVarDefault, name)
+        if ok and val ~= nil then
+            return val
+        end
+    end
+
+    return nil
+end
+
+function Compat.SafeGetCVarNumberAny(names)
+    if type(names) == 'string' then
+        return Compat.SafeGetCVarNumber(names), names
+    end
+
+    if type(names) ~= 'table' then
+        return nil, nil
+    end
+
+    for _, name in ipairs(names) do
+        local value = Compat.SafeGetCVarNumber(name)
+        if value ~= nil then
+            return value, name
+        end
+    end
+
+    return nil, nil
+end
+
+function Compat.SafeSetCVarAny(names, value)
+    if type(names) == 'string' then
+        return Compat.SafeSetCVar(names, value), names
+    end
+
+    if type(names) ~= 'table' then
+        return false, nil
+    end
+
+    local fallbackName = names[1]
+    for _, name in ipairs(names) do
+        if Compat.HasCVar(name) then
+            return Compat.SafeSetCVar(name, value), name
+        end
+    end
+
+    if fallbackName then
+        return Compat.SafeSetCVar(fallbackName, value), fallbackName
+    end
+
+    return false, nil
+end
+
+function Compat.SafeCall(func, ...)
+    if type(func) ~= 'function' then
+        return false, nil
+    end
+
+    return pcall(func, ...)
 end
 
 function Compat.SafeSetCVar(name, value)

@@ -21,7 +21,7 @@ local Compat = ns.Compat or {}
 local ShoulderCompensation = ns.ShoulderCompensation or {}
 
 local LibCamera    = LibStub("LibCamera-1.0", true)
-local LibMountInfo = LibStub("LibMountInfo-1.0", true)
+local LibMountInfo = LibStub("LibMountInfo-1.1", true) or LibStub("LibMountInfo-1.0", true)
 local ACD          = LibStub("AceConfigDialog-3.0", true)
 
 -- =====================================================================
@@ -56,6 +56,8 @@ local MoveViewRightStop     = MoveViewRightStop
 local MoveViewLeftStart     = MoveViewLeftStart
 local MoveViewLeftStop      = MoveViewLeftStop
 local GetCameraZoom         = GetCameraZoom
+local UnitExists            = UnitExists
+local UnitIsUnit            = UnitIsUnit
 local IsEncounterInProgress = IsEncounterInProgress
 local GetTime = GetTime
 local UnitIsDead = UnitIsDead
@@ -71,6 +73,32 @@ local GetNumSubgroupMembers= GetNumSubgroupMembers
 
 local IS_RETAIL = Compat.IS_RETAIL and true or false
 local CONVERSION_RATIO = Compat.CONVERSION_RATIO or (IS_RETAIL and 15 or 12.5)
+
+local CVAR_ALIASES = {
+    cameraReduceUnexpectedMovement = { "cameraReduceUnexpectedMovement", "CameraReduceUnexpectedMovement" },
+    CameraReduceUnexpectedMovement = { "cameraReduceUnexpectedMovement", "CameraReduceUnexpectedMovement" },
+}
+
+local CVAR_CANONICAL = {
+    CameraReduceUnexpectedMovement = "cameraReduceUnexpectedMovement",
+}
+
+local function CanonicalCVarName(cvarName)
+    return CVAR_CANONICAL[cvarName] or cvarName
+end
+
+local function SafePlayerAuraBySpellID(spellID)
+    if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then
+        return nil
+    end
+
+    local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellID)
+    if ok then
+        return aura
+    end
+
+    return nil
+end
 
 -- =====================================================================
 -- 2) STATE
@@ -191,7 +219,12 @@ function Functions:logMessage(level, message)
     elseif level == "info" then color, prefix = "|cff00ff00", "[I]"
     end
 
-    DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff0070deMCD|r %s: %s%s|r", prefix, color, tostring(message)))
+    local line = string.format("|cff0070deMCD|r %s: %s%s|r", prefix, color, tostring(message))
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage(line)
+    else
+        print(line)
+    end
 end
 
 function Functions:SendMessage(message)
@@ -207,8 +240,15 @@ end
 -- =====================================================================
 -- 6) SAFE CVAR HELPERS (fix SafeGetCVar nil + cross-client)
 -- =====================================================================
+local function GetCVarLookupNames(name)
+    return CVAR_ALIASES[name] or name
+end
+
 local function SafeGetCVar(name)
-    if Compat.SafeGetCVarNumber then
+    if Compat.SafeGetCVarNumberAny then
+        local value = Compat.SafeGetCVarNumberAny(GetCVarLookupNames(name))
+        return value
+    elseif Compat.SafeGetCVarNumber then
         return Compat.SafeGetCVarNumber(name)
     end
     return nil
@@ -216,10 +256,36 @@ end
 
 
 local function SafeSetCVar(name, value)
-    if Compat.SafeSetCVar then
+    if Compat.SafeSetCVarAny then
+        return Compat.SafeSetCVarAny(GetCVarLookupNames(name), value)
+    elseif Compat.SafeSetCVar then
         return Compat.SafeSetCVar(name, value)
     end
     return false
+end
+
+local function SafeLibCall(object, methodName, ...)
+    if not object or type(object[methodName]) ~= "function" then
+        return false
+    end
+
+    local ok, err = pcall(object[methodName], object, ...)
+    if not ok then
+        Functions:logMessage("error", tostring(methodName) .. " failed: " .. tostring(err))
+        return false
+    end
+
+    return true
+end
+
+local function SafeFunctionCall(func, ...)
+    if type(func) ~= "function" then return false end
+    local ok, err = pcall(func, ...)
+    if not ok then
+        Functions:logMessage("error", "Camera helper failed: " .. tostring(err))
+        return false
+    end
+    return true
 end
 
 local function ClampNumber(value, minValue, maxValue)
@@ -231,6 +297,7 @@ local function ClampNumber(value, minValue, maxValue)
 end
 
 local function NormalizeManagedCVarValue(cvarName, value, db)
+    cvarName = CanonicalCVarName(cvarName)
     local defaults = ns.Database and ns.Database.DEFAULTS
     local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
     local maxFactor = maxYards / CONVERSION_RATIO
@@ -261,6 +328,15 @@ local function NormalizeManagedCVarValue(cvarName, value, db)
         return ClampNumber(value, 0, 10) or ((db and ClampNumber(db.cameraIndirectOffset, 0, 10)) or 1.5)
     elseif cvarName == "test_cameraOverShoulder" then
         return ClampNumber(value, -15, 15) or 0
+    elseif cvarName == "cameraView" then
+        local view = tonumber(value)
+        if view == 1 or view == 2 or view == 3 or view == 4 or view == 5 then
+            return view
+        end
+        if Compat.SafeGetCVarDefault then
+            return tonumber(Compat.SafeGetCVarDefault("cameraView")) or 1
+        end
+        return 1
     end
 
     local num = tonumber(value)
@@ -430,11 +506,13 @@ function Functions:GetDistancePresetId(distanceKey)
 end
 
 local function UpdateCVar(key, value)
+    key = CanonicalCVarName(key)
+
     local db = DB()
     local normalizedValue = NormalizeManagedCVarValue(key, value, db)
     if normalizedValue == nil then return end
 
-    local currentValue = Compat.SafeGetCVar and Compat.SafeGetCVar(key) or nil
+    local currentValue = SafeGetCVar(key)
     if currentValue == nil then return end
 
     local strValue = tostring(normalizedValue)
@@ -457,13 +535,16 @@ end
 -- 7) MOUNT / TRAVEL DETECT
 -- =====================================================================
 function Functions:IsSkyriding()
-    if IsMounted() and LibMountInfo and LibMountInfo.IsSkyriding then
-        return LibMountInfo:IsSkyriding()
+    if IsMounted and IsMounted() and LibMountInfo and LibMountInfo.IsSkyriding then
+        local ok, result = pcall(LibMountInfo.IsSkyriding, LibMountInfo)
+        if ok then
+            return result and true or false
+        end
     end
 
     if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-        if C_UnitAuras.GetPlayerAuraBySpellID(404464) then return true end
-        if C_UnitAuras.GetPlayerAuraBySpellID(404468) then return false end
+        if SafePlayerAuraBySpellID(404464) then return true end
+        if SafePlayerAuraBySpellID(404468) then return false end
     end
 
     return false
@@ -477,22 +558,53 @@ function Functions:GetMountZoomMode(db)
     return MOUNT_ZOOM_MODE_ALL
 end
 
+local activeMountCache = {
+    expiresAt = 0,
+    mounted = false,
+    mountID = nil,
+    mountTypeID = nil,
+    isFlying = false,
+}
+
+function Functions:InvalidateMountCache()
+    activeMountCache.expiresAt = 0
+end
+
 function Functions:GetActiveMountID()
-    if not IS_RETAIL or not IsMounted() or not C_MountJournal or not C_MountJournal.GetMountIDs then
+    local mounted = IsMounted and IsMounted() or false
+    if not IS_RETAIL or not mounted or not C_MountJournal or not C_MountJournal.GetMountIDs or not C_MountJournal.GetMountInfoByID then
+        activeMountCache.mounted = mounted
+        activeMountCache.mountID = nil
+        activeMountCache.mountTypeID = nil
+        activeMountCache.isFlying = false
+        activeMountCache.expiresAt = 0
         return nil
     end
 
-    local mountIDs = C_MountJournal.GetMountIDs()
-    if not mountIDs then return nil end
+    local now = GetTime and GetTime() or 0
+    if activeMountCache.expiresAt > now and activeMountCache.mounted == mounted then
+        return activeMountCache.mountID
+    end
 
-    for _, mountID in ipairs(mountIDs) do
-        local _, _, _, isActive = C_MountJournal.GetMountInfoByID(mountID)
-        if isActive then
-            return mountID
+    local mountID = nil
+    local okMountIDs, mountIDs = pcall(C_MountJournal.GetMountIDs)
+    if okMountIDs and type(mountIDs) == "table" then
+        for _, id in ipairs(mountIDs) do
+            local ok, _, _, _, isActive = pcall(C_MountJournal.GetMountInfoByID, id)
+            if ok and isActive then
+                mountID = id
+                break
+            end
         end
     end
 
-    return nil
+    activeMountCache.mounted = mounted
+    activeMountCache.mountID = mountID
+    activeMountCache.mountTypeID = nil
+    activeMountCache.isFlying = false
+    activeMountCache.expiresAt = now + 0.35
+
+    return mountID
 end
 
 function Functions:IsFlyingMountActive()
@@ -501,22 +613,29 @@ function Functions:IsFlyingMountActive()
         return false, nil, mountID
     end
 
-    local _, _, _, _, mountTypeID = C_MountJournal.GetMountInfoExtraByID(mountID)
-    if mountTypeID and FLYCAM_FLYING_MOUNT_TYPES[mountTypeID] then
-        return true, mountTypeID, mountID
+    if activeMountCache.mountID == mountID and activeMountCache.mountTypeID ~= nil then
+        return activeMountCache.isFlying, activeMountCache.mountTypeID, mountID
     end
 
-    return false, mountTypeID, mountID
+    local ok, _, _, _, _, mountTypeID = pcall(C_MountJournal.GetMountInfoExtraByID, mountID)
+    if not ok then
+        return false, nil, mountID
+    end
+
+    activeMountCache.mountTypeID = mountTypeID
+    activeMountCache.isFlying = (mountTypeID and FLYCAM_FLYING_MOUNT_TYPES[mountTypeID]) and true or false
+
+    return activeMountCache.isFlying, mountTypeID, mountID
 end
 
 function Functions:IsDragonRacingRaceActive()
-    if not IsMounted() then
+    if not (IsMounted and IsMounted()) then
         return false
     end
 
     if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for spellID in pairs(DRAGONRACING_RACE_AURAS) do
-            if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then
+            if SafePlayerAuraBySpellID(spellID) then
                 return true
             end
         end
@@ -555,7 +674,7 @@ function Functions:IsDragonRacingRaceActive()
             end
         end
 
-        AuraUtil.ForEachAura("player", "HELPFUL", nil, CheckAura, true)
+        pcall(AuraUtil.ForEachAura, "player", "HELPFUL", nil, CheckAura, true)
         if inRace then
             return true
         end
@@ -574,8 +693,8 @@ function Functions:IsFlyingTravelContext()
         return true
     end
 
-    local formIndex = GetShapeshiftForm()
-    if formIndex and formIndex > 0 then
+    local formIndex = GetShapeshiftForm and GetShapeshiftForm() or nil
+    if formIndex and formIndex > 0 and GetShapeshiftFormInfo then
         local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
         if spellID and FLYING_TRAVEL_FORM_IDS[spellID] then
             return true
@@ -584,7 +703,7 @@ function Functions:IsFlyingTravelContext()
 
     if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for spellID in pairs(FLYING_TRAVEL_BUFF_IDS) do
-            if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then
+            if SafePlayerAuraBySpellID(spellID) then
                 return true
             end
         end
@@ -595,15 +714,16 @@ end
 
 function Functions:IsTravelFormOnlyActive()
     if LibMountInfo and LibMountInfo.IsMounted then
-        if LibMountInfo:IsMounted() then
+        local ok, mounted = pcall(LibMountInfo.IsMounted, LibMountInfo)
+        if ok and mounted then
             return false
         end
-    elseif IsMounted() then
+    elseif IsMounted and IsMounted() then
         return false
     end
 
-    local formIndex = GetShapeshiftForm()
-    if formIndex and formIndex > 0 then
+    local formIndex = GetShapeshiftForm and GetShapeshiftForm() or nil
+    if formIndex and formIndex > 0 and GetShapeshiftFormInfo then
         local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
         if spellID and TRAVEL_FORM_IDS[spellID] then
             return true
@@ -612,7 +732,7 @@ function Functions:IsTravelFormOnlyActive()
 
     if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for spellID in pairs(TRAVEL_BUFF_IDS) do
-            if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then
+            if SafePlayerAuraBySpellID(spellID) then
                 return true
             end
         end
@@ -663,13 +783,14 @@ end
 
 function IsInTravelForm()
     if LibMountInfo and LibMountInfo.IsMounted then
-        if LibMountInfo:IsMounted() then return true end
+        local ok, mounted = pcall(LibMountInfo.IsMounted, LibMountInfo)
+        if ok and mounted then return true end
     else
-        if IsMounted() then return true end
+        if IsMounted and IsMounted() then return true end
     end
 
-    local formIndex = GetShapeshiftForm()
-    if formIndex and formIndex > 0 then
+    local formIndex = GetShapeshiftForm and GetShapeshiftForm() or nil
+    if formIndex and formIndex > 0 and GetShapeshiftFormInfo then
         local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
         if spellID and TRAVEL_FORM_IDS[spellID] then return true end
     end
@@ -677,7 +798,7 @@ function IsInTravelForm()
     if IS_RETAIL then
         if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
             for spellID in pairs(TRAVEL_BUFF_IDS) do
-                if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then return true end
+                if SafePlayerAuraBySpellID(spellID) then return true end
             end
         end
     else
@@ -714,7 +835,12 @@ end
 local function ScheduleTransition(delay, callback)
     CancelTransition()
 
-    if C_Timer and C_Timer.NewTimer then
+    if not (C_Timer and (C_Timer.NewTimer or C_Timer.After)) then
+        callback()
+        return
+    end
+
+    if C_Timer.NewTimer then
         transitionTimer = C_Timer.NewTimer(delay, function()
             transitionTimer = nil
             callback()
@@ -749,7 +875,14 @@ local function GetPendingReturnRemaining()
 end
 
 
+local function NormalizeTargetYards(targetYards)
+    local defaults = ns.Database and ns.Database.DEFAULTS
+    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    return ClampNumber(targetYards, 1, maxYards) or maxYards
+end
+
 local function ApplyZoomCap(targetYards)
+    targetYards = NormalizeTargetYards(targetYards)
     local targetFactor = targetYards / CONVERSION_RATIO
 
     if SafeGetCVar("cameraDistanceMaxZoomFactor") ~= nil then
@@ -762,6 +895,7 @@ local function ApplyZoomCap(targetYards)
 end
 
 local function IsZoomCapAligned(targetYards)
+    targetYards = NormalizeTargetYards(targetYards)
     local targetFactor = targetYards / CONVERSION_RATIO
     local currentFactor = SafeGetCVar("cameraDistanceMaxZoomFactor")
     local currentMax = SafeGetCVar("cameraDistanceMax")
@@ -778,6 +912,7 @@ local function IsZoomCapAligned(targetYards)
 end
 
 local function ApplyZoomTransition(targetYards, transitionTime)
+    targetYards = NormalizeTargetYards(targetYards)
     lastAutoAppliedZoomYards = targetYards
     lastAutoAppliedAt = (GetTime and GetTime() or 0)
 
@@ -791,7 +926,7 @@ local function ApplyZoomTransition(targetYards, transitionTime)
     -- If we are shrinking max factor, do zoom first then lower cap (prevents snap)
     if targetFactor < currentFactor then
         if LibCamera and LibCamera.SetZoomUsingCVar then
-            LibCamera:SetZoomUsingCVar(targetYards, transitionTime)
+            SafeLibCall(LibCamera, "SetZoomUsingCVar", targetYards, transitionTime)
         end
 
         local myToken = stateToken
@@ -803,7 +938,7 @@ local function ApplyZoomTransition(targetYards, transitionTime)
     else
         ApplyZoomCap(targetYards)
         if LibCamera and LibCamera.SetZoomUsingCVar then
-            LibCamera:SetZoomUsingCVar(targetYards, transitionTime)
+            SafeLibCall(LibCamera, "SetZoomUsingCVar", targetYards, transitionTime)
         end
     end
 end
@@ -1142,13 +1277,13 @@ local function IsProfessionActivityBlockingAfk()
 end
 
 local function StopAfkRotation()
-    MoveViewRightStop()
-    MoveViewLeftStop()
+    SafeFunctionCall(MoveViewRightStop)
+    SafeFunctionCall(MoveViewLeftStop)
 end
 
 local function ShowUiAfterAfk()
     if afkUIHidden then
-        UIParent:Show()
+        SafeFunctionCall(UIParent and UIParent.Show, UIParent)
         afkUIHidden = false
     end
     safeExitFrame:Hide()
@@ -1163,7 +1298,7 @@ local function ApplyAfkZoom(db)
 
     ApplyZoomCap(maxYards)
     if LibCamera and LibCamera.SetZoomUsingCVar then
-        LibCamera:SetZoomUsingCVar(maxYards, transition)
+        SafeLibCall(LibCamera, "SetZoomUsingCVar", maxYards, transition)
     end
 end
 
@@ -1176,9 +1311,9 @@ local function StartAfkRotation(db)
     StopAfkRotation()
 
     if direction == "left" then
-        MoveViewLeftStart(speed)
+        SafeFunctionCall(MoveViewLeftStart, speed)
     else
-        MoveViewRightStart(speed)
+        SafeFunctionCall(MoveViewRightStart, speed)
     end
 end
 
@@ -1203,7 +1338,7 @@ local function CanEnterAfkMode(db)
         return false, "on_taxi"
     end
 
-    if db.afkSkipMounted ~= false and IsMounted() then
+    if db.afkSkipMounted ~= false and IsMounted and IsMounted() then
         return false, "mounted"
     end
 
@@ -1230,10 +1365,8 @@ local function EnterAfkMode(db)
     StartAfkRotation(db)
 
     if db.afkHideUI ~= false then
-        if CloseAllWindows then
-            CloseAllWindows()
-        end
-        UIParent:Hide()
+        SafeFunctionCall(CloseAllWindows)
+        SafeFunctionCall(UIParent and UIParent.Hide, UIParent)
         afkUIHidden = true
         safeExitFrame:Show()
     else
@@ -1272,6 +1405,15 @@ local function ScheduleAfkModeEntry(db)
     local delay = ClampAfkDelay(db and db.afkDelay)
 
     if delay <= 0 then
+        local currentDb = DB()
+        local canEnter = currentDb and CanEnterAfkMode(currentDb)
+        if canEnter and token == afkPendingToken then
+            EnterAfkMode(currentDb)
+        end
+        return
+    end
+
+    if not (C_Timer and C_Timer.After) then
         local currentDb = DB()
         local canEnter = currentDb and CanEnterAfkMode(currentDb)
         if canEnter and token == afkPendingToken then
@@ -1357,10 +1499,8 @@ function Functions:RefreshAfkMode(force)
             ApplyAfkZoom(db)
             StartAfkRotation(db)
             if db.afkHideUI ~= false then
-                if CloseAllWindows then
-                    CloseAllWindows()
-                end
-                UIParent:Hide()
+                SafeFunctionCall(CloseAllWindows)
+                SafeFunctionCall(UIParent and UIParent.Hide, UIParent)
                 afkUIHidden = true
                 safeExitFrame:Show()
             else
@@ -1392,7 +1532,9 @@ safeExitFrame:SetScript("OnKeyDown", function(_, key)
         Functions:ManualExitAfkMode()
     end
 end)
-tinsert(UISpecialFrames, safeExitFrame:GetName())
+if UISpecialFrames and safeExitFrame.GetName then
+    tinsert(UISpecialFrames, safeExitFrame:GetName())
+end
 
 local shoulderRefreshToken = 0
 local raceFirstPersonApplied = false
@@ -1400,7 +1542,7 @@ local raceFirstPersonApplied = false
 local function ApplyRaceFirstPersonZoom()
     ApplyZoomCap(RACE_FIRST_PERSON_YARDS)
     if LibCamera and LibCamera.SetZoomUsingCVar then
-        LibCamera:SetZoomUsingCVar(RACE_FIRST_PERSON_YARDS, 0.20)
+        SafeLibCall(LibCamera, "SetZoomUsingCVar", RACE_FIRST_PERSON_YARDS, 0.20)
     end
 end
 
@@ -1427,7 +1569,7 @@ function Functions:ApplyShoulderOffset(force)
         return
     end
 
-    local currentZoom = GetCameraZoom()
+    local currentZoom = (GetCameraZoom and GetCameraZoom()) or 0
     if (not force) and math_abs(shoulderHandlerFrame.lastZoom - currentZoom) < 0.01 then
         return
     end
@@ -1438,7 +1580,12 @@ function Functions:ApplyShoulderOffset(force)
     local modelFactor = 1.0
 
     if ShoulderCompensation and ShoulderCompensation.GetFactor then
-        modelFactor = ShoulderCompensation:GetFactor() or 1.0
+        local okFactor, value = pcall(ShoulderCompensation.GetFactor, ShoulderCompensation)
+        if okFactor and tonumber(value) then
+            modelFactor = value
+        elseif not okFactor then
+            Functions:logMessage("warning", "Shoulder compensation failed; using neutral offset factor.")
+        end
     end
 
     UpdateCVar("test_cameraOverShoulder", baseOffset * zoomFactor * modelFactor)
@@ -1834,7 +1981,7 @@ function Functions:AdjustCamera(forceNow)
 
         ApplyZoomCap(manualTargetYards)
         if LibCamera and LibCamera.SetZoomUsingCVar then
-            LibCamera:SetZoomUsingCVar(manualTargetYards, db.zoomTransitionTime or 0.5)
+            SafeLibCall(LibCamera, "SetZoomUsingCVar", manualTargetYards, db.zoomTransitionTime or 0.5)
         end
 
         Functions:logMessage("info", L["SMART_ZOOM_DISABLED_MSG"] or "Smart Zoom is disabled. Using manual max distance settings.")
@@ -1859,10 +2006,16 @@ end
 
 function Functions:OnCVarUpdate(_, cvarName, value)
     if isInternalUpdate then return end
+    cvarName = CanonicalCVarName(cvarName)
+
     local db = DB()
     if not db then return end
 
     if cvarName == "cameraView" then
+        local normalizedView = NormalizeManagedCVarValue(cvarName, value, db)
+        if tonumber(value) ~= normalizedView then
+            UpdateCVar("cameraView", normalizedView)
+        end
         -- Saved camera views can override zoom, yaw, pitch and other camera CVars
         -- during login / view restore. Re-apply the full addon state, not just zoom.
         Functions:ScheduleStabilizedUpdate({ 0, 0.15, 0.75, 1.5 }, true)

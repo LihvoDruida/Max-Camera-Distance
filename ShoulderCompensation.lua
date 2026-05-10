@@ -17,6 +17,7 @@ local tonumber = tonumber
 local type = type
 local pairs = pairs
 local strsplit = strsplit
+local pcall = pcall
 
 local C_MountJournal = _G.C_MountJournal
 local C_UnitAuras = _G.C_UnitAuras
@@ -24,18 +25,42 @@ local GetShapeshiftFormID = _G.GetShapeshiftFormID
 
 local modelFrame = CreateFrame and CreateFrame("PlayerModel") or nil
 
+local function SafeUnitRace(unit)
+    if UnitRace then
+        return UnitRace(unit)
+    end
+    return nil, nil
+end
+
+local function SafeUnitSex(unit)
+    if UnitSex then
+        return UnitSex(unit)
+    end
+    return nil
+end
+
+local function SafeUnitClass(unit)
+    if UnitClass then
+        return UnitClass(unit)
+    end
+    return nil, nil
+end
+
+
 local function SafeAuraSpellIdAtIndex(unit, index)
     if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
-        local aura = C_UnitAuras.GetBuffDataByIndex(unit, index)
-        if aura and aura.spellId and (not issecretvalue or not issecretvalue(aura.spellId)) then
+        local ok, aura = pcall(C_UnitAuras.GetBuffDataByIndex, unit, index)
+        if ok and aura and aura.spellId and (not issecretvalue or not issecretvalue(aura.spellId)) then
             return aura.spellId
         end
         return nil
     end
 
     if UnitBuff then
-        local _, _, _, _, _, _, _, _, _, spellId = UnitBuff(unit, index)
-        return spellId
+        local ok, _, _, _, _, _, _, _, _, _, spellId = pcall(UnitBuff, unit, index)
+        if ok then
+            return spellId
+        end
     end
 
     return nil
@@ -416,20 +441,20 @@ function Shoulder:GetCurrentMountId()
     end
 
     if self.state.lastActiveMount then
-        local _, _, _, active = C_MountJournal.GetMountInfoByID(self.state.lastActiveMount)
-        if active then
+        local ok, _, _, _, active = pcall(C_MountJournal.GetMountInfoByID, self.state.lastActiveMount)
+        if ok and active then
             return self.state.lastActiveMount
         end
     end
 
-    local ids = C_MountJournal.GetMountIDs()
-    if type(ids) ~= "table" then
+    local okIds, ids = pcall(C_MountJournal.GetMountIDs)
+    if not okIds or type(ids) ~= "table" then
         return self.state.lastActiveMount
     end
 
     for _, mountId in pairs(ids) do
-        local _, _, _, active = C_MountJournal.GetMountInfoByID(mountId)
-        if active then
+        local ok, _, _, _, active = pcall(C_MountJournal.GetMountInfoByID, mountId)
+        if ok and active then
             self.state.lastActiveMount = mountId
             return mountId
         end
@@ -444,11 +469,18 @@ function Shoulder:GetCurrentModelId()
     end
 
     if modelFrame.ClearModel then
-        modelFrame:ClearModel()
+        pcall(modelFrame.ClearModel, modelFrame)
     end
 
-    modelFrame:SetUnit("player")
-    local modelId = modelFrame:GetModelFileID()
+    local okSet = pcall(modelFrame.SetUnit, modelFrame, "player")
+    if not okSet then
+        return self.state.lastModelId
+    end
+
+    local okModel, modelId = pcall(modelFrame.GetModelFileID, modelFrame)
+    if not okModel then
+        modelId = nil
+    end
 
     if modelId and self.playerModelOffsetFactors[modelId] then
         self.state.lastModelId = modelId
@@ -459,8 +491,8 @@ function Shoulder:GetCurrentModelId()
         return modelId
     end
 
-    local _, raceFile = UnitRace("player")
-    local sex = UnitSex("player")
+    local _, raceFile = SafeUnitRace("player")
+    local sex = SafeUnitSex("player")
     if raceFile and self.raceAndGenderToModelId[raceFile] and self.raceAndGenderToModelId[raceFile][sex] then
         return self.raceAndGenderToModelId[raceFile][sex]
     end
@@ -469,7 +501,7 @@ function Shoulder:GetCurrentModelId()
 end
 
 function Shoulder:GetVehicleId()
-    local vehicleGuid = UnitGUID("vehicle")
+    local vehicleGuid = UnitGUID and UnitGUID("vehicle")
     if not vehicleGuid or (issecretvalue and issecretvalue(vehicleGuid)) then
         return self.state.lastVehicleId
     end
@@ -490,9 +522,9 @@ function Shoulder:ResolveHardcodedOverride(idType, id)
 end
 
 function Shoulder:GetNormalPlayerFactor()
-    local _, raceFile = UnitRace("player")
-    local sex = UnitSex("player")
-    local _, englishClass = UnitClass("player")
+    local _, raceFile = SafeUnitRace("player")
+    local sex = SafeUnitSex("player")
+    local _, englishClass = SafeUnitClass("player")
 
     if englishClass == "DEMONHUNTER" and raceFile and sex then
         if HasAuraSpell("player", 162264) then
@@ -529,9 +561,9 @@ function Shoulder:GetShapeshiftFactor()
         return nil
     end
 
-    local _, englishClass = UnitClass("player")
-    local _, raceFile = UnitRace("player")
-    local sex = UnitSex("player")
+    local _, englishClass = SafeUnitClass("player")
+    local _, raceFile = SafeUnitRace("player")
+    local sex = SafeUnitSex("player")
 
     if englishClass == "DRUID" and raceFile and sex then
         local byRace = self.druidFormIdToShoulderOffsetFactor and self.druidFormIdToShoulderOffsetFactor[raceFile]
@@ -550,13 +582,13 @@ function Shoulder:GetShapeshiftFactor()
 end
 
 function Shoulder:GetMountedFactor()
-    if not IsMounted() or UnitOnTaxi("player") then
+    if not (IsMounted and IsMounted()) or (UnitOnTaxi and UnitOnTaxi("player")) then
         return nil
     end
 
     if HasAuraSpell("player", 87840) then
-        local _, raceFile = UnitRace("player")
-        local sex = UnitSex("player")
+        local _, raceFile = SafeUnitRace("player")
+        local sex = SafeUnitSex("player")
         local modelId = self:GetCurrentModelId()
         if modelId and self.playerModelOffsetFactors[modelId] then
             return self.playerModelOffsetFactors[modelId] * 10
@@ -577,7 +609,7 @@ function Shoulder:GetMountedFactor()
         if modelId and self.playerModelOffsetFactors[modelId] then
             return self.playerModelOffsetFactors[modelId] * 10
         end
-        local sex = UnitSex("player")
+        local sex = SafeUnitSex("player")
         if self.raceAndGenderToModelId["Dracthyr"] and self.raceAndGenderToModelId["Dracthyr"][sex] then
             local dracthyrModel = self.raceAndGenderToModelId["Dracthyr"][sex]
             return (self.playerModelOffsetFactors[dracthyrModel] or 1) * 10
@@ -597,7 +629,7 @@ function Shoulder:GetMountedFactor()
 end
 
 function Shoulder:GetVehicleFactor()
-    if not UnitInVehicle("player") then
+    if not (UnitInVehicle and UnitInVehicle("player")) then
         return nil
     end
 
@@ -634,6 +666,6 @@ end
 
 function Shoulder:Invalidate()
     if modelFrame and modelFrame.ClearModel then
-        modelFrame:ClearModel()
+        pcall(modelFrame.ClearModel, modelFrame)
     end
 end

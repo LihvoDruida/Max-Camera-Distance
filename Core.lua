@@ -78,6 +78,12 @@ local function RequestShoulderRefresh()
     end
 end
 
+local function InvalidateMountCache()
+    if ns.Functions and ns.Functions.InvalidateMountCache then
+        SafeCall(ns.Functions.InvalidateMountCache, "InvalidateMountCache", ns.Functions)
+    end
+end
+
 local startupRefreshToken = 0
 
 local function ScheduleStartupCameraRefresh()
@@ -161,6 +167,7 @@ local watchedCVars = {
     cameraPitchMoveSpeed = true,
     CameraKeepCharacterCentered = true,
     cameraReduceUnexpectedMovement = true,
+    CameraReduceUnexpectedMovement = true,
     cameraIndirectVisibility = true,
     cameraIndirectOffset = true,
     cameraView = true,
@@ -207,16 +214,21 @@ eventHandlers.ADDON_LOADED = function(event, loadedAddon)
 end
 
 eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
+    InvalidateMountCache()
     if not IsPlayerReady() then return end
     if not (ns.Functions and ns.Functions.AdjustCamera) then return end
 
     if isLogin or isReload then
         ScheduleStartupCameraRefresh()
     else
-        C_Timer.After(0, function()
-            if not IsPlayerReady() then return end
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0, function()
+                if not IsPlayerReady() then return end
+                ForceSmartUpdate()
+            end)
+        else
             ForceSmartUpdate()
-        end)
+        end
     end
 
     if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
@@ -255,6 +267,7 @@ eventHandlers.PLAYER_UNGHOST = function(event)
     end
 end
 eventHandlers.PLAYER_MOUNT_DISPLAY_CHANGED = function(event)
+    InvalidateMountCache()
     RequestSmartUpdate(event)
     if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
         SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
@@ -274,6 +287,7 @@ end
 
 eventHandlers.UNIT_AURA = function(event, unit)
     if unit ~= "player" then return end
+    InvalidateMountCache()
     RequestShoulderRefresh()
     if IsMounted and IsMounted() then
         RequestSmartUpdate()
@@ -282,12 +296,14 @@ end
 
 eventHandlers.UNIT_ENTERING_VEHICLE = function(event, unit)
     if unit ~= "player" then return end
+    InvalidateMountCache()
     RequestShoulderRefresh()
     RequestSmartUpdate()
 end
 
 eventHandlers.UNIT_EXITING_VEHICLE = function(event, unit)
     if unit ~= "player" then return end
+    InvalidateMountCache()
     RequestShoulderRefresh()
     RequestSmartUpdate()
 end
@@ -298,8 +314,13 @@ eventHandlers.UNIT_SPELLCAST_SUCCEEDED = function(event, unit)
 end
 
 eventHandlers.LOADING_SCREEN_DISABLED = function()
+    InvalidateMountCache()
     RequestShoulderRefresh()
+    if ns.Functions and ns.Functions.ScheduleStabilizedUpdate then
+        SafeCall(ns.Functions.ScheduleStabilizedUpdate, "ScheduleStabilizedUpdate", ns.Functions, { 0, 0.15, 0.75 }, true)
+    end
 end
+eventHandlers.PLAYER_CONTROL_GAINED = ForceSmartUpdate
 eventHandlers.GROUP_ROSTER_UPDATE = RequestSmartUpdate
 eventHandlers.ENCOUNTER_START = ForceSmartUpdate
 eventHandlers.ENCOUNTER_END = ForceSmartUpdate
@@ -327,7 +348,10 @@ frame:SetScript("OnEvent", function(self, event, ...)
     local handler = eventHandlers[event]
     if handler then
         -- LogEvent(event, ...)
-        handler(event, ...)
+        local ok, err = pcall(handler, event, ...)
+        if not ok then
+            print(string.format("|cffff0000%s Error in event %s:|r %s", addonName, tostring(event), tostring(err)))
+        end
     end
 end)
 
