@@ -92,6 +92,21 @@ local function IsInternalWrite()
     return internalWriteDepth > 0
 end
 
+function CVarGuard:BeginInternalWrite()
+    internalWriteDepth = internalWriteDepth + 1
+end
+
+function CVarGuard:EndInternalWrite()
+    internalWriteDepth = internalWriteDepth - 1
+    if internalWriteDepth < 0 then
+        internalWriteDepth = 0
+    end
+end
+
+function CVarGuard:IsInternalWrite()
+    return IsInternalWrite()
+end
+
 local function IsShoulderActive()
     local v = SafeGetCVar("test_cameraOverShoulder")
     return v ~= nil and (v > 0.0001 or v < -0.0001)

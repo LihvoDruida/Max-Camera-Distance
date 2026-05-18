@@ -66,7 +66,20 @@ local function RequestSmartUpdate()
     end
 end
 
+local function InvalidateRuntimeCaches()
+    if ns.Functions and ns.Functions.InvalidateRuntimeCaches then
+        SafeCall(ns.Functions.InvalidateRuntimeCaches, "InvalidateRuntimeCaches", ns.Functions)
+    end
+end
+
+local function RefreshAfkRelevantState()
+    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
+        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
+    end
+end
+
 local function ForceSmartUpdate()
+    InvalidateRuntimeCaches()
     if ns.Functions and ns.Functions.AdjustCamera then
         SafeCall(ns.Functions.AdjustCamera, "AdjustCamera", ns.Functions, true)
     end
@@ -85,6 +98,29 @@ local function InvalidateMountCache()
 end
 
 local startupRefreshToken = 0
+local cameraViewHooksInstalled = false
+
+local function InstallCameraViewHooks()
+    if cameraViewHooksInstalled then return end
+    cameraViewHooksInstalled = true
+
+    if type(hooksecurefunc) ~= "function" then return end
+
+    local function ScheduleViewRestoreRefresh()
+        if ns.Functions and ns.Functions.ScheduleStabilizedUpdate then
+            SafeCall(ns.Functions.ScheduleStabilizedUpdate, "ScheduleStabilizedUpdate", ns.Functions, { 0, 0.10, 0.35 }, true)
+        elseif ns.Functions and ns.Functions.RequestUpdate then
+            SafeCall(ns.Functions.RequestUpdate, "RequestUpdate", ns.Functions)
+        end
+    end
+
+    if type(_G.SetView) == "function" then
+        pcall(hooksecurefunc, "SetView", ScheduleViewRestoreRefresh)
+    end
+    if type(_G.ResetView) == "function" then
+        pcall(hooksecurefunc, "ResetView", ScheduleViewRestoreRefresh)
+    end
+end
 
 local function ScheduleStartupCameraRefresh()
     if not C_Timer or not C_Timer.After then
@@ -208,6 +244,7 @@ eventHandlers.ADDON_LOADED = function(event, loadedAddon)
         SafeCall(guard.Init, "CVarGuard.Init", guard)
     end
 
+    SafeCall(InstallCameraViewHooks, "InstallCameraViewHooks")
     SafeCall(InitMinimapButton, "InitMinimapButton")
 
     frame:UnregisterEvent("ADDON_LOADED")
@@ -215,6 +252,7 @@ end
 
 eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
     InvalidateMountCache()
+    InvalidateRuntimeCaches()
     if not IsPlayerReady() then return end
     if not (ns.Functions and ns.Functions.AdjustCamera) then return end
 
@@ -231,53 +269,40 @@ eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
         end
     end
 
-    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
-        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
-    end
+    RefreshAfkRelevantState()
 end
 
 eventHandlers.PLAYER_REGEN_DISABLED = function(event)
     RequestSmartUpdate(event)
-    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
-        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
-    end
+    RefreshAfkRelevantState()
 end
 eventHandlers.PLAYER_REGEN_ENABLED = function(event)
     RequestSmartUpdate(event)
-    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
-        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
-    end
+    RefreshAfkRelevantState()
 end
 eventHandlers.PLAYER_DEAD = function(event)
     RequestSmartUpdate(event)
-    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
-        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
-    end
+    RefreshAfkRelevantState()
 end
 eventHandlers.PLAYER_ALIVE = function(event)
     RequestSmartUpdate(event)
-    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
-        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
-    end
+    RefreshAfkRelevantState()
 end
 eventHandlers.PLAYER_UNGHOST = function(event)
     RequestSmartUpdate(event)
-    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
-        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
-    end
+    RefreshAfkRelevantState()
 end
 eventHandlers.PLAYER_MOUNT_DISPLAY_CHANGED = function(event)
     InvalidateMountCache()
+    InvalidateRuntimeCaches()
     RequestSmartUpdate(event)
-    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
-        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
-    end
+    RefreshAfkRelevantState()
 end
 eventHandlers.UPDATE_SHAPESHIFT_FORM = function(event)
+    InvalidateMountCache()
+    InvalidateRuntimeCaches()
     RequestSmartUpdate(event)
-    if ns.Functions and ns.Functions.OnAfkRelevantStateChanged then
-        SafeCall(ns.Functions.OnAfkRelevantStateChanged, "OnAfkRelevantStateChanged", ns.Functions)
-    end
+    RefreshAfkRelevantState()
 end
 eventHandlers.UNIT_MODEL_CHANGED = function(event, unit)
     if unit ~= "player" then return end
@@ -288,10 +313,12 @@ end
 eventHandlers.UNIT_AURA = function(event, unit)
     if unit ~= "player" then return end
     InvalidateMountCache()
+    InvalidateRuntimeCaches()
     RequestShoulderRefresh()
-    if IsMounted and IsMounted() then
-        RequestSmartUpdate()
-    end
+    -- Travel forms, skyriding/race auras and temporary vehicle-style buffs do not
+    -- always flip PLAYER_MOUNT_DISPLAY_CHANGED immediately. Coalesced RequestUpdate
+    -- keeps reaction fast without running permanent OnUpdate work.
+    RequestSmartUpdate()
 end
 
 eventHandlers.UNIT_ENTERING_VEHICLE = function(event, unit)

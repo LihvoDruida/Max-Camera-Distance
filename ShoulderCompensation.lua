@@ -13,6 +13,7 @@ local UnitInVehicle = UnitInVehicle
 local UnitGUID = UnitGUID
 local UnitOnTaxi = UnitOnTaxi
 local IsMounted = IsMounted
+local GetTime = GetTime
 local tonumber = tonumber
 local type = type
 local pairs = pairs
@@ -433,6 +434,8 @@ Shoulder.state = Shoulder.state or {
     lastActiveMount = nil,
     lastModelId = nil,
     lastVehicleId = nil,
+    cachedFactor = nil,
+    cachedFactorExpiresAt = 0,
 }
 
 function Shoulder:GetCurrentMountId()
@@ -641,30 +644,45 @@ function Shoulder:GetVehicleFactor()
     return self:ResolveHardcodedOverride("vehicleId", vehicleId) or 1
 end
 
+local function CacheFactor(self, value)
+    value = tonumber(value) or 1
+    self.state.cachedFactor = value
+    self.state.cachedFactorExpiresAt = (GetTime and GetTime() or 0) + 0.75
+    return value
+end
+
 function Shoulder:GetFactor()
+    local now = GetTime and GetTime() or 0
+    if self.state.cachedFactor ~= nil and self.state.cachedFactorExpiresAt and self.state.cachedFactorExpiresAt > now then
+        return self.state.cachedFactor
+    end
+
     if not UnitRace or not UnitSex then
-        return 1
+        return CacheFactor(self, 1)
     end
 
     local vehicleFactor = self:GetVehicleFactor()
     if vehicleFactor then
-        return vehicleFactor
+        return CacheFactor(self, vehicleFactor)
     end
 
     local mountedFactor = self:GetMountedFactor()
     if mountedFactor then
-        return mountedFactor
+        return CacheFactor(self, mountedFactor)
     end
 
     local formFactor = self:GetShapeshiftFactor()
     if formFactor then
-        return formFactor
+        return CacheFactor(self, formFactor)
     end
 
-    return self:GetNormalPlayerFactor() or 1
+    return CacheFactor(self, self:GetNormalPlayerFactor() or 1)
 end
 
 function Shoulder:Invalidate()
+    self.state.cachedFactor = nil
+    self.state.cachedFactorExpiresAt = 0
+
     if modelFrame and modelFrame.ClearModel then
         pcall(modelFrame.ClearModel, modelFrame)
     end

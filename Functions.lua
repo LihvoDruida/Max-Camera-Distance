@@ -131,6 +131,24 @@ local updatePending = false
 local updateFrame = CreateFrame("Frame")
 updateFrame:Hide()
 
+-- Runtime caches are deliberately short lived. They let one camera pass reuse
+-- expensive state checks (raid combat scan, mount/aura probes, context resolve)
+-- without making mount/combat reactions feel delayed.
+local RUNTIME_SIGNAL_CACHE_SECONDS = 0.05
+local GROUP_COMBAT_CACHE_SECONDS = 0.12
+local CVAR_GUARD_REFRESH_SECONDS = 0.12
+local SHOULDER_UPDATE_INTERVAL = 0.033
+local runtimeCache = {
+    combatSignals = nil,
+    combatSignalsExpiresAt = 0,
+    combatSignalsDb = nil,
+    groupCombat = nil,
+    groupCombatExpiresAt = 0,
+    groupCombatKey = nil,
+    cvarGuardRefreshAt = 0,
+    cvarGuardPending = false,
+}
+
 -- AFK
 local afkActive = false
 local afkUIHidden = false
@@ -235,6 +253,49 @@ local function NotifyConfigChanged()
     if ns.Config and ns.Config.NotifyChange then
         ns.Config:NotifyChange()
     end
+end
+
+function Functions:InvalidateRuntimeCaches(scope)
+    runtimeCache.combatSignals = nil
+    runtimeCache.combatSignalsExpiresAt = 0
+    runtimeCache.combatSignalsDb = nil
+
+    if scope ~= "combat-only" then
+        runtimeCache.groupCombat = nil
+        runtimeCache.groupCombatExpiresAt = 0
+        runtimeCache.groupCombatKey = nil
+    end
+end
+
+local function RequestCVarGuardRefresh(force)
+    local guard = ns.CVarGuard
+    if not (guard and guard.Refresh) then return end
+
+    if force then
+        runtimeCache.cvarGuardPending = false
+        runtimeCache.cvarGuardRefreshAt = GetTime and GetTime() or 0
+        guard:Refresh(true)
+        return
+    end
+
+    local now = GetTime and GetTime() or 0
+    if now == 0 or (now - (runtimeCache.cvarGuardRefreshAt or 0)) >= CVAR_GUARD_REFRESH_SECONDS then
+        runtimeCache.cvarGuardRefreshAt = now
+        guard:Refresh(false)
+        return
+    end
+
+    if runtimeCache.cvarGuardPending then return end
+    if not (C_Timer and C_Timer.After) then return end
+
+    runtimeCache.cvarGuardPending = true
+    C_Timer.After(CVAR_GUARD_REFRESH_SECONDS, function()
+        runtimeCache.cvarGuardPending = false
+        runtimeCache.cvarGuardRefreshAt = GetTime and GetTime() or runtimeCache.cvarGuardRefreshAt
+        if ns.CVarGuard and ns.CVarGuard.Refresh then
+            ns.CVarGuard:Refresh(false)
+        end
+    end)
 end
 
 -- =====================================================================
@@ -526,9 +587,18 @@ local function UpdateCVar(key, value)
         if currentValue == strValue then return end
     end
 
+    local guard = ns.CVarGuard
+    if guard and guard.BeginInternalWrite then
+        guard:BeginInternalWrite()
+    end
+
     isInternalUpdate = true
     SafeSetCVar(key, normalizedValue)
     isInternalUpdate = false
+
+    if guard and guard.EndInternalWrite then
+        guard:EndInternalWrite()
+    end
 end
 
 -- =====================================================================
@@ -973,6 +1043,7 @@ function Functions:ScheduleStabilizedUpdate(delays, forceNow)
 end
 
 function Functions:RequestUpdate()
+    self:InvalidateRuntimeCaches()
     if updatePending then return end
     updatePending = true
     updateFrame:Show()
@@ -995,36 +1066,51 @@ end)
 -- 10) COMBAT DETECT (group-safe)
 -- =====================================================================
 function Functions:IsGroupInCombat()
-    -- This helper is intentionally GROUP-ONLY.
-    -- Personal combat should be checked separately (UnitAffectingCombat("player"),
-    -- UnitThreatSituation("player"), etc.).
-    if IsInRaid() then
-        if IsEncounterInProgress() then
-            return true
-        end
+    -- This helper is intentionally GROUP-ONLY. Personal combat should be
+    -- checked separately. The result is cached very briefly because the same
+    -- camera pass can ask for it from ActionCam, Smart Zoom and status logic.
+    local inRaid = IsInRaid and IsInRaid()
+    local inGroup = (not inRaid) and IsInGroup and IsInGroup()
+    local memberCount = inRaid and (GetNumGroupMembers and GetNumGroupMembers() or 0)
+        or (inGroup and (GetNumSubgroupMembers and GetNumSubgroupMembers() or 0) or 0)
+    local key = (inRaid and "raid" or (inGroup and "party" or "solo")) .. ":" .. tostring(memberCount)
+    local now = GetTime and GetTime() or 0
 
-        for i = 1, GetNumGroupMembers() do
-            local unit = "raid"..i
-            if UnitExists(unit) and not UnitIsUnit(unit, "player") and UnitAffectingCombat(unit) then
-                return true
-            end
-        end
-
-        return false
+    if runtimeCache.groupCombatKey == key
+        and runtimeCache.groupCombatExpiresAt > now
+        and runtimeCache.groupCombat ~= nil then
+        return runtimeCache.groupCombat
     end
 
-    if IsInGroup() then
-        for i = 1, GetNumSubgroupMembers() do
-            local unit = "party"..i
+    local result = false
+
+    if inRaid then
+        if IsEncounterInProgress and IsEncounterInProgress() then
+            result = true
+        else
+            for i = 1, memberCount do
+                local unit = "raid" .. i
+                if UnitExists(unit) and not UnitIsUnit(unit, "player") and UnitAffectingCombat(unit) then
+                    result = true
+                    break
+                end
+            end
+        end
+    elseif inGroup then
+        for i = 1, memberCount do
+            local unit = "party" .. i
             if UnitExists(unit) and UnitAffectingCombat(unit) then
-                return true
+                result = true
+                break
             end
         end
-
-        return false
     end
 
-    return false
+    runtimeCache.groupCombatKey = key
+    runtimeCache.groupCombat = result
+    runtimeCache.groupCombatExpiresAt = now + GROUP_COMBAT_CACHE_SECONDS
+
+    return result
 end
 
 local function GetCombatContextRaw()
@@ -1067,6 +1153,13 @@ local function GetCombatTargetYards(db, context)
 end
 
 local function GetCombatSignals(db)
+    local now = GetTime and GetTime() or 0
+    if runtimeCache.combatSignals
+        and runtimeCache.combatSignalsDb == db
+        and runtimeCache.combatSignalsExpiresAt > now then
+        return runtimeCache.combatSignals
+    end
+
     local threatStatus = UnitThreatSituation("player")
     local mountedRaw = IsInTravelForm()
     local mountZoomActive = mountedRaw and Functions:ShouldUseMountZoom(db) or false
@@ -1078,7 +1171,7 @@ local function GetCombatSignals(db)
         isFlyingMount, mountTypeID, activeMountID = Functions:IsFlyingMountActive()
     end
 
-    return {
+    local signals = {
         playerInCombat = UnitAffectingCombat("player") and true or false,
         groupInCombat = Functions:IsGroupInCombat(),
         hasThreat = (threatStatus ~= nil and threatStatus > 0) and true or false,
@@ -1094,6 +1187,12 @@ local function GetCombatSignals(db)
         forceCombatZoom = (db and ShouldForceCombatZoom(db)) and true or false,
         rawContext = GetCombatContextRaw(),
     }
+
+    runtimeCache.combatSignals = signals
+    runtimeCache.combatSignalsDb = db
+    runtimeCache.combatSignalsExpiresAt = now + RUNTIME_SIGNAL_CACHE_SECONDS
+
+    return signals
 end
 
 local function GetCombatTriggerConfig(db)
@@ -1591,37 +1690,61 @@ function Functions:ApplyShoulderOffset(force)
     UpdateCVar("test_cameraOverShoulder", baseOffset * zoomFactor * modelFactor)
 end
 
+local shoulderRefreshQueued = false
+local shoulderRefreshAgain = false
+
 function Functions:RequestShoulderRefresh()
-    shoulderRefreshToken = shoulderRefreshToken + 1
-    local myToken = shoulderRefreshToken
+    if shoulderRefreshQueued then
+        shoulderRefreshAgain = true
+        return
+    end
+
+    shoulderRefreshQueued = true
     shoulderHandlerFrame.lastZoom = -1
 
-    local function RefreshShoulderNow()
+    local function RefreshShoulderNow(isFinalPass)
         if ShoulderCompensation and ShoulderCompensation.Invalidate then
             ShoulderCompensation:Invalidate()
         end
         Functions:ApplyShoulderOffset(true)
-        if ns.CVarGuard and ns.CVarGuard.Refresh then
-            ns.CVarGuard:Refresh(true)
+        RequestCVarGuardRefresh(isFinalPass == true)
+    end
+
+    local function FinishSeries()
+        shoulderRefreshQueued = false
+        if shoulderRefreshAgain then
+            shoulderRefreshAgain = false
+            Functions:RequestShoulderRefresh()
         end
     end
 
     if not (C_Timer and C_Timer.After) then
-        RefreshShoulderNow()
+        RefreshShoulderNow(true)
+        FinishSeries()
         return
     end
 
-    local delays = { 0, 0.02, 0.08, 0.16 }
-    for _, delay in ipairs(delays) do
+    local delays = { 0, 0.05, 0.18 }
+    local lastIndex = #delays
+    for index, delay in ipairs(delays) do
         C_Timer.After(delay, function()
-            if myToken ~= shoulderRefreshToken then return end
-            RefreshShoulderNow()
+            if not shoulderRefreshQueued then return end
+            RefreshShoulderNow(index == lastIndex)
+            if index == lastIndex then
+                FinishSeries()
+            end
         end)
     end
 end
 
 shoulderHandlerFrame.lastZoom = -1
-shoulderHandlerFrame:SetScript("OnUpdate", function()
+shoulderHandlerFrame.lastTick = 0
+shoulderHandlerFrame:SetScript("OnUpdate", function(self)
+    local now = GetTime and GetTime() or 0
+    if now > 0 and (now - (self.lastTick or 0)) < SHOULDER_UPDATE_INTERVAL then
+        return
+    end
+    self.lastTick = now
     Functions:ApplyShoulderOffset(false)
 end)
 shoulderHandlerFrame:Hide()
@@ -1676,9 +1799,7 @@ function Functions:UpdateActionCam()
         end
     end
 
-    if ns.CVarGuard and ns.CVarGuard.Refresh then
-        ns.CVarGuard:Refresh()
-    end
+    RequestCVarGuardRefresh(false)
 end
 
 -- =====================================================================
@@ -1961,6 +2082,7 @@ function Functions:AdjustCamera(forceNow)
     local db = DB()
     if not db then return end
 
+    self:InvalidateRuntimeCaches()
     SanitizeRuntimeProfile(db)
     Functions:UpdateActionCam()
 
@@ -1999,9 +2121,7 @@ function Functions:AdjustCamera(forceNow)
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
     
-    if ns.CVarGuard and ns.CVarGuard.Refresh then
-        ns.CVarGuard:Refresh()
-    end
+    RequestCVarGuardRefresh(false)
 end
 
 function Functions:OnCVarUpdate(_, cvarName, value)
