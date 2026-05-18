@@ -357,6 +357,33 @@ local function ClampNumber(value, minValue, maxValue)
     return num
 end
 
+local function SafeBoolCall(func, ...)
+    if type(func) ~= "function" then return false end
+    local ok, result = pcall(func, ...)
+    return ok and result and true or false
+end
+
+local function SafeValueCall(func, ...)
+    if type(func) ~= "function" then return nil end
+    local ok, a, b, c = pcall(func, ...)
+    if ok then
+        return a, b, c
+    end
+    return nil
+end
+
+local function SafeIsInInstance()
+    if type(IsInInstance) ~= "function" then
+        return false, nil
+    end
+    local ok, inInstance, instanceType = pcall(IsInInstance)
+    if ok then
+        return inInstance and true or false, instanceType
+    end
+    return false, nil
+end
+
+
 local function NormalizeManagedCVarValue(cvarName, value, db)
     cvarName = CanonicalCVarName(cvarName)
     local defaults = ns.Database and ns.Database.DEFAULTS
@@ -810,8 +837,8 @@ function Functions:IsTravelFormOnlyActive()
         local UnitBuff = _G.UnitBuff
         if UnitBuff then
             for i = 1, 40 do
-                local _, _, _, _, _, _, _, _, _, spellID = UnitBuff("player", i)
-                if not spellID then break end
+                local okBuff, _, _, _, _, _, _, _, _, _, spellID = pcall(UnitBuff, "player", i)
+                if not okBuff or not spellID then break end
                 if TRAVEL_BUFF_IDS[spellID] then
                     return true
                 end
@@ -875,8 +902,8 @@ function IsInTravelForm()
         local UnitBuff = _G.UnitBuff
         if UnitBuff then
             for i = 1, 40 do
-                local _, _, _, _, _, _, _, _, _, spellID = UnitBuff("player", i)
-                if not spellID then break end
+                local okBuff, _, _, _, _, _, _, _, _, _, spellID = pcall(UnitBuff, "player", i)
+                if not okBuff or not spellID then break end
                 if TRAVEL_BUFF_IDS[spellID] then return true end
             end
         end
@@ -1069,10 +1096,15 @@ function Functions:IsGroupInCombat()
     -- This helper is intentionally GROUP-ONLY. Personal combat should be
     -- checked separately. The result is cached very briefly because the same
     -- camera pass can ask for it from ActionCam, Smart Zoom and status logic.
-    local inRaid = IsInRaid and IsInRaid()
-    local inGroup = (not inRaid) and IsInGroup and IsInGroup()
-    local memberCount = inRaid and (GetNumGroupMembers and GetNumGroupMembers() or 0)
-        or (inGroup and (GetNumSubgroupMembers and GetNumSubgroupMembers() or 0) or 0)
+    local inRaid = SafeBoolCall(IsInRaid)
+    local inGroup = (not inRaid) and SafeBoolCall(IsInGroup)
+    local memberCount = 0
+    if inRaid then
+        memberCount = tonumber(SafeValueCall(GetNumGroupMembers)) or 0
+    elseif inGroup then
+        memberCount = tonumber(SafeValueCall(GetNumSubgroupMembers)) or 0
+    end
+
     local key = (inRaid and "raid" or (inGroup and "party" or "solo")) .. ":" .. tostring(memberCount)
     local now = GetTime and GetTime() or 0
 
@@ -1085,21 +1117,26 @@ function Functions:IsGroupInCombat()
     local result = false
 
     if inRaid then
-        if IsEncounterInProgress and IsEncounterInProgress() then
+        if SafeBoolCall(IsEncounterInProgress) then
             result = true
         else
-            for i = 1, memberCount do
+            -- Cap defensive scan size. GetNumGroupMembers can briefly be stale during roster changes.
+            local cappedMembers = math.min(memberCount, 40)
+            for i = 1, cappedMembers do
                 local unit = "raid" .. i
-                if UnitExists(unit) and not UnitIsUnit(unit, "player") and UnitAffectingCombat(unit) then
+                if SafeBoolCall(UnitExists, unit)
+                    and not SafeBoolCall(UnitIsUnit, unit, "player")
+                    and SafeBoolCall(UnitAffectingCombat, unit) then
                     result = true
                     break
                 end
             end
         end
     elseif inGroup then
-        for i = 1, memberCount do
+        local cappedMembers = math.min(memberCount, 4)
+        for i = 1, cappedMembers do
             local unit = "party" .. i
-            if UnitExists(unit) and UnitAffectingCombat(unit) then
+            if SafeBoolCall(UnitExists, unit) and SafeBoolCall(UnitAffectingCombat, unit) then
                 result = true
                 break
             end
@@ -1114,7 +1151,7 @@ function Functions:IsGroupInCombat()
 end
 
 local function GetCombatContextRaw()
-    local inInstance, instanceType = IsInInstance()
+    local inInstance, instanceType = SafeIsInInstance()
 
     if inInstance then
         if instanceType == "arena" or instanceType == "pvp" then
@@ -1130,11 +1167,11 @@ local function GetCombatContextRaw()
         end
     end
 
-    if IsInRaid() then
+    if SafeBoolCall(IsInRaid) then
         return "raid"
     end
 
-    if IsInGroup() then
+    if SafeBoolCall(IsInGroup) then
         return "party"
     end
 
@@ -1160,7 +1197,7 @@ local function GetCombatSignals(db)
         return runtimeCache.combatSignals
     end
 
-    local threatStatus = UnitThreatSituation("player")
+    local threatStatus = SafeValueCall(UnitThreatSituation, "player")
     local mountedRaw = IsInTravelForm()
     local mountZoomActive = mountedRaw and Functions:ShouldUseMountZoom(db) or false
     local isSkyriding = mountedRaw and Functions:IsSkyriding() or false
@@ -1172,7 +1209,7 @@ local function GetCombatSignals(db)
     end
 
     local signals = {
-        playerInCombat = UnitAffectingCombat("player") and true or false,
+        playerInCombat = SafeBoolCall(UnitAffectingCombat, "player"),
         groupInCombat = Functions:IsGroupInCombat(),
         hasThreat = (threatStatus ~= nil and threatStatus > 0) and true or false,
         isMounted = mountedRaw,
@@ -1425,23 +1462,23 @@ local function CanEnterAfkMode(db)
         return false, "not_afk"
     end
 
-    if UnitAffectingCombat("player") then
+    if SafeBoolCall(UnitAffectingCombat, "player") then
         return false, "in_combat"
     end
 
-    if UnitIsDead("player") or UnitIsGhost("player") then
+    if SafeBoolCall(UnitIsDead, "player") or SafeBoolCall(UnitIsGhost, "player") then
         return false, "dead"
     end
 
-    if UnitOnTaxi and UnitOnTaxi("player") then
+    if SafeBoolCall(UnitOnTaxi, "player") then
         return false, "on_taxi"
     end
 
-    if db.afkSkipMounted ~= false and IsMounted and IsMounted() then
+    if db.afkSkipMounted ~= false and SafeBoolCall(IsMounted) then
         return false, "mounted"
     end
 
-    if db.afkSkipFlying ~= false and type(IsFlying) == "function" and IsFlying() then
+    if db.afkSkipFlying ~= false and SafeBoolCall(IsFlying) then
         return false, "flying"
     end
 

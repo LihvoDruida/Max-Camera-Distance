@@ -23,6 +23,8 @@ local IS_RETAIL = Compat.IS_RETAIL and true or false
 -- Cached globals
 local UnitExists = UnitExists
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
+local UnitIsDead = UnitIsDead
+local UnitIsGhost = UnitIsGhost
 local C_Timer = C_Timer
 local pcall = pcall
 
@@ -48,8 +50,26 @@ local function SafeCall(func, name, ...)
     end
 end
 
+local function IsDeadOrGhostSafe(unit)
+    if type(UnitIsDeadOrGhost) == "function" then
+        local ok, result = pcall(UnitIsDeadOrGhost, unit)
+        if ok then return result and true or false end
+    end
+    if type(UnitIsDead) == "function" then
+        local ok, result = pcall(UnitIsDead, unit)
+        if ok and result then return true end
+    end
+    if type(UnitIsGhost) == "function" then
+        local ok, result = pcall(UnitIsGhost, unit)
+        if ok and result then return true end
+    end
+    return false
+end
+
 local function IsPlayerReady()
-    return UnitExists("player") and not UnitIsDeadOrGhost("player")
+    if type(UnitExists) ~= "function" then return false end
+    local ok, exists = pcall(UnitExists, "player")
+    return ok and exists and not IsDeadOrGhostSafe("player")
 end
 
 local function SafeRegisterEvent(targetFrame, eventName)

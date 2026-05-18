@@ -15,11 +15,13 @@ local SetCVar = SetCVar
 local ReloadUI = ReloadUI
 local GetAddOnMetadata = GetAddOnMetadata
 
-local _, _, _, buildNumber = GetBuildInfo()
-Compat.BUILD = tonumber(buildNumber) or 0
+local okBuild, _, _, _, buildNumber = pcall(GetBuildInfo)
+Compat.BUILD = okBuild and (tonumber(buildNumber) or 0) or 0
 Compat.PROJECT_ID = WOW_PROJECT_ID or 0
 
-Compat.IS_RETAIL = (Compat.PROJECT_ID == WOW_PROJECT_MAINLINE) or (Compat.BUILD >= 120000)
+local WOW_PROJECT_MAINLINE_VALUE = WOW_PROJECT_MAINLINE or 1
+
+Compat.IS_RETAIL = (Compat.PROJECT_ID == WOW_PROJECT_MAINLINE_VALUE) or (Compat.BUILD >= 120000)
 Compat.IS_MOP_CLASSIC = (Compat.BUILD >= 50000 and Compat.BUILD < 60000)
 Compat.IS_TBC_ANNIVERSARY = (Compat.BUILD >= 20000 and Compat.BUILD < 30000)
 Compat.IS_CLASSIC_ERA = (Compat.BUILD >= 10000 and Compat.BUILD < 20000)
@@ -102,6 +104,9 @@ end
 
 function Compat.SafeSetCVarAny(names, value)
     if type(names) == 'string' then
+        if not Compat.HasCVar(names) then
+            return false, nil
+        end
         return Compat.SafeSetCVar(names, value), names
     end
 
@@ -109,17 +114,14 @@ function Compat.SafeSetCVarAny(names, value)
         return false, nil
     end
 
-    local fallbackName = names[1]
     for _, name in ipairs(names) do
         if Compat.HasCVar(name) then
             return Compat.SafeSetCVar(name, value), name
         end
     end
 
-    if fallbackName then
-        return Compat.SafeSetCVar(fallbackName, value), fallbackName
-    end
-
+    -- Do not try to create/write unsupported CVars on older clients.
+    -- Some Classic branches error or taint noisily when a Retail-only CVar is written.
     return false, nil
 end
 
