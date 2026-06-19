@@ -1,8 +1,9 @@
 local addonName, ns = ...
+local LibStub = _G.LibStub
 ns.Database = ns.Database or {}
 local Database = ns.Database
 
-local AceDB = LibStub("AceDB-3.0")
+local AceDB = LibStub and LibStub("AceDB-3.0", true)
 local Compat = ns.Compat or {}
 
 local IS_RETAIL = Compat.IS_RETAIL and true or false
@@ -422,6 +423,33 @@ function Database:MigrateToPerCharacterProfiles()
     end
 end
 
+
+local function CreateFallbackDB(defaultsWrapper)
+    local rawDb = _G.MaxCameraDistanceDB
+    if type(rawDb) ~= "table" then
+        rawDb = {}
+        _G.MaxCameraDistanceDB = rawDb
+    end
+
+    rawDb.profiles = rawDb.profiles or {}
+    rawDb.profileKeys = rawDb.profileKeys or {}
+
+    local characterKey = GetCurrentCharacterKey() or "Default"
+    local profileKey = rawDb.profileKeys[characterKey] or characterKey
+    rawDb.profileKeys[characterKey] = profileKey
+
+    if type(rawDb.profiles[profileKey]) ~= "table" then
+        rawDb.profiles[profileKey] = CopyTableSafe(defaultsWrapper.profile or PROFILE_DEFAULTS)
+    end
+
+    return {
+        profile = rawDb.profiles[profileKey],
+        profiles = rawDb.profiles,
+        profileKeys = rawDb.profileKeys,
+        RegisterCallback = function() end,
+    }
+end
+
 -- ============================================================================
 -- INIT DB
 -- ============================================================================
@@ -429,7 +457,13 @@ function Database:InitDB()
     local defaultsWrapper = { profile = CopyTableSafe(PROFILE_DEFAULTS) }
 
     self:MigrateToPerCharacterProfiles()
-    self.db = AceDB:New("MaxCameraDistanceDB", defaultsWrapper)
+
+    if AceDB and AceDB.New then
+        self.db = AceDB:New("MaxCameraDistanceDB", defaultsWrapper)
+    else
+        self.db = CreateFallbackDB(defaultsWrapper)
+        print(addonName .. ": AceDB-3.0 not found. Using basic saved-variable storage; profile UI is unavailable.")
+    end
 
     if not self.db then
         print(addonName .. ": DB initialization failed.")
@@ -446,6 +480,8 @@ function Database:RegisterProfileCallbacks()
     local function OnUpdate(event)
         Database:OnProfileUpdate(event)
     end
+
+    if type(self.db.RegisterCallback) ~= "function" then return end
 
     self.db:RegisterCallback("OnProfileChanged", OnUpdate)
     self.db:RegisterCallback("OnProfileCopied", OnUpdate)

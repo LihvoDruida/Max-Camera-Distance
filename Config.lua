@@ -1,4 +1,5 @@
 local addonName, ns = ...
+local LibStub = _G.LibStub
 ns.Config = ns.Config or {}
 local Config = ns.Config
 
@@ -9,7 +10,7 @@ local L = setmetatable({}, {
         if ns.Locale and ns.Locale.Get then
             return ns.Locale:Get(key)
         end
-        local aceLocale = LibStub("AceLocale-3.0", true)
+        local aceLocale = (LibStub and LibStub("AceLocale-3.0", true))
         local tbl = aceLocale and aceLocale:GetLocale(addonName, true)
         local value = tbl and tbl[key]
         if value ~= nil then
@@ -18,10 +19,10 @@ local L = setmetatable({}, {
         return key
     end,
 })
-local AceConfig = LibStub("AceConfig-3.0", true)
-local AceConfigDialog = LibStub("AceConfigDialog-3.0", true)
-local AceDBOptions = LibStub("AceDBOptions-3.0", true)
-local AceConfigRegistry = LibStub("AceConfigRegistry-3.0", true)
+local AceConfig = (LibStub and LibStub("AceConfig-3.0", true))
+local AceConfigDialog = (LibStub and LibStub("AceConfigDialog-3.0", true))
+local AceDBOptions = (LibStub and LibStub("AceDBOptions-3.0", true))
+local AceConfigRegistry = (LibStub and LibStub("AceConfigRegistry-3.0", true))
 
 local Compat = ns.Compat or {}
 local IS_RETAIL = Compat.IS_RETAIL and true or false
@@ -521,7 +522,7 @@ function Config:SetupOptions()
                             db.minimap = db.minimap or { hide = false }
                             db.minimap.hide = not val
 
-                            local iconLib = LibStub("LibDBIcon-1.0", true)
+                            local iconLib = (LibStub and LibStub("LibDBIcon-1.0", true))
                             if iconLib then
                                 if val then iconLib:Show(addonName) else iconLib:Hide(addonName) end
                             end
@@ -1355,12 +1356,16 @@ function Config:SetupOptions()
         return
     end
 
-    AceConfig:RegisterOptionsTable(addonName, options)
+    local okRegister, errRegister = pcall(AceConfig.RegisterOptionsTable, AceConfig, addonName, options)
+    if not okRegister then
+        print(addonName .. ": AceConfig registration failed: " .. tostring(errRegister))
+        return
+    end
 
     if AceConfigDialog and AceConfigDialog.AddToBlizOptions then
         local rootCategoryName = L["ADDON_TITLE"] or "Max Camera Distance"
-        AceConfigDialog:AddToBlizOptions(addonName, rootCategoryName)
-        AceConfigDialog:AddToBlizOptions(addonName, L["PROFILES"] or "Profiles", rootCategoryName, "profiles")
+        pcall(AceConfigDialog.AddToBlizOptions, AceConfigDialog, addonName, rootCategoryName)
+        pcall(AceConfigDialog.AddToBlizOptions, AceConfigDialog, addonName, L["PROFILES"] or "Profiles", rootCategoryName, "profiles")
     end
 end
 

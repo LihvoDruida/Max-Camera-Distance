@@ -1,4 +1,5 @@
 local addonName, ns = ...
+local LibStub = _G.LibStub
 ns.Core = ns.Core or {}
 local Core = ns.Core
 local frame = CreateFrame("Frame")
@@ -8,7 +9,7 @@ local L = setmetatable({}, {
         if ns.Locale and ns.Locale.Get then
             return ns.Locale:Get(key)
         end
-        local aceLocale = LibStub("AceLocale-3.0", true)
+        local aceLocale = (LibStub and LibStub("AceLocale-3.0", true))
         local tbl = aceLocale and aceLocale:GetLocale(addonName, true)
         local value = tbl and tbl[key]
         if value ~= nil then
@@ -29,9 +30,9 @@ local C_Timer = C_Timer
 local pcall = pcall
 
 -- Minimap libs
-local LDB = LibStub("LibDataBroker-1.1", true)
-local LDBIcon = LibStub("LibDBIcon-1.0", true)
-local ACD = LibStub("AceConfigDialog-3.0", true)
+local LDB = (LibStub and LibStub("LibDataBroker-1.1", true))
+local LDBIcon = (LibStub and LibStub("LibDBIcon-1.0", true))
+local ACD = (LibStub and LibStub("AceConfigDialog-3.0", true))
 
 local ENABLE_LOGGING = false
 local minimapInited = false
@@ -196,8 +197,11 @@ local function InitMinimapButton()
         label = L["ADDON_TITLE"] or "Max Camera Distance",
 
         OnClick = function(_, button)
-            if ACD then
-                ACD:Open(addonName)
+            if ACD and ACD.Open then
+                local ok, err = pcall(ACD.Open, ACD, addonName)
+                if not ok then
+                    print(addonName .. ": settings window failed: " .. tostring(err))
+                end
             else
                 print(addonName .. ": AceConfigDialog not found.")
             end

@@ -1,4 +1,5 @@
 local addonName, ns = ...
+local LibStub = _G.LibStub
 ns.Functions = ns.Functions or {}
 local Functions = ns.Functions
 
@@ -8,7 +9,7 @@ local L = setmetatable({}, {
         if ns.Locale and ns.Locale.Get then
             return ns.Locale:Get(key)
         end
-        local aceLocale = LibStub("AceLocale-3.0", true)
+        local aceLocale = (LibStub and LibStub("AceLocale-3.0", true))
         local tbl = aceLocale and aceLocale:GetLocale(addonName, true)
         local value = tbl and tbl[key]
         if value ~= nil then
@@ -20,9 +21,9 @@ local L = setmetatable({}, {
 local Compat = ns.Compat or {}
 local ShoulderCompensation = ns.ShoulderCompensation or {}
 
-local LibCamera    = LibStub("LibCamera-1.0", true)
-local LibMountInfo = LibStub("LibMountInfo-1.1", true) or LibStub("LibMountInfo-1.0", true)
-local ACD          = LibStub("AceConfigDialog-3.0", true)
+local LibCamera    = (LibStub and LibStub("LibCamera-1.0", true))
+local LibMountInfo = (LibStub and (LibStub("LibMountInfo-1.1", true) or LibStub("LibMountInfo-1.0", true)))
+local ACD          = (LibStub and LibStub("AceConfigDialog-3.0", true))
 
 -- =====================================================================
 -- 1) FAST LOCALS / API
@@ -2337,7 +2338,10 @@ function Functions:SlashCmdHandler(msg)
 
     if command == "config" then
         if ACD and ACD.Open then
-            ACD:Open(addonName)
+            local ok, err = pcall(ACD.Open, ACD, addonName)
+            if not ok then
+                Functions:SendMessage("Error: settings window failed: " .. tostring(err))
+            end
         else
             Functions:SendMessage("Error: AceConfigDialog not found. Cannot open settings.")
         end

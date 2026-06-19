@@ -1,9 +1,10 @@
 local addonName, ns = ...
+local LibStub = _G.LibStub
 ns.LocaleData = ns.LocaleData or {}
 local L = {}
 ns.LocaleData["zhCN"] = L
 
-local AceLocale = LibStub("AceLocale-3.0", true)
+local AceLocale = LibStub and LibStub("AceLocale-3.0", true)
 local AceTable = AceLocale and AceLocale:NewLocale(addonName, "zhCN")
 
 -- ============================================================================

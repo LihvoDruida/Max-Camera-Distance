@@ -92,16 +92,41 @@ end
 -------------
 -- UTILITY --
 -------------
+local function safeGetCVarNumber(name, fallback)
+    local value = nil;
+    if (C_CVar and C_CVar.GetCVar) then
+        local ok, result = pcall(C_CVar.GetCVar, name);
+        if (ok) then value = result; end
+    end
+    if (value == nil and type(GetCVar) == "function") then
+        local ok, result = pcall(GetCVar, name);
+        if (ok) then value = result; end
+    end
+    return tonumber(value) or fallback;
+end
+
+local function safeSetCVar(name, value)
+    if (C_CVar and C_CVar.SetCVar) then
+        local ok = pcall(C_CVar.SetCVar, name, value);
+        if (ok) then return true; end
+    end
+    if (type(SetCVar) == "function") then
+        local ok = pcall(SetCVar, name, value);
+        if (ok) then return true; end
+    end
+    return false;
+end
+
 local function getZoomSpeed()
-    return tonumber(GetCVar("cameraZoomSpeed"));
+    return safeGetCVarNumber("cameraZoomSpeed", 20);
 end
 
 local function getYawSpeed()
-    return tonumber(GetCVar("cameraYawMoveSpeed"));
+    return safeGetCVarNumber("cameraYawMoveSpeed", 180);
 end
 
 local function getPitchSpeed()
-    return tonumber(GetCVar("cameraPitchMoveSpeed"));
+    return safeGetCVarNumber("cameraPitchMoveSpeed", 90);
 end
 
 
@@ -321,6 +346,9 @@ local cvarZoom;
 local oldSpeed;
 function LibCamera:SetZoomUsingCVar(endValue, duration, callback)
 
+    endValue = tonumber(endValue) or 0;
+    duration = math.max(0.01, tonumber(duration) or 0.01);
+
     -- start every zoom by making sure that we stop zooming
     self:StopZooming();
 
@@ -334,7 +362,7 @@ function LibCamera:SetZoomUsingCVar(endValue, duration, callback)
     oldSpeed = getZoomSpeed();
 
     -- set the zoom cvar to what will get us to the endValue in the duration
-    SetCVar("cameraZoomSpeed", speed);
+    safeSetCVar("cameraZoomSpeed", speed);
 
     local triggeredZoom = false;
 
@@ -346,9 +374,9 @@ function LibCamera:SetZoomUsingCVar(endValue, duration, callback)
             -- actually trigger the zoom
             -- second parameter is just to let other addons know that this is zoom triggered by an addon
             if (change > 0) then
-                CameraZoomOut(change, true);
+                if (type(CameraZoomOut) == "function") then pcall(CameraZoomOut, change, true); end;
             elseif (change < 0) then
-                CameraZoomIn(-change, true);
+                if (type(CameraZoomIn) == "function") then pcall(CameraZoomIn, -change, true); end;
             end
 
             triggeredZoom = true;
@@ -459,7 +487,7 @@ function LibCamera:StopZooming(not_really)
 
         -- restore old speed if we had one
         if (oldSpeed) then
-            SetCVar("cameraZoomSpeed", oldSpeed);
+            safeSetCVar("cameraZoomSpeed", oldSpeed);
             oldSpeed = nil;
         end
     end
