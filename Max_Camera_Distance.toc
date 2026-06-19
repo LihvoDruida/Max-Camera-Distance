@@ -1,6 +1,6 @@
 ## X-Flavor: retail
 ## X-Expansion: Midnight
-## Interface: 120000, 120001, 120005
+## Interface: 120007
 
 ## Title:<|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
 ## Notes: Smart camera distance with safer cross-version compatibility guards.

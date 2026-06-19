@@ -1,6 +1,6 @@
 ## X-Flavor: classic
 ## X-Expansion: MOP
-## Interface: 50502, 50503
+## Interface: 50503
 
 ## Title:<|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
 ## Notes: Smart camera distance with safer cross-version compatibility guards.
