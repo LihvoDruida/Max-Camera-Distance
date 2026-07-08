@@ -396,6 +396,16 @@ L["DEBUG_LEVEL_WARNING"] = "Попередження"
 L["DEBUG_LEVEL_INFO"] = "Інформація"
 L["DEBUG_LEVEL_DEBUG"] = "Налагодження"
 
+-- Runtime diagnostics and slash commands
+L["CMD_USAGE"] = 'Використання: /mcd config | autozoom | automount | status | deps | reset | debug on | debug off'
+L["STATUS_STATE_AFK"] = 'AFK'
+L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = 'Перша особа у гонці'
+L["STATUS_STATE_NORMAL"] = 'Звичайний'
+L["STATUS_STATE_MANUAL"] = 'Ручний'
+L["STATUS_RUNTIME_GUARDS"] = 'Runtime-захист'
+L["STATUS_ACTIONCAM_SHOULDER"] = 'ActionCam плече'
+L["STATUS_DYNAMIC_PITCH"] = 'Динамічний нахил'
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value

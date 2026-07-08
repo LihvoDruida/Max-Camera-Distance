@@ -16,6 +16,14 @@ local C_CVar = C_CVar
 local internalWriteDepth = 0
 local isInitialized = false
 
+local debugCounters = {
+    cvarWrites = 0,
+    skippedUnsupportedCvars = 0,
+    preventedExternalCvars = 0,
+    restoredMotionSicknessSettings = 0,
+    ignoredInternalWrites = 0,
+}
+
 local REDUCE_UNEXPECTED_MOVEMENT_CVARS = {
     "cameraReduceUnexpectedMovement",
     "CameraReduceUnexpectedMovement",
@@ -78,13 +86,23 @@ local function SetManagedCVar(name, value)
     local current = SafeGetCVar(name)
     local target = tonumber(value) or 0
 
-    if current ~= nil and current == target then
+    if current == nil then
+        debugCounters.skippedUnsupportedCvars = debugCounters.skippedUnsupportedCvars + 1
+        return false
+    end
+
+    if current == target then
         return false
     end
 
     internalWriteDepth = internalWriteDepth + 1
     local ok = SafeSetCVar(name, value)
     internalWriteDepth = internalWriteDepth - 1
+    if ok then
+        debugCounters.cvarWrites = debugCounters.cvarWrites + 1
+    else
+        debugCounters.skippedUnsupportedCvars = debugCounters.skippedUnsupportedCvars + 1
+    end
     return ok and true or false
 end
 
@@ -211,6 +229,7 @@ function CVarGuard:RestoreKeepCenteredIfPossible()
 
         if changed then
             stateCache.lastRestoreKeepCentered = true
+            debugCounters.restoredMotionSicknessSettings = debugCounters.restoredMotionSicknessSettings + 1
         end
     end
 end
@@ -221,20 +240,18 @@ function CVarGuard:RestoreReduceUnexpectedMovementIfPossible()
         return
     end
 
-    local db = DB()
     local restoreValue = nil
 
     if savedUserValues.cameraReduceUnexpectedMovement ~= nil then
         restoreValue = savedUserValues.cameraReduceUnexpectedMovement
         savedUserValues.cameraReduceUnexpectedMovement = nil
-    elseif db then
-        restoreValue = db.reduceUnexpectedMovement and 1 or 0
     end
 
     if restoreValue ~= nil then
         local changed = SetManagedCVar("cameraReduceUnexpectedMovement", restoreValue)
         if changed then
             stateCache.lastRestoreReduceUnexpectedMovement = true
+            debugCounters.restoredMotionSicknessSettings = debugCounters.restoredMotionSicknessSettings + 1
         end
     end
 end
@@ -262,7 +279,10 @@ function CVarGuard:Refresh(force)
 end
 
 function CVarGuard:OnExternalCVarSet(cvar, value)
-    if IsInternalWrite() then return end
+    if IsInternalWrite() then
+        debugCounters.ignoredInternalWrites = debugCounters.ignoredInternalWrites + 1
+        return
+    end
     if type(cvar) ~= "string" then return end
 
     cvar = NormalizeCVarName(cvar)
@@ -280,7 +300,9 @@ function CVarGuard:OnExternalCVarSet(cvar, value)
         if num == 1 or value == true or value == "true" then
             if self:ShouldBlockKeepCentered() then
                 self:CaptureUserValue("CameraKeepCharacterCentered")
-                SetManagedCVar("CameraKeepCharacterCentered", 0)
+                if SetManagedCVar("CameraKeepCharacterCentered", 0) then
+                    debugCounters.preventedExternalCvars = debugCounters.preventedExternalCvars + 1
+                end
                 self:LogOnce("lastForcedKeepCentered", "Disabled CameraKeepCharacterCentered because it conflicts with ActionCam.")
             else
                 savedUserValues.CameraKeepCharacterCentered = 1
@@ -300,23 +322,39 @@ function CVarGuard:OnExternalCVarSet(cvar, value)
         if num == 1 or value == true or value == "true" then
             if self:ShouldBlockReduceUnexpectedMovement() then
                 self:CaptureUserValue("cameraReduceUnexpectedMovement")
-                SetManagedCVar("cameraReduceUnexpectedMovement", 0)
+                if SetManagedCVar("cameraReduceUnexpectedMovement", 0) then
+                    debugCounters.preventedExternalCvars = debugCounters.preventedExternalCvars + 1
+                end
                 self:LogOnce("lastForcedReduceUnexpectedMovement", "Disabled cameraReduceUnexpectedMovement because it conflicts with shoulder offset.")
             else
                 savedUserValues.cameraReduceUnexpectedMovement = 1
+                local db = DB()
+                if db then db.reduceUnexpectedMovement = true end
             end
         elseif num == 0 or value == false or value == "false" then
             if not self:ShouldBlockReduceUnexpectedMovement() then
                 savedUserValues.cameraReduceUnexpectedMovement = 0
+                local db = DB()
+                if db then db.reduceUnexpectedMovement = false end
             end
         end
 
         return
     end
 
+    if cvar == "cameraZoomSpeed" then
+        -- LibCamera temporarily changes this during smooth zoom transitions and restores it.
+        -- Track it for diagnostics only; never persist or fight external writes here.
+        return
+    end
+
     if cvar == "test_cameraOverShoulder" or cvar == "test_cameraDynamicPitch" then
         self:Refresh(true)
     end
+end
+
+function CVarGuard:GetDebugCounters()
+    return debugCounters
 end
 
 function CVarGuard:InvalidateCache()

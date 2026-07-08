@@ -370,6 +370,16 @@ L["ADDON_TITLE"] = 'Max Camera Distance'
 L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = '点击打开设置'
 L["SETTINGS_APPLIED_FULL"] = "|cff00ff00已应用|r — 距离：%.1f |cff888888（过渡 %.2fs）|r"
 
+-- Runtime diagnostics and slash commands
+L["CMD_USAGE"] = '用法：/mcd config | autozoom | automount | status | deps | reset | debug on | debug off'
+L["STATUS_STATE_AFK"] = '暂离'
+L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = '竞速第一人称'
+L["STATUS_STATE_NORMAL"] = '常规'
+L["STATUS_STATE_MANUAL"] = '手动'
+L["STATUS_RUNTIME_GUARDS"] = '运行时保护'
+L["STATUS_ACTIONCAM_SHOULDER"] = 'ActionCam 肩偏移'
+L["STATUS_DYNAMIC_PITCH"] = '动态俯仰'
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value

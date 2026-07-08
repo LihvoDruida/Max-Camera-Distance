@@ -20,6 +20,7 @@ local L = setmetatable({}, {
 })
 local Compat = ns.Compat or {}
 local ShoulderCompensation = ns.ShoulderCompensation or {}
+local CameraStateController = ns.CameraStateController
 
 local LibCamera    = (LibStub and LibStub("LibCamera-1.0", true))
 local LibMountInfo = (LibStub and (LibStub("LibMountInfo-1.1", true) or LibStub("LibMountInfo-1.0", true)))
@@ -104,11 +105,16 @@ end
 -- =====================================================================
 -- 2) STATE
 -- =====================================================================
-local ZOOM_STATE_NONE   = "none"
-local ZOOM_STATE_MOUNT  = "mount"
+local ZOOM_STATE_AFK = "afk"
+local ZOOM_STATE_DRAGON_RACE_FIRST_PERSON = "dragonrace_first_person"
 local ZOOM_STATE_COMBAT = "combat"
+local ZOOM_STATE_MOUNT = "mount"
+local ZOOM_STATE_NORMAL = "normal"
+local ZOOM_STATE_MANUAL = "manual"
+-- Backward-compatible name used by older internal logic for the non-combat/non-mount state.
+local ZOOM_STATE_NONE = ZOOM_STATE_NORMAL
 
-local currentZoomState = ZOOM_STATE_NONE
+local currentZoomState = (CameraStateController and CameraStateController.GetState and CameraStateController:GetState()) or ZOOM_STATE_NORMAL
 
 local transitionTimer = nil
 local isInternalUpdate = false
@@ -918,6 +924,10 @@ end
 -- =====================================================================
 local function CancelTransition()
     pendingReturnInfo = nil
+    if CameraStateController and CameraStateController.ClearPendingReturn then
+        CameraStateController:ClearPendingReturn()
+        CameraStateController:TouchTransition()
+    end
 
     if not transitionTimer then return end
 
@@ -1262,11 +1272,17 @@ local function BuildStatusSnapshot(db)
     local resolvedContext = rawContext
     local combatActive, triggerConfig, activeTriggers = GetCombatActivation(db, signals)
 
-    local state = ZOOM_STATE_NONE
-    if db and db.autoCombatZoom and combatActive then
+    local state = ZOOM_STATE_NORMAL
+    if db and afkActive then
+        state = ZOOM_STATE_AFK
+    elseif db and db.dragonRacingRaceFirstPerson and signals.dragonRacingFirstPerson then
+        state = ZOOM_STATE_DRAGON_RACE_FIRST_PERSON
+    elseif db and db.autoCombatZoom and combatActive then
         state = ZOOM_STATE_COMBAT
     elseif db and db.autoMountZoom and signals.mountZoomActive then
         state = ZOOM_STATE_MOUNT
+    elseif db and not db.autoCombatZoom and not db.autoMountZoom then
+        state = ZOOM_STATE_MANUAL
     end
 
     local targetYards, targetDistanceKey, targetSourceType, targetPresetId
@@ -1275,6 +1291,16 @@ local function BuildStatusSnapshot(db)
         targetDistanceKey = "maxZoomFactor"
         targetSourceType = "manual"
         targetPresetId = "manual"
+    elseif state == ZOOM_STATE_AFK then
+        targetYards = maxYards
+        targetDistanceKey = "maxZoomFactor"
+        targetSourceType = "afk"
+        targetPresetId = "afk"
+    elseif state == ZOOM_STATE_DRAGON_RACE_FIRST_PERSON then
+        targetYards = RACE_FIRST_PERSON_YARDS
+        targetDistanceKey = "mountZoomFactor"
+        targetSourceType = "dragonrace_first_person"
+        targetPresetId = "dragonrace_first_person"
     elseif state == ZOOM_STATE_COMBAT then
         local combatDistanceKey
         targetYards, combatDistanceKey = GetCombatTargetYards(db, resolvedContext)
@@ -1308,8 +1334,14 @@ local function BuildStatusSnapshot(db)
     local pendingReturnDelay = pendingReturnActive and pendingReturnInfo.delay or 0
     local pendingReturnRemaining = pendingReturnActive and GetPendingReturnRemaining() or 0
 
+    local controllerSnapshot = CameraStateController and CameraStateController.GetSnapshot and CameraStateController:GetSnapshot() or nil
+
     return {
         state = state,
+        previousState = controllerSnapshot and controllerSnapshot.previousState or nil,
+        stateToken = controllerSnapshot and controllerSnapshot.stateToken or stateToken,
+        transitionToken = controllerSnapshot and controllerSnapshot.transitionToken or nil,
+        sourceEvent = controllerSnapshot and controllerSnapshot.sourceEvent or nil,
         rawContext = rawContext,
         resolvedContext = resolvedContext,
         targetYards = targetYards,
@@ -1346,6 +1378,9 @@ local function BuildStatusSnapshot(db)
         pendingReturnRemaining = pendingReturnRemaining,
         zoomRestoreSetting = (db and db.zoomRestoreSetting) or "adaptive",
         respectManualStateZoom = (db and db.respectManualStateZoom ~= false) and true or false,
+        afkActive = afkActive and true or false,
+        actionCamShoulderActive = (SafeGetCVar("test_cameraOverShoulder") or 0) ~= 0,
+        dynamicPitchActive = (SafeGetCVar("test_cameraDynamicPitch") or 0) == 1,
         mountManualOverride = stateManualOverride[ZOOM_STATE_MOUNT] and true or false,
         combatManualOverride = stateManualOverride[ZOOM_STATE_COMBAT] and true or false,
     }
@@ -1999,6 +2034,10 @@ function Functions:UpdateSmartZoomState(event)
     local newState, targetYards, snapshot = ComputeDesiredState(db)
     local transitionTime = db.zoomTransitionTime or 0.5
 
+    if CameraStateController and CameraStateController.SetState then
+        CameraStateController:SetState(newState, targetYards, snapshot and snapshot.resolvedContext, event or "smart_zoom")
+    end
+
     if snapshot and snapshot.resolvedContext and newState == ZOOM_STATE_COMBAT then
         lastCombatContext = snapshot.resolvedContext
     end
@@ -2068,6 +2107,9 @@ function Functions:UpdateSmartZoomState(event)
 
         if delay <= 0 then
             pendingReturnInfo = nil
+            if CameraStateController and CameraStateController.ClearPendingReturn then
+                CameraStateController:ClearPendingReturn()
+            end
             ApplyZoomTransition(appliedTargetYards, transitionTime)
             Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, appliedTargetYards))
             NotifyConfigChanged()
@@ -2077,6 +2119,9 @@ function Functions:UpdateSmartZoomState(event)
         ScheduleTransition(delay, function()
             if myToken ~= stateToken then return end
             pendingReturnInfo = nil
+            if CameraStateController and CameraStateController.ClearPendingReturn then
+                CameraStateController:ClearPendingReturn()
+            end
 
             local liveDb = DB()
             if not liveDb then return end
@@ -2096,9 +2141,15 @@ function Functions:UpdateSmartZoomState(event)
             delay = delay,
             fireAt = (GetTime and GetTime() or 0) + delay,
         }
+        if CameraStateController and CameraStateController.SetPendingReturn then
+            CameraStateController:SetPendingReturn(pendingReturnInfo)
+        end
         NotifyConfigChanged()
     else
         pendingReturnInfo = nil
+        if CameraStateController and CameraStateController.ClearPendingReturn then
+            CameraStateController:ClearPendingReturn()
+        end
         ApplyZoomTransition(appliedTargetYards, transitionTime)
         if snapshot and snapshot.resolvedContext then
             Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, appliedTargetYards) .. " [" .. tostring(snapshot.resolvedContext) .. "]")
@@ -2114,6 +2165,81 @@ function Functions:GetStatusSnapshot()
     if not db then return nil end
     SanitizeRuntimeProfile(db)
     return BuildStatusSnapshot(db)
+end
+
+
+local function FormatBool(value)
+    return value and (L["STATUS_YES"] or "Yes") or (L["STATUS_NO"] or "No")
+end
+
+local function FormatCVar(name)
+    local value = SafeGetCVar(name)
+    if value == nil then
+        return "unsupported"
+    end
+    return tostring(value)
+end
+
+function Functions:GetDependencySnapshot()
+    local function HasLib(major)
+        if major == "LibStub" then
+            return type(_G.LibStub) == "table" or type(_G.LibStub) == "function"
+        end
+        return LibStub and LibStub(major, true) ~= nil
+    end
+
+    return {
+        { label = "LibStub", found = HasLib("LibStub"), required = true },
+        { label = "LibCamera", found = LibCamera ~= nil, required = true },
+        { label = "AceDB", found = HasLib("AceDB-3.0"), optional = true },
+        { label = "AceConfig", found = HasLib("AceConfig-3.0"), optional = true },
+        { label = "AceConfigDialog", found = HasLib("AceConfigDialog-3.0"), optional = true },
+        { label = "AceDBOptions", found = HasLib("AceDBOptions-3.0"), optional = true },
+        { label = "AceLocale", found = HasLib("AceLocale-3.0"), optional = true },
+        { label = "LibMountInfo", found = LibMountInfo ~= nil, optional = true },
+        { label = "LibDataBroker", found = HasLib("LibDataBroker-1.1"), optional = true },
+        { label = "LibDBIcon", found = HasLib("LibDBIcon-1.0"), optional = true },
+    }
+end
+
+function Functions:PrintDependencyStatus()
+    self:SendMessage("Dependency status:")
+    for _, dep in ipairs(self:GetDependencySnapshot()) do
+        local status
+        if dep.found then
+            status = "found"
+        elseif dep.optional then
+            status = "optional missing"
+        else
+            status = "missing"
+        end
+        self:SendMessage(" - " .. dep.label .. ": " .. status)
+    end
+end
+
+function Functions:PrintRuntimeStatus()
+    local db = DB()
+    if not db then
+        self:SendMessage(L["DB_NOT_READY"] or "Database not initialized yet.")
+        return
+    end
+
+    local snapshot = self:GetStatusSnapshot()
+    local version = Compat.GetAddonVersion and Compat.GetAddonVersion() or "Dev"
+    local controllerSnapshot = CameraStateController and CameraStateController.GetSnapshot and CameraStateController:GetSnapshot() or nil
+
+    self:SendMessage("Status:")
+    self:SendMessage(" - version: " .. tostring(version))
+    self:SendMessage(" - client: " .. tostring(Compat.CLIENT_TAG or "Unknown") .. " build=" .. tostring(Compat.BUILD or "unknown"))
+    self:SendMessage(" - zoom: " .. tostring((GetCameraZoom and GetCameraZoom()) or "unknown"))
+    self:SendMessage(" - state: " .. tostring(snapshot and snapshot.state or "unknown") .. " previous=" .. tostring(snapshot and snapshot.previousState or (controllerSnapshot and controllerSnapshot.previousState) or "none"))
+    self:SendMessage(" - target yards: " .. tostring(snapshot and snapshot.targetYards or "unknown"))
+    self:SendMessage(" - pending return: " .. tostring(snapshot and snapshot.pendingReturnActive and "active" or "none") .. " remaining=" .. tostring(snapshot and snapshot.pendingReturnRemaining or 0))
+    self:SendMessage(" - combat: player=" .. FormatBool(snapshot and snapshot.playerInCombat) .. " group=" .. FormatBool(snapshot and snapshot.groupInCombat) .. " threat=" .. FormatBool(snapshot and snapshot.hasThreat))
+    self:SendMessage(" - travel: mounted=" .. FormatBool(snapshot and snapshot.isMounted) .. " skyriding=" .. FormatBool(snapshot and snapshot.isSkyriding) .. " dragonFP=" .. FormatBool(snapshot and snapshot.dragonRacingFirstPerson))
+    self:SendMessage(" - afk=" .. FormatBool(snapshot and snapshot.afkActive) .. " shoulder=" .. FormatBool(snapshot and snapshot.actionCamShoulderActive) .. " dynamicPitch=" .. FormatBool(snapshot and snapshot.dynamicPitchActive))
+    self:SendMessage(" - CVars: cameraDistanceMaxZoomFactor=" .. FormatCVar("cameraDistanceMaxZoomFactor") .. ", cameraDistanceMax=" .. FormatCVar("cameraDistanceMax") .. ", cameraZoomSpeed=" .. FormatCVar("cameraZoomSpeed"))
+    self:SendMessage(" - CVars: keepCentered=" .. FormatCVar("CameraKeepCharacterCentered") .. ", reduceUnexpectedMovement=" .. FormatCVar("cameraReduceUnexpectedMovement") .. ", shoulder=" .. FormatCVar("test_cameraOverShoulder") .. ", dynamicPitch=" .. FormatCVar("test_cameraDynamicPitch"))
 end
 
 function Functions:AdjustCamera(forceNow)
@@ -2136,7 +2262,10 @@ function Functions:AdjustCamera(forceNow)
         local manualTargetYards = (GetDistanceValue(db, "maxZoomFactor")) or db.maxZoomFactor or maxYards
 
         stateToken = stateToken + 1
-        currentZoomState = ZOOM_STATE_NONE
+        currentZoomState = ZOOM_STATE_MANUAL
+        if CameraStateController and CameraStateController.SetState then
+            CameraStateController:SetState(ZOOM_STATE_MANUAL, manualTargetYards, "manual", "manual_mode")
+        end
         CancelTransition()
 
         ApplyZoomCap(manualTargetYards)
@@ -2240,12 +2369,18 @@ function Functions:OnCVarUpdate(_, cvarName, value)
         end
         db.cameraPitchMoveSpeed = desired
     elseif cvarName == "cameraReduceUnexpectedMovement" then
-        local desired = db.reduceUnexpectedMovement and 1 or 0
-        if numValue ~= desired then
-            UpdateCVar(cvarName, desired)
+        -- Respect external/user changes unless the Motion Sickness guard is actively blocking it.
+        local guard = ns.CVarGuard
+        if guard and guard.ShouldBlockReduceUnexpectedMovement and guard:ShouldBlockReduceUnexpectedMovement() then
+            if numValue ~= 0 then
+                UpdateCVar(cvarName, 0)
+            end
             return
         end
-        db.reduceUnexpectedMovement = (desired == 1)
+        db.reduceUnexpectedMovement = (numValue == 1)
+    elseif cvarName == "cameraZoomSpeed" then
+        -- LibCamera owns temporary cameraZoomSpeed transitions and restores the previous value.
+        return
     elseif cvarName == "cameraIndirectVisibility" then
         local desired = db.cameraIndirectVisibility and 1 or 0
         if numValue ~= desired then
@@ -2327,7 +2462,10 @@ end
 -- 15) SLASH
 -- =====================================================================
 function Functions:SlashCmdHandler(msg)
-    local command = strlower(msg or "")
+    local raw = tostring(msg or "")
+    local command, arg = raw:match("^%s*(%S*)%s*(.-)%s*$")
+    command = strlower(command or "")
+    arg = strlower(arg or "")
 
     if not (ns.Database and ns.Database.db) then
         Functions:SendMessage(L["DB_NOT_READY"] or "Database not initialized yet.")
@@ -2336,14 +2474,17 @@ function Functions:SlashCmdHandler(msg)
 
     local db = ns.Database.db.profile
 
-    if command == "config" then
+    if command == "" or command == "help" then
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | deps | reset | debug on | debug off")
+
+    elseif command == "config" then
         if ACD and ACD.Open then
             local ok, err = pcall(ACD.Open, ACD, addonName)
             if not ok then
                 Functions:SendMessage("Error: settings window failed: " .. tostring(err))
             end
         else
-            Functions:SendMessage("Error: AceConfigDialog not found. Cannot open settings.")
+            Functions:SendMessage("Error: AceConfigDialog not found. Cannot open settings. Use /mcd status and /mcd deps for diagnostics.")
         end
 
     elseif command == "autozoom" then
@@ -2358,7 +2499,38 @@ function Functions:SlashCmdHandler(msg)
         local state = db.autoMountZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
         Functions:SendMessage("Auto Mount Zoom: " .. state)
 
+    elseif command == "status" then
+        Functions:PrintRuntimeStatus()
+
+    elseif command == "deps" then
+        Functions:PrintDependencyStatus()
+
+    elseif command == "reset" then
+        local ok = ns.Database and ns.Database.ResetCurrentProfile and ns.Database:ResetCurrentProfile()
+        if ok then
+            Functions:AdjustCamera(true)
+            Functions:SendMessage(L["SETTINGS_RESET"] or "Profile has been reset to default values.")
+        else
+            Functions:SendMessage("Error: profile reset is unavailable.")
+        end
+
+    elseif command == "debug" then
+        if arg == "on" then
+            db.enableDebugLogging = true
+            db.debugLevel = db.debugLevel or {}
+            db.debugLevel.error = true
+            db.debugLevel.warning = true
+            db.debugLevel.info = true
+            db.debugLevel.debug = true
+            Functions:SendMessage("Debug logging: " .. (L["ENABLED"] or "enabled"))
+        elseif arg == "off" then
+            db.enableDebugLogging = false
+            Functions:SendMessage("Debug logging: " .. (L["DISABLED"] or "disabled"))
+        else
+            Functions:SendMessage("Usage: /mcd debug on | debug off")
+        end
+
     else
-        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount")
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | deps | reset | debug on | debug off")
     end
 end

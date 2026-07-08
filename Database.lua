@@ -212,6 +212,40 @@ local PROFILE_DEFAULTS = {
     minimap = { hide = false },
 }
 
+Database.PROFILE_DEFAULTS = PROFILE_DEFAULTS
+
+function Database:GetDefaultProfile()
+    return CopyTableSafe(PROFILE_DEFAULTS)
+end
+
+function Database:ResetCurrentProfile()
+    if not self.db then return false end
+
+    if type(self.db.ResetProfile) == "function" then
+        local ok = pcall(self.db.ResetProfile, self.db)
+        if ok then
+            if self.db.profile then
+                self:ApplyMigrations(self.db.profile)
+            end
+            return true
+        end
+    end
+
+    if self.db.profile then
+        local defaults = CopyTableSafe(PROFILE_DEFAULTS)
+        for key in pairs(self.db.profile) do
+            self.db.profile[key] = nil
+        end
+        for key, value in pairs(defaults) do
+            self.db.profile[key] = value
+        end
+        self:ApplyMigrations(self.db.profile)
+        return true
+    end
+
+    return false
+end
+
 -- ============================================================================
 -- MIGRATIONS (fills missing keys, never overwrites user's choices)
 -- ============================================================================
@@ -442,12 +476,19 @@ local function CreateFallbackDB(defaultsWrapper)
         rawDb.profiles[profileKey] = CopyTableSafe(defaultsWrapper.profile or PROFILE_DEFAULTS)
     end
 
-    return {
+    local fallback = {
         profile = rawDb.profiles[profileKey],
         profiles = rawDb.profiles,
         profileKeys = rawDb.profileKeys,
         RegisterCallback = function() end,
     }
+
+    function fallback:ResetProfile()
+        rawDb.profiles[profileKey] = CopyTableSafe(defaultsWrapper.profile or PROFILE_DEFAULTS)
+        self.profile = rawDb.profiles[profileKey]
+    end
+
+    return fallback
 end
 
 -- ============================================================================

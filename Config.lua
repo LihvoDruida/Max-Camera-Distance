@@ -151,8 +151,12 @@ local function BoolText(value)
 end
 
 local function StateText(value)
+    if value == "afk" then return L["STATUS_STATE_AFK"] or "AFK" end
+    if value == "dragonrace_first_person" then return L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] or "Dragon Race First Person" end
     if value == "combat" then return L["STATUS_STATE_COMBAT"] or "Combat" end
     if value == "mount" then return L["STATUS_STATE_MOUNT"] or "Mount" end
+    if value == "normal" then return L["STATUS_STATE_NORMAL"] or "Normal" end
+    if value == "manual" then return L["STATUS_STATE_MANUAL"] or "Manual" end
     return L["STATUS_STATE_NONE"] or "None"
 end
 
@@ -303,6 +307,15 @@ local function BuildLiveStatusText()
         string.format("%s: %s",
             L["STATUS_DRAGON_RACE_FP"] or "Race First Person",
             BoolText(snapshot.dragonRacingFirstPerson)
+        ),
+        string.format("%s: %s=%s, %s=%s, %s=%s",
+            L["STATUS_RUNTIME_GUARDS"] or "Runtime Guards",
+            L["STATUS_STATE_AFK"] or "AFK",
+            BoolText(snapshot.afkActive),
+            L["STATUS_ACTIONCAM_SHOULDER"] or "ActionCam Shoulder",
+            BoolText(snapshot.actionCamShoulderActive),
+            L["STATUS_DYNAMIC_PITCH"] or "Dynamic Pitch",
+            BoolText(snapshot.dynamicPitchActive)
         ),
         string.format("%s: %s=%.1fs, %s=%.1fs, %s=%.1fs, %s=%.1fs",
             L["STATUS_RETURN_DELAYS"] or "Return Delays",

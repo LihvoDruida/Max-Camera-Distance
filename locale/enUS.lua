@@ -365,6 +365,16 @@ L["ADDON_TITLE"] = 'Max Camera Distance'
 L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Click to open settings'
 L["SETTINGS_APPLIED_FULL"] = "|cff00ff00Applied|r — distance: %.1f |cff888888(transition %.2fs)|r"
 
+-- Runtime diagnostics and slash commands
+L["CMD_USAGE"] = 'Usage: /mcd config | autozoom | automount | status | deps | reset | debug on | debug off'
+L["STATUS_STATE_AFK"] = 'AFK'
+L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = 'Dragon Race First Person'
+L["STATUS_STATE_NORMAL"] = 'Normal'
+L["STATUS_STATE_MANUAL"] = 'Manual'
+L["STATUS_RUNTIME_GUARDS"] = 'Runtime Guards'
+L["STATUS_ACTIONCAM_SHOULDER"] = 'ActionCam Shoulder'
+L["STATUS_DYNAMIC_PITCH"] = 'Dynamic Pitch'
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value

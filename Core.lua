@@ -129,7 +129,7 @@ local function InstallCameraViewHooks()
 
     local function ScheduleViewRestoreRefresh()
         if ns.Functions and ns.Functions.ScheduleStabilizedUpdate then
-            SafeCall(ns.Functions.ScheduleStabilizedUpdate, "ScheduleStabilizedUpdate", ns.Functions, { 0, 0.10, 0.35 }, true)
+            SafeCall(ns.Functions.ScheduleStabilizedUpdate, "ScheduleStabilizedUpdate", ns.Functions, { 0, 0.10, 0.35, 0.75 }, true)
         elseif ns.Functions and ns.Functions.RequestUpdate then
             SafeCall(ns.Functions.RequestUpdate, "RequestUpdate", ns.Functions)
         end
@@ -140,6 +140,9 @@ local function InstallCameraViewHooks()
     end
     if type(_G.ResetView) == "function" then
         pcall(hooksecurefunc, "ResetView", ScheduleViewRestoreRefresh)
+    end
+    if type(_G.SaveView) == "function" then
+        pcall(hooksecurefunc, "SaveView", ScheduleViewRestoreRefresh)
     end
 end
 
@@ -155,7 +158,7 @@ local function ScheduleStartupCameraRefresh()
     -- Login/load can briefly report stale combat, mount, zone or CVar state.
     -- Re-apply Smart Zoom a few times so the final state settles to the
     -- correct Normal/Mount/Combat target instead of sometimes staying at max.
-    local delays = { 0.10, 0.50, 1.50, 3.0, 6.0, 9.0 }
+    local delays = { 0, 0.10, 0.35, 0.75, 1.50, 3.0, 6.0, 9.0 }
     for _, delay in ipairs(delays) do
         C_Timer.After(delay, function()
             if myToken ~= startupRefreshToken then return end
@@ -368,7 +371,7 @@ eventHandlers.LOADING_SCREEN_DISABLED = function()
     InvalidateMountCache()
     RequestShoulderRefresh()
     if ns.Functions and ns.Functions.ScheduleStabilizedUpdate then
-        SafeCall(ns.Functions.ScheduleStabilizedUpdate, "ScheduleStabilizedUpdate", ns.Functions, { 0, 0.15, 0.75 }, true)
+        SafeCall(ns.Functions.ScheduleStabilizedUpdate, "ScheduleStabilizedUpdate", ns.Functions, { 0, 0.10, 0.35, 0.75 }, true)
     end
 end
 eventHandlers.PLAYER_CONTROL_GAINED = ForceSmartUpdate

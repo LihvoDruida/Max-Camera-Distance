@@ -324,6 +324,16 @@ L["ADDON_TITLE"] = 'Max Camera Distance'
 L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Cliquez pour ouvrir les paramètres'
 L["SETTINGS_APPLIED_FULL"] = "|cff00ff00Appliqué|r — distance : %.1f |cff888888(transition %.2fs)|r"
 
+-- Runtime diagnostics and slash commands
+L["CMD_USAGE"] = 'Utilisation : /mcd config | autozoom | automount | status | deps | reset | debug on | debug off'
+L["STATUS_STATE_AFK"] = 'ABS'
+L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = 'Course draconique première personne'
+L["STATUS_STATE_NORMAL"] = 'Normal'
+L["STATUS_STATE_MANUAL"] = 'Manuel'
+L["STATUS_RUNTIME_GUARDS"] = 'Protections runtime'
+L["STATUS_ACTIONCAM_SHOULDER"] = 'Épaule ActionCam'
+L["STATUS_DYNAMIC_PITCH"] = 'Inclinaison dynamique'
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value
