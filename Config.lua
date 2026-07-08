@@ -607,7 +607,7 @@ function Config:SetupOptions()
                         type = "range",
                         name = L["MOVE_VIEW_DISTANCE"],
                         desc = L["MOVE_VIEW_DISTANCE_DESC"],
-                        min = 1,
+                        min = 20,
                         max = 50,
                         step = 1,
                         get = function() return GetOption("moveViewDistance") end,

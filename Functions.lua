@@ -398,7 +398,7 @@ local function NormalizeManagedCVarValue(cvarName, value, db)
     local maxFactor = maxYards / CONVERSION_RATIO
 
     if cvarName == "cameraDistanceMoveSpeed" then
-        return ClampNumber(value, 1, 50)
+        return ClampNumber(value, 20, 50)
     elseif cvarName == "cameraYawMoveSpeed" then
         return ClampNumber(value, 1, 360) or (db and ClampNumber(db.cameraYawMoveSpeed, 1, 360)) or 180
     elseif cvarName == "cameraPitchMoveSpeed" then
@@ -453,7 +453,7 @@ local function SanitizeRuntimeProfile(db)
     db.raidCombatZoomFactor = ClampNumber(db.raidCombatZoomFactor, 1, maxYards) or db.worldCombatZoomFactor
     db.pvpCombatZoomFactor = ClampNumber(db.pvpCombatZoomFactor, 1, maxYards) or db.partyCombatZoomFactor or db.raidCombatZoomFactor or db.worldCombatZoomFactor
     db.groupCombatZoomFactor = nil
-    db.moveViewDistance = ClampNumber(db.moveViewDistance, 1, 50) or 20
+    db.moveViewDistance = ClampNumber(db.moveViewDistance, 20, 50) or 50
     db.cameraYawMoveSpeed = ClampNumber(db.cameraYawMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraYawMoveSpeed"), 1, 360) or 180)
     db.cameraPitchMoveSpeed = ClampNumber(db.cameraPitchMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraPitchMoveSpeed"), 1, 360) or 90)
     db.zoomTransitionTime = ClampNumber(db.zoomTransitionTime, 0, 2) or 0.5
@@ -1049,6 +1049,26 @@ local function ApplyZoomTransition(targetYards, transitionTime)
             SafeLibCall(LibCamera, "SetZoomUsingCVar", targetYards, transitionTime)
         end
     end
+end
+
+local function ApplyManualCameraCapOnly(targetYards, reason)
+    -- Manual mode must only update the maximum camera cap.
+    -- It must not call LibCamera, CameraZoomIn/Out, or change cameraZoomSpeed;
+    -- otherwise the addon fights normal mouse-wheel zooming.
+    targetYards = NormalizeTargetYards(targetYards)
+    lastAutoAppliedZoomYards = nil
+    ApplyZoomCap(targetYards)
+    Functions:logMessage("debug", "Manual camera cap only: " .. tostring(reason or "manual") .. " -> " .. tostring(targetYards))
+    return targetYards
+end
+
+function Functions:ApplyManualCameraCapOnly(reason)
+    local db = DB()
+    if not db then return nil end
+    SanitizeRuntimeProfile(db)
+    local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local manualTargetYards = (GetDistanceValue(db, "maxZoomFactor")) or db.maxZoomFactor or maxYards
+    return ApplyManualCameraCapOnly(manualTargetYards, reason or "manual")
 end
 
 -- =====================================================================
@@ -2238,7 +2258,8 @@ function Functions:PrintRuntimeStatus()
     self:SendMessage(" - combat: player=" .. FormatBool(snapshot and snapshot.playerInCombat) .. " group=" .. FormatBool(snapshot and snapshot.groupInCombat) .. " threat=" .. FormatBool(snapshot and snapshot.hasThreat))
     self:SendMessage(" - travel: mounted=" .. FormatBool(snapshot and snapshot.isMounted) .. " skyriding=" .. FormatBool(snapshot and snapshot.isSkyriding) .. " dragonFP=" .. FormatBool(snapshot and snapshot.dragonRacingFirstPerson))
     self:SendMessage(" - afk=" .. FormatBool(snapshot and snapshot.afkActive) .. " shoulder=" .. FormatBool(snapshot and snapshot.actionCamShoulderActive) .. " dynamicPitch=" .. FormatBool(snapshot and snapshot.dynamicPitchActive))
-    self:SendMessage(" - CVars: cameraDistanceMaxZoomFactor=" .. FormatCVar("cameraDistanceMaxZoomFactor") .. ", cameraDistanceMax=" .. FormatCVar("cameraDistanceMax") .. ", cameraZoomSpeed=" .. FormatCVar("cameraZoomSpeed"))
+    self:SendMessage(" - CVars: cameraDistanceMaxZoomFactor=" .. FormatCVar("cameraDistanceMaxZoomFactor") .. ", cameraDistanceMax=" .. FormatCVar("cameraDistanceMax") .. ", cameraDistanceMoveSpeed=" .. FormatCVar("cameraDistanceMoveSpeed") .. ", cameraZoomSpeed=" .. FormatCVar("cameraZoomSpeed"))
+    self:SendMessage(" - timing: manualWheelSpeed=" .. tostring(db.moveViewDistance or "unknown") .. ", zoomTransitionTime=" .. tostring(db.zoomTransitionTime or "unknown"))
     self:SendMessage(" - CVars: keepCentered=" .. FormatCVar("CameraKeepCharacterCentered") .. ", reduceUnexpectedMovement=" .. FormatCVar("cameraReduceUnexpectedMovement") .. ", shoulder=" .. FormatCVar("test_cameraOverShoulder") .. ", dynamicPitch=" .. FormatCVar("test_cameraDynamicPitch"))
 end
 
@@ -2268,10 +2289,7 @@ function Functions:AdjustCamera(forceNow)
         end
         CancelTransition()
 
-        ApplyZoomCap(manualTargetYards)
-        if LibCamera and LibCamera.SetZoomUsingCVar then
-            SafeLibCall(LibCamera, "SetZoomUsingCVar", manualTargetYards, db.zoomTransitionTime or 0.5)
-        end
+        ApplyManualCameraCapOnly(manualTargetYards, "manual_mode")
 
         Functions:logMessage("info", L["SMART_ZOOM_DISABLED_MSG"] or "Smart Zoom is disabled. Using manual max distance settings.")
         NotifyConfigChanged()
@@ -2475,7 +2493,7 @@ function Functions:SlashCmdHandler(msg)
     local db = ns.Database.db.profile
 
     if command == "" or command == "help" then
-        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | deps | reset | debug on | debug off")
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off")
 
     elseif command == "config" then
         if ACD and ACD.Open then
@@ -2505,6 +2523,20 @@ function Functions:SlashCmdHandler(msg)
     elseif command == "deps" then
         Functions:PrintDependencyStatus()
 
+    elseif command == "fastzoom" then
+        db.moveViewDistance = 50
+        db.zoomTransitionTime = 0.1
+        UpdateCVar("cameraDistanceMoveSpeed", 50)
+        Functions:SendMessage("Fast manual zoom enabled.")
+        NotifyConfigChanged()
+
+    elseif command == "slowzoom" then
+        db.moveViewDistance = 20
+        db.zoomTransitionTime = 0.5
+        UpdateCVar("cameraDistanceMoveSpeed", 20)
+        Functions:SendMessage("Slow manual zoom enabled.")
+        NotifyConfigChanged()
+
     elseif command == "reset" then
         local ok = ns.Database and ns.Database.ResetCurrentProfile and ns.Database:ResetCurrentProfile()
         if ok then
@@ -2531,6 +2563,6 @@ function Functions:SlashCmdHandler(msg)
         end
 
     else
-        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | deps | reset | debug on | debug off")
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off")
     end
 end

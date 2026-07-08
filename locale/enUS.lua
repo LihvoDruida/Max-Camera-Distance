@@ -16,11 +16,11 @@ L["VERSION_PREFIX"] = "Version: "
 L["MAX_ZOOM_FACTOR"] = "Max Camera Distance"
 L["MAX_ZOOM_FACTOR_DESC"] = "Set the absolute maximum allowed camera distance (in yards) for the game client."
 
-L["MOVE_VIEW_DISTANCE"] = "Zoom Speed"
-L["MOVE_VIEW_DISTANCE_DESC"] = "How fast the camera zooms in and out when using the mouse wheel or hotkeys."
+L["MOVE_VIEW_DISTANCE"] = "Manual Wheel Zoom Speed"
+L["MOVE_VIEW_DISTANCE_DESC"] = "How fast the camera zooms in and out when using the mouse wheel or zoom hotkeys. This affects manual wheel zoom only."
 
-L["ZOOM_TRANSITION"] = "Transition Smoothness"
-L["ZOOM_TRANSITION_DESC"] = "Time in seconds to smoothly transition between camera distances |cffff5555(Combat)|r, |cff66ccffMount|r, and |cffffffffNormal|r. Higher values mean slower, smoother movement."
+L["ZOOM_TRANSITION"] = "Smart Zoom Transition Time"
+L["ZOOM_TRANSITION_DESC"] = "Time in seconds for automatic Smart Zoom transitions between |cffff5555Combat|r, |cff66ccffMount|r, AFK, Dragonrace, and Normal camera states. This does not control mouse-wheel zoom."
 L["YAW_MOVE_SPEED"] = "Horizontal Rotation Speed"
 L["YAW_MOVE_SPEED_DESC"] = "Adjust the speed of horizontal camera rotation (Yaw) when turning with the mouse."
 
@@ -166,7 +166,7 @@ L["AFK_EXIT_MSG"] = "AFK Mode: disabled (restored UI and camera)."
 -- ============================================================================
 -- Commands / Help
 -- ============================================================================
-L["CMD_USAGE"] = "Usage: /mcd config | autozoom | automount"
+L["CMD_USAGE"] = "Usage: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off"
 
 -- Optional (if used anywhere in other files)
 L["ZOOM_SET_MESSAGE"] = "Zoom set to %s (%.1f yards)"
@@ -366,7 +366,7 @@ L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Click to open settings'
 L["SETTINGS_APPLIED_FULL"] = "|cff00ff00Applied|r — distance: %.1f |cff888888(transition %.2fs)|r"
 
 -- Runtime diagnostics and slash commands
-L["CMD_USAGE"] = 'Usage: /mcd config | autozoom | automount | status | deps | reset | debug on | debug off'
+L["CMD_USAGE"] = 'Usage: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off'
 L["STATUS_STATE_AFK"] = 'AFK'
 L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = 'Dragon Race First Person'
 L["STATUS_STATE_NORMAL"] = 'Normal'

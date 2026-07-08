@@ -2,24 +2,17 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://www.blizzard.com/wow/ui ..\FrameXML\UI.xsd">
 
-    <!-- Core libraries bundled for nolib-safe releases. -->
-    <Script file="LibStub\LibStub.lua"/>
-    <Script file="CallbackHandler-1.0\CallbackHandler-1.0.lua"/>
+    <!--
+        No-lib/source-safe manifest.
 
-    <!-- Ace3 -->
-    <Include file="AceAddon-3.0\AceAddon-3.0.xml"/>
-    <Include file="AceConsole-3.0\AceConsole-3.0.xml"/>
-    <Include file="AceGUI-3.0\AceGUI-3.0.xml"/>
-    <Include file="AceConfig-3.0\AceConfig-3.0.xml"/>
-    <Include file="AceDB-3.0\AceDB-3.0.xml"/>
-    <Include file="AceDBOptions-3.0\AceDBOptions-3.0.xml"/>
-    <Include file="AceLocale-3.0\AceLocale-3.0.xml"/>
+        This archive only bundles LibCamera. Ace3, LibMountInfo, LibDataBroker,
+        and LibDBIcon are optional runtime integrations loaded through LibStub
+        when they are provided by a proper release packager or standalone addons.
 
-    <!-- Camera helpers -->
+        Do not add XML includes here unless the referenced files physically exist
+        in the zip. scripts/verify-release-zip.py will fail the artifact if this
+        manifest points to missing files.
+    -->
     <Script file="LibCamera\LibCamera.lua"/>
-    <Script file="LibMountInfo\LibMountInfo.lua"/>
-
-    <Script file="LibDataBroker-1.1\LibDataBroker-1.1.lua"/>
-    <Include file="LibDBIcon-1.0\lib.xml"/>
 
 </Ui>

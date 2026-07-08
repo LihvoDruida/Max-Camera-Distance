@@ -13,8 +13,8 @@ L["GENERAL_SETTINGS"] = "Paramètres généraux"
 L["MAX_ZOOM_FACTOR"] = "Distance max de la caméra"
 L["MAX_ZOOM_FACTOR_DESC"] = "Définit la distance maximale autorisée pour la caméra (en mètres/yards)."
 
-L["MOVE_VIEW_DISTANCE"] = "Vitesse du zoom"
-L["MOVE_VIEW_DISTANCE_DESC"] = "Règle la vitesse à laquelle la caméra effectue un zoom avant ou arrière."
+L["MOVE_VIEW_DISTANCE"] = "Vitesse du zoom manuel à la molette"
+L["MOVE_VIEW_DISTANCE_DESC"] = "Règle la vitesse du zoom avec la molette de la souris ou les raccourcis de zoom. N’affecte que le zoom manuel."
 
 L["YAW_MOVE_SPEED"] = "Vitesse de rotation horizontale"
 L["YAW_MOVE_SPEED_DESC"] = "Règle la vitesse du mouvement horizontal de la caméra (lacet)."
@@ -95,8 +95,8 @@ L["PROFILES_MISSING_LIB_DESC"] = "AceDBOptions-3.0 est introuvable, donc les con
 
 -- Added missing fallback keys to keep UI complete
 L["VERSION_PREFIX"] = "Version: "
-L["ZOOM_TRANSITION"] = "Transition Smoothness"
-L["ZOOM_TRANSITION_DESC"] = "Temps en secondes pour une transition fluide entre les distances de caméra |cffff5555(combat)|r, |cff66ccffmonture|r et |cffffffffnormale|r. Des valeurs plus élevées donnent un mouvement plus lent et plus fluide."
+L["ZOOM_TRANSITION"] = "Durée de transition Smart Zoom"
+L["ZOOM_TRANSITION_DESC"] = "Temps en secondes pour les transitions automatiques Smart Zoom entre combat, monture, AFK, Dragonrace et l’état normal. Ne contrôle pas le zoom à la molette."
 L["DB_NOT_READY"] = "Database not initialized yet."
 L["SHOW_MINIMAP_BUTTON"] = "Show Minimap Button"
 L["SHOW_MINIMAP_BUTTON_DESC"] = "Toggles the minimap icon."
@@ -140,7 +140,7 @@ L["AFK_MODE_ENABLE"] = "Enable AFK Rotation"
 L["AFK_MODE_ENABLE_DESC"] = "Automatically zooms out and rotates the camera while AFK. Hides UI for cinematic effect."
 L["AFK_ENTER_MSG"] = "AFK Mode: enabled (cinematic rotation)."
 L["AFK_EXIT_MSG"] = "AFK Mode: disabled (restored UI and camera)."
-L["CMD_USAGE"] = "Usage: /mcd config | autozoom | automount"
+L["CMD_USAGE"] = "Usage: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off"
 L["ZOOM_SET_MESSAGE"] = "Zoom set to %s (%.1f yards)"
 L["HOOK_DISABLED_BY_ADDON"] = "|cffff0000Désactivé par MaxCameraDistance|r"
 L["HOOK_MOUSE_SPEED_DESC"] = "Mouse look speed is controlled separately (Horizontal/Vertical) in the addon settings:"
@@ -325,7 +325,7 @@ L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Cliquez pour ouvrir les paramètres'
 L["SETTINGS_APPLIED_FULL"] = "|cff00ff00Appliqué|r — distance : %.1f |cff888888(transition %.2fs)|r"
 
 -- Runtime diagnostics and slash commands
-L["CMD_USAGE"] = 'Utilisation : /mcd config | autozoom | automount | status | deps | reset | debug on | debug off'
+L["CMD_USAGE"] = 'Utilisation : /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off'
 L["STATUS_STATE_AFK"] = 'ABS'
 L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = 'Course draconique première personne'
 L["STATUS_STATE_NORMAL"] = 'Normal'

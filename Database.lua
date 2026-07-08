@@ -93,7 +93,7 @@ local BLIZZARD_DEFAULT_YARDS = Clamp(defaultFactor * CONVERSION_RATIO, 1, MAX_YA
 
 local defaultYaw        = SafeGetCVar("cameraYawMoveSpeed") or 180
 local defaultPitch      = SafeGetCVar("cameraPitchMoveSpeed") or 90
-local defaultMoveSpeed  = SafeGetCVar("cameraDistanceMoveSpeed") or 20
+local defaultMoveSpeed  = Clamp(SafeGetCVar("cameraDistanceMoveSpeed") or 50, 20, 50)
 
 -- These exist only on some branches; if missing we store nil and the addon will ignore them.
 local defaultSharpen    = SafeGetCVar("resampleAlwaysSharpen")
@@ -327,8 +327,9 @@ function Database:ApplyMigrations(profile)
     -- Legacy split is migrated only once; it should not remain in runtime logic.
     profile.groupCombatZoomFactor = nil
 
-    -- move speed is typically 1..50
-    profile.moveViewDistance = Clamp(tonumber(profile.moveViewDistance) or defaultMoveSpeed, 1, 50)
+    -- manual mouse-wheel zoom speed is intentionally kept responsive (20..50).
+    -- Older profiles may have stored very low values that make the wheel feel broken.
+    profile.moveViewDistance = Clamp(tonumber(profile.moveViewDistance) or defaultMoveSpeed, 20, 50)
     profile.zoomTransitionTime = Clamp(tonumber(profile.zoomTransitionTime) or 0.5, 0, 2)
     profile.dismountDelay = Clamp(tonumber(profile.dismountDelay) or 0, 0, 10)
     profile.worldCombatReturnDelay = Clamp(tonumber(profile.worldCombatReturnDelay) or PROFILE_DEFAULTS.worldCombatReturnDelay, 0, 10)

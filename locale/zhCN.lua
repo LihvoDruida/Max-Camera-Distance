@@ -16,11 +16,11 @@ L["VERSION_PREFIX"] = "版本："
 L["MAX_ZOOM_FACTOR"] = "最大镜头距离"
 L["MAX_ZOOM_FACTOR_DESC"] = "设置游戏允许的绝对最大镜头距离（码）。"
 
-L["MOVE_VIEW_DISTANCE"] = "缩放速度"
-L["MOVE_VIEW_DISTANCE_DESC"] = "使用鼠标滚轮或快捷键时镜头缩放的速度。"
+L["MOVE_VIEW_DISTANCE"] = "鼠标滚轮手动缩放速度"
+L["MOVE_VIEW_DISTANCE_DESC"] = "使用鼠标滚轮或缩放快捷键时镜头缩放的速度。仅影响手动缩放。"
 
-L["ZOOM_TRANSITION"] = "过渡平滑度"
-L["ZOOM_TRANSITION_DESC"] = "镜头距离在 |cffff5555战斗|r、|cff66ccff坐骑|r 和 |cffffffff常规状态|r 之间平滑过渡的时间（秒）。数值越大，移动越慢、越平滑。"
+L["ZOOM_TRANSITION"] = "Smart Zoom 过渡时间"
+L["ZOOM_TRANSITION_DESC"] = "Smart Zoom 在战斗、坐骑、AFK、Dragonrace 和常规状态之间自动过渡的时间（秒）。不控制鼠标滚轮缩放。"
 L["YAW_MOVE_SPEED"] = "水平旋转速度"
 L["YAW_MOVE_SPEED_DESC"] = "调整鼠标转向时镜头水平旋转（偏航）的速度。"
 
@@ -142,7 +142,7 @@ L["AFK_EXIT_MSG"] = "暂离模式：已禁用（恢复界面和镜头）。"
 -- ============================================================================
 -- 命令 / 帮助
 -- ============================================================================
-L["CMD_USAGE"] = "用法：/mcd config | autozoom | automount"
+L["CMD_USAGE"] = "用法：/mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off"
 
 -- 可选（若其他文件中使用）
 L["ZOOM_SET_MESSAGE"] = "缩放已设置为 %s（%.1f码）"
@@ -371,7 +371,7 @@ L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = '点击打开设置'
 L["SETTINGS_APPLIED_FULL"] = "|cff00ff00已应用|r — 距离：%.1f |cff888888（过渡 %.2fs）|r"
 
 -- Runtime diagnostics and slash commands
-L["CMD_USAGE"] = '用法：/mcd config | autozoom | automount | status | deps | reset | debug on | debug off'
+L["CMD_USAGE"] = '用法：/mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off'
 L["STATUS_STATE_AFK"] = '暂离'
 L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = '竞速第一人称'
 L["STATUS_STATE_NORMAL"] = '常规'

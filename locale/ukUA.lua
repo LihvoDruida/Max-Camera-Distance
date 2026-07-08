@@ -16,11 +16,11 @@ L["VERSION_PREFIX"] = "Версія: "
 L["MAX_ZOOM_FACTOR"] = "Максимальна дистанція камери"
 L["MAX_ZOOM_FACTOR_DESC"] = "Встановлює абсолютну максимальну дистанцію камери (у ярдах), яку може використовувати клієнт гри."
 
-L["MOVE_VIEW_DISTANCE"] = "Швидкість зуму"
-L["MOVE_VIEW_DISTANCE_DESC"] = "Наскільки швидко камера наближається й віддаляється при прокручуванні колеса миші або використанні гарячих клавіш."
+L["MOVE_VIEW_DISTANCE"] = "Швидкість ручного зуму колесиком"
+L["MOVE_VIEW_DISTANCE_DESC"] = "Наскільки швидко камера наближається й віддаляється при прокручуванні колеса миші або використанні zoom-клавіш. Це впливає тільки на ручний зум."
 
-L["ZOOM_TRANSITION"] = "Плавність переходу"
-L["ZOOM_TRANSITION_DESC"] = "Час у секундах для плавного переходу між дистанціями камери |cffff5555(бій)|r, |cff66ccffмаунт|r та |cffffffffзвичайний стан|r. Вищі значення дають повільніший і плавніший рух."
+L["ZOOM_TRANSITION"] = "Час переходу Smart Zoom"
+L["ZOOM_TRANSITION_DESC"] = "Час у секундах для автоматичних переходів Smart Zoom між станами |cffff5555бій|r, |cff66ccffмаунт|r, AFK, Dragonrace та звичайним станом. Це не керує ручним зумом колесиком."
 
 L["YAW_MOVE_SPEED"] = "Швидкість горизонтального обертання"
 L["YAW_MOVE_SPEED_DESC"] = "Регулює швидкість горизонтального обертання камери (Yaw) під час повороту мишею."
@@ -173,7 +173,7 @@ L["AFK_EXIT_MSG"] = "AFK режим: вимкнено (інтерфейс і к�
 -- ============================================================================
 -- Команди / Допомога
 -- ============================================================================
-L["CMD_USAGE"] = "Використання: /mcd config | autozoom | automount"
+L["CMD_USAGE"] = "Використання: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off"
 
 L["ZOOM_SET_MESSAGE"] = "Зум встановлено на %s (%.1f ярдів)"
 
@@ -397,7 +397,7 @@ L["DEBUG_LEVEL_INFO"] = "Інформація"
 L["DEBUG_LEVEL_DEBUG"] = "Налагодження"
 
 -- Runtime diagnostics and slash commands
-L["CMD_USAGE"] = 'Використання: /mcd config | autozoom | automount | status | deps | reset | debug on | debug off'
+L["CMD_USAGE"] = 'Використання: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off'
 L["STATUS_STATE_AFK"] = 'AFK'
 L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = 'Перша особа у гонці'
 L["STATUS_STATE_NORMAL"] = 'Звичайний'
