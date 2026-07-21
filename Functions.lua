@@ -389,6 +389,27 @@ local function SafeValueCall(func, ...)
     return nil
 end
 
+-- GetShapeshiftFormInfo does not return the same tuple on every branch: modern
+-- clients give (icon, active, castable, spellID) while older ones insert a name
+-- as the second value. Blindly taking the 4th return gave a boolean on those
+-- clients, so druid travel forms were never detected. Pick the first numeric
+-- return that actually looks like a spell ID instead.
+local function GetShapeshiftFormSpellID(formIndex)
+    if type(GetShapeshiftFormInfo) ~= "function" then return nil end
+
+    local ok, a, b, c, d = pcall(GetShapeshiftFormInfo, formIndex)
+    if not ok then return nil end
+
+    for _, value in ipairs({ d, c, b, a }) do
+        local num = tonumber(value)
+        if num and num > 0 and type(value) ~= "boolean" then
+            return num
+        end
+    end
+
+    return nil
+end
+
 local function SafeIsInInstance()
     if type(IsInInstance) ~= "function" then
         return false, nil
@@ -811,7 +832,7 @@ function Functions:IsFlyingTravelContext()
 
     local formIndex = GetShapeshiftForm and GetShapeshiftForm() or nil
     if formIndex and formIndex > 0 and GetShapeshiftFormInfo then
-        local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
+        local spellID = GetShapeshiftFormSpellID(formIndex)
         if spellID and FLYING_TRAVEL_FORM_IDS[spellID] then
             return true
         end
@@ -840,7 +861,7 @@ function Functions:IsTravelFormOnlyActive()
 
     local formIndex = GetShapeshiftForm and GetShapeshiftForm() or nil
     if formIndex and formIndex > 0 and GetShapeshiftFormInfo then
-        local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
+        local spellID = GetShapeshiftFormSpellID(formIndex)
         if spellID and TRAVEL_FORM_IDS[spellID] then
             return true
         end
@@ -907,7 +928,7 @@ function IsInTravelForm()
 
     local formIndex = GetShapeshiftForm and GetShapeshiftForm() or nil
     if formIndex and formIndex > 0 and GetShapeshiftFormInfo then
-        local _, _, _, spellID = GetShapeshiftFormInfo(formIndex)
+        local spellID = GetShapeshiftFormSpellID(formIndex)
         if spellID and TRAVEL_FORM_IDS[spellID] then return true end
     end
 
@@ -1159,31 +1180,31 @@ function Functions:IsGroupInCombat()
 
     local result = false
 
+    -- One pcall around the whole scan instead of three per unit. A 40-man raid
+    -- used to cost up to 120 pcalls every time this cache expired.
+    local function ScanUnits(prefix, count)
+        for i = 1, count do
+            local unit = prefix .. i
+            if UnitExists(unit)
+                and not UnitIsUnit(unit, "player")
+                and UnitAffectingCombat(unit) then
+                return true
+            end
+        end
+        return false
+    end
+
     if inRaid then
         if SafeBoolCall(IsEncounterInProgress) then
             result = true
         else
             -- Cap defensive scan size. GetNumGroupMembers can briefly be stale during roster changes.
-            local cappedMembers = math.min(memberCount, 40)
-            for i = 1, cappedMembers do
-                local unit = "raid" .. i
-                if SafeBoolCall(UnitExists, unit)
-                    and not SafeBoolCall(UnitIsUnit, unit, "player")
-                    and SafeBoolCall(UnitAffectingCombat, unit) then
-                    result = true
-                    break
-                end
-            end
+            local ok, scanned = pcall(ScanUnits, "raid", math.min(memberCount, 40))
+            result = ok and scanned or false
         end
     elseif inGroup then
-        local cappedMembers = math.min(memberCount, 4)
-        for i = 1, cappedMembers do
-            local unit = "party" .. i
-            if SafeBoolCall(UnitExists, unit) and SafeBoolCall(UnitAffectingCombat, unit) then
-                result = true
-                break
-            end
-        end
+        local ok, scanned = pcall(ScanUnits, "party", math.min(memberCount, 4))
+        result = ok and scanned or false
     end
 
     runtimeCache.groupCombatKey = key
@@ -1424,12 +1445,15 @@ local function GetCurrentZoomContext(db)
 end
 
 ShouldForceCombatZoom = function(db)
-    local inInstance = IsInInstance()
+    -- IsEncounterInProgress does not exist on every branch (it is missing on the
+    -- oldest Classic clients). This runs on every camera pass, so an unguarded
+    -- call produced continuous Lua errors there.
+    local inInstance = SafeIsInInstance()
     if inInstance then
         return false
     end
 
-    return IsEncounterInProgress() and true or false
+    return SafeBoolCall(IsEncounterInProgress)
 end
 
 local function ClampAfkDelay(value)
@@ -2262,7 +2286,10 @@ function Functions:PrintRuntimeStatus()
 
     self:SendMessage("Status:")
     self:SendMessage(" - version: " .. tostring(version))
-    self:SendMessage(" - client: " .. tostring(Compat.CLIENT_TAG or "Unknown") .. " build=" .. tostring(Compat.BUILD or "unknown"))
+    self:SendMessage(" - client: " .. tostring(Compat.CLIENT_TAG or "Unknown")
+        .. " version=" .. tostring(Compat.VERSION ~= "" and Compat.VERSION or "unknown")
+        .. " build=" .. tostring(Compat.BUILD_NUMBER or "unknown")
+        .. " interface=" .. tostring(Compat.INTERFACE or "unknown"))
     self:SendMessage(" - zoom: " .. tostring((GetCameraZoom and GetCameraZoom()) or "unknown"))
     self:SendMessage(" - state: " .. tostring(snapshot and snapshot.state or "unknown") .. " previous=" .. tostring(snapshot and snapshot.previousState or (controllerSnapshot and controllerSnapshot.previousState) or "none"))
     self:SendMessage(" - target yards: " .. tostring(snapshot and snapshot.targetYards or "unknown"))
@@ -2495,6 +2522,11 @@ end
 -- =====================================================================
 function Functions:ClearAllQuestTracking()
     if not C_QuestLog or not C_QuestLog.GetNumQuestWatches then
+        Functions:SendMessage("Quest tracking API not available in this client.")
+        return
+    end
+
+    if not (C_QuestLog.GetQuestIDForQuestWatchIndex and C_QuestLog.RemoveQuestWatch) then
         Functions:SendMessage("Quest tracking API not available in this client.")
         return
     end

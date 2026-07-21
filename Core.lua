@@ -27,6 +27,7 @@ local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local UnitIsDead = UnitIsDead
 local UnitIsGhost = UnitIsGhost
 local C_Timer = C_Timer
+local GetTime = GetTime
 local pcall = pcall
 
 -- Minimap libs
@@ -82,8 +83,30 @@ local function IsPlayerReady()
     return ok and exists and not IsDeadOrGhostSafe("player")
 end
 
+-- Events that only ever matter for the player. Registering them globally means
+-- the handler is invoked for EVERY unit in the group: in a 40-man raid
+-- UNIT_SPELLCAST_SUCCEEDED and UNIT_AURA fire hundreds of times per second and
+-- each one paid for a pcall plus a table lookup before being discarded.
+-- RegisterUnitEvent makes the client filter them for us.
+local PLAYER_ONLY_EVENTS = {
+    UNIT_AURA = true,
+    UNIT_MODEL_CHANGED = true,
+    UNIT_SPELLCAST_SUCCEEDED = true,
+    UNIT_ENTERING_VEHICLE = true,
+    UNIT_EXITING_VEHICLE = true,
+}
+
 local function SafeRegisterEvent(targetFrame, eventName)
-    local ok = pcall(targetFrame.RegisterEvent, targetFrame, eventName)
+    local ok = false
+
+    if PLAYER_ONLY_EVENTS[eventName] and type(targetFrame.RegisterUnitEvent) == "function" then
+        ok = pcall(targetFrame.RegisterUnitEvent, targetFrame, eventName, "player")
+    end
+
+    if not ok then
+        ok = pcall(targetFrame.RegisterEvent, targetFrame, eventName)
+    end
+
     if not ok and ENABLE_LOGGING then
         print(string.format("%s: skipped unsupported event %s", addonName, tostring(eventName)))
     end
@@ -360,8 +383,20 @@ eventHandlers.UNIT_MODEL_CHANGED = function(event, unit)
     RequestSmartUpdate()
 end
 
+-- UNIT_AURA on the player still fires constantly in combat, and each one used to
+-- wipe the runtime caches and queue a full mount/aura/group rescan. Auras only
+-- matter here for travel-form and race detection, which cannot change faster
+-- than this throttle.
+local UNIT_AURA_THROTTLE = 0.1
+local lastAuraHandledAt = 0
+
 eventHandlers.UNIT_AURA = function(event, unit)
     if unit ~= "player" then return end
+
+    local now = (GetTime and GetTime()) or 0
+    if now > 0 and (now - lastAuraHandledAt) < UNIT_AURA_THROTTLE then return end
+    lastAuraHandledAt = now
+
     InvalidateMountCache()
     InvalidateRuntimeCaches()
     RequestShoulderRefresh()
