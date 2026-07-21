@@ -1459,11 +1459,22 @@ end
 -- =====================================================================
 -- BLIZZARD SETTINGS HOOK (Retail only, Dragonflight+ UI)
 -- =====================================================================
-if IS_RETAIL
-   and SettingsPanel and SettingsPanel.Container and SettingsPanel.Container.SettingsList
-   and SettingsPanel.Container.SettingsList.ScrollBox
-   and hooksecurefunc then
+-- This used to run at file-load time. If SettingsPanel was not built yet the
+-- whole hook was skipped for the rest of the session, so it is now deferred and
+-- retried until it succeeds.
+local blizzardSettingsHookInstalled = false
 
+local function InstallBlizzardSettingsHook()
+    if blizzardSettingsHookInstalled then return true end
+
+    if not (IS_RETAIL
+        and SettingsPanel and SettingsPanel.Container and SettingsPanel.Container.SettingsList
+        and SettingsPanel.Container.SettingsList.ScrollBox
+        and hooksecurefunc) then
+        return false
+    end
+
+    blizzardSettingsHookInstalled = true
     local MOUSE_LOOK_SPEED = _G.MOUSE_LOOK_SPEED
     local CONTROLS_LABEL = _G.CONTROLS_LABEL
     local COMBAT_LABEL = _G.COMBAT_LABEL or "Combat"
@@ -1490,6 +1501,22 @@ if IS_RETAIL
                     end
                 end
             end
+        end
+    end)
+
+    return true
+end
+
+-- Try immediately, then retry on the events that can create SettingsPanel.
+if not InstallBlizzardSettingsHook() and IS_RETAIL then
+    local hookFrame = CreateFrame("Frame")
+    hookFrame:RegisterEvent("PLAYER_LOGIN")
+    hookFrame:RegisterEvent("ADDON_LOADED")
+    hookFrame:SetScript("OnEvent", function(self, event, loadedAddon)
+        if event == "ADDON_LOADED" and loadedAddon ~= "Blizzard_Settings" then return end
+        if InstallBlizzardSettingsHook() then
+            self:UnregisterAllEvents()
+            self:SetScript("OnEvent", nil)
         end
     end)
 end

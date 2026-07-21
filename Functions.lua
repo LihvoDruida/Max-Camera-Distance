@@ -22,9 +22,19 @@ local Compat = ns.Compat or {}
 local ShoulderCompensation = ns.ShoulderCompensation or {}
 local CameraStateController = ns.CameraStateController
 
-local LibCamera    = (LibStub and LibStub("LibCamera-1.0", true))
-local LibMountInfo = (LibStub and (LibStub("LibMountInfo-1.1", true) or LibStub("LibMountInfo-1.0", true)))
-local ACD          = (LibStub and LibStub("AceConfigDialog-3.0", true))
+-- Optional libraries are resolved lazily: a standalone provider addon (or an
+-- addon that embeds Ace3 / LibMountInfo) can finish loading AFTER this file, and
+-- capturing the LibStub result once at load time left them nil forever.
+local LibCamera, LibMountInfo, ACD
+
+local function ResolveOptionalLibs()
+    if not LibStub then return end
+    LibCamera    = LibCamera or LibStub("LibCamera-1.0", true)
+    LibMountInfo = LibMountInfo or LibStub("LibMountInfo-1.1", true) or LibStub("LibMountInfo-1.0", true)
+    ACD          = ACD or LibStub("AceConfigDialog-3.0", true)
+end
+
+ResolveOptionalLibs()
 
 -- =====================================================================
 -- 1) FAST LOCALS / API
@@ -747,7 +757,9 @@ function Functions:IsDragonRacingRaceActive()
 
     if AuraUtil and AuraUtil.ForEachAura then
         local canaccessvalue = _G.canaccessvalue
-        local issecretvalue = _G.isecretvalue
+        -- was misspelled as _G.isecretvalue, which silently disabled this guard
+        -- and let secret aura spellIDs reach the table lookup below.
+        local issecretvalue = _G.issecretvalue
         local inRace = false
 
         local function HasSafeDragonracingAuraSpellID(spellId)
@@ -2264,6 +2276,8 @@ function Functions:PrintRuntimeStatus()
 end
 
 function Functions:AdjustCamera(forceNow)
+    ResolveOptionalLibs()
+
     local db = DB()
     if not db then return end
 
@@ -2295,7 +2309,20 @@ function Functions:AdjustCamera(forceNow)
         NotifyConfigChanged()
     end
 
-    -- Always apply other CVars
+    Functions:ApplyManagedCVars()
+end
+
+-- Applies every CVar the addon owns that is NOT part of the zoom state machine.
+-- Kept separate from AdjustCamera so it can also run on paths where Smart Zoom
+-- bails out early (Smart Zoom disabled, logging in dead/as a ghost, ...).
+-- Without this, "Camera Turning Speed" and friends were never re-applied on
+-- those logins.
+function Functions:ApplyManagedCVars()
+    local db = DB()
+    if not db then return end
+
+    SanitizeRuntimeProfile(db)
+
     UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
     UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
@@ -2305,7 +2332,7 @@ function Functions:AdjustCamera(forceNow)
     UpdateCVar("occludedSilhouettePlayer", db.occludedSilhouettePlayer and 1 or 0)
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
-    
+
     RequestCVarGuardRefresh(false)
 end
 
@@ -2360,6 +2387,18 @@ function Functions:OnCVarUpdate(_, cvarName, value)
         local defaults = ns.Database and ns.Database.DEFAULTS
         local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
         yards = ClampNumber(yards, 1, maxYards)
+
+        -- Only mirror the CVar back into the profile while the slider is actually
+        -- the source of truth. With a preset selected the CVar holds the PRESET
+        -- value, and writing it back would permanently destroy the manual value
+        -- the user gets when switching the preset back to "Manual".
+        if GetDistancePresetId(db, "maxZoomFactor") ~= "manual" then
+            local presetYards = GetDistanceValue(db, "maxZoomFactor")
+            if presetYards and yards and math_abs(presetYards - yards) > 0.1 then
+                UpdateCVar(cvarName, (cvarName == "cameraDistanceMax") and presetYards or (presetYards / CONVERSION_RATIO))
+            end
+            return
+        end
 
         if yards and db.maxZoomFactor and math_abs(db.maxZoomFactor - yards) > 0.1 then
             db.maxZoomFactor = yards
@@ -2480,6 +2519,8 @@ end
 -- 15) SLASH
 -- =====================================================================
 function Functions:SlashCmdHandler(msg)
+    ResolveOptionalLibs()
+
     local raw = tostring(msg or "")
     local command, arg = raw:match("^%s*(%S*)%s*(.-)%s*$")
     command = strlower(command or "")

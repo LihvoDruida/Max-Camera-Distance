@@ -23,9 +23,18 @@ local format = string.format
 -- ============================================================================
 -- SAFE HELPERS
 -- ============================================================================
+-- Live (current) CVar value. Only used for one-off migrations, never for defaults.
 local function SafeGetCVar(name)
     if Compat.SafeGetCVarNumber then
         return Compat.SafeGetCVarNumber(name)
+    end
+    return nil
+end
+
+-- Client's built-in default for a CVar. Constant for the lifetime of the client.
+local function SafeGetCVarDefault(name)
+    if Compat.SafeGetCVarNumberDefault then
+        return Compat.SafeGetCVarNumberDefault(name)
     end
     return nil
 end
@@ -82,27 +91,42 @@ end
 -- ============================================================================
 -- READ GAME DEFAULTS (best-effort, per client)
 -- ============================================================================
--- cameraDistanceMaxZoomFactor default is usually ~1.9 (Retail). Classic varies by branch.
--- We always try to read it from the client; fallbacks are only for safety.
-local defaultFactor = SafeGetCVar("cameraDistanceMaxZoomFactor")
+-- !!! DO NOT read these from the LIVE CVar value. !!!
+--
+-- AceDB-3.0 deletes every profile key whose value equals the default when the
+-- player logs out (RegisterDefaults(nil) -> removeDefaults). That is safe only
+-- while the defaults are CONSTANT.
+--
+-- This addon writes cameraYawMoveSpeed, cameraDistanceMaxZoomFactor, etc. itself,
+-- so reading the live CVar made the "default" follow the user's own setting:
+--   1. user picks 250 -> stored in SavedVariables (250 ~= default 180)
+--   2. next launch the live CVar is 250, so the default becomes 250
+--   3. profile value == default -> AceDB STRIPS the key on logout
+--   4. anything that resets the CVar cache (Config.wtf reset, patch, another PC,
+--      logging out in a different camera state) -> the setting is gone for good
+-- which is exactly the "Camera Turning Speed resets every launch" symptom.
+--
+-- GetCVarDefault() returns the client's built-in default and never drifts,
+-- so it is a valid SavedVariables default.
+local defaultFactor = SafeGetCVarDefault("cameraDistanceMaxZoomFactor")
 if not defaultFactor then
     defaultFactor = IS_RETAIL and 1.9 or 4.0
 end
 
 local BLIZZARD_DEFAULT_YARDS = Clamp(defaultFactor * CONVERSION_RATIO, 1, MAX_YARDS)
 
-local defaultYaw        = SafeGetCVar("cameraYawMoveSpeed") or 180
-local defaultPitch      = SafeGetCVar("cameraPitchMoveSpeed") or 90
-local defaultMoveSpeed  = Clamp(SafeGetCVar("cameraDistanceMoveSpeed") or 50, 20, 50)
+local defaultYaw        = SafeGetCVarDefault("cameraYawMoveSpeed") or 180
+local defaultPitch      = SafeGetCVarDefault("cameraPitchMoveSpeed") or 90
+local defaultMoveSpeed  = Clamp(SafeGetCVarDefault("cameraDistanceMoveSpeed") or 50, 20, 50)
 
 -- These exist only on some branches; if missing we store nil and the addon will ignore them.
-local defaultSharpen    = SafeGetCVar("resampleAlwaysSharpen")
-local defaultSoftTarget = SafeGetCVar("SoftTargetIconGameObject")
+local defaultSharpen    = SafeGetCVarDefault("resampleAlwaysSharpen")
+local defaultSoftTarget = SafeGetCVarDefault("SoftTargetIconGameObject")
 
-local defaultReduceMove = SafeGetCVar("cameraReduceUnexpectedMovement")
-local defaultIndirect   = SafeGetCVar("cameraIndirectVisibility")
-local defaultIndirectOffset = SafeGetCVar("cameraIndirectOffset")
-local defaultOccludedSilhouette = SafeGetCVar("occludedSilhouettePlayer")
+local defaultReduceMove = SafeGetCVarDefault("cameraReduceUnexpectedMovement")
+local defaultIndirect   = SafeGetCVarDefault("cameraIndirectVisibility")
+local defaultIndirectOffset = SafeGetCVarDefault("cameraIndirectOffset")
+local defaultOccludedSilhouette = SafeGetCVarDefault("occludedSilhouettePlayer")
 
 -- ============================================================================
 -- PUBLIC CONSTANTS (used by Config/Functions)
@@ -459,6 +483,60 @@ function Database:MigrateToPerCharacterProfiles()
 end
 
 
+-- ============================================================================
+-- MIGRATION: rescue settings that the old dynamic defaults silently dropped
+-- ============================================================================
+-- Before this build the profile defaults were read from the LIVE CVars, so any
+-- setting that happened to match the live CVar at logout was removed from
+-- SavedVariables by AceDB. Those keys are missing right now but the value the
+-- user actually wants is still sitting in the CVar, so copy it back once before
+-- AceDB installs the new (static) defaults over it.
+local RESCUED_CVAR_KEYS = {
+    { key = "cameraYawMoveSpeed",       cvar = "cameraYawMoveSpeed",        min = 1,  max = 360 },
+    { key = "cameraPitchMoveSpeed",     cvar = "cameraPitchMoveSpeed",      min = 1,  max = 360 },
+    { key = "moveViewDistance",         cvar = "cameraDistanceMoveSpeed",   min = 20, max = 50 },
+    { key = "cameraIndirectOffset",     cvar = "cameraIndirectOffset",      min = 0,  max = 10 },
+    { key = "reduceUnexpectedMovement", cvar = "cameraReduceUnexpectedMovement", isBoolean = true },
+    { key = "cameraIndirectVisibility", cvar = "cameraIndirectVisibility",  isBoolean = true },
+    { key = "occludedSilhouettePlayer", cvar = "occludedSilhouettePlayer",  isBoolean = true },
+    { key = "resampleAlwaysSharpen",    cvar = "resampleAlwaysSharpen",     isBoolean = true },
+    { key = "softTargetInteract",       cvar = "SoftTargetIconGameObject",  isBoolean = true },
+}
+
+function Database:MigrateDynamicCVarDefaults()
+    local rawDb = _G.MaxCameraDistanceDB
+    if type(rawDb) ~= "table" or type(rawDb.profiles) ~= "table" then return end
+
+    rawDb.__migrations = rawDb.__migrations or {}
+    if rawDb.__migrations.staticCVarDefaults then return end
+    rawDb.__migrations.staticCVarDefaults = true
+
+    for _, profile in pairs(rawDb.profiles) do
+        if type(profile) == "table" then
+            for _, entry in ipairs(RESCUED_CVAR_KEYS) do
+                if profile[entry.key] == nil then
+                    local live = SafeGetCVar(entry.cvar)
+                    if live ~= nil then
+                        if entry.isBoolean then
+                            profile[entry.key] = (live == 1)
+                        else
+                            profile[entry.key] = Clamp(live, entry.min, entry.max)
+                        end
+                    end
+                end
+            end
+
+            -- minZoomFactor is deliberately NOT restored from the live CVar: this
+            -- addon pins cameraDistanceMaxZoomFactor to whatever state was active at
+            -- logout (mount / combat / normal), so the live value is not the user's
+            -- "Normal zoom" choice. Fall back to the real client default instead.
+            if profile.minZoomFactor == nil then
+                profile.minZoomFactor = BLIZZARD_DEFAULT_YARDS
+            end
+        end
+    end
+end
+
 local function CreateFallbackDB(defaultsWrapper)
     local rawDb = _G.MaxCameraDistanceDB
     if type(rawDb) ~= "table" then
@@ -499,6 +577,10 @@ function Database:InitDB()
     local defaultsWrapper = { profile = CopyTableSafe(PROFILE_DEFAULTS) }
 
     self:MigrateToPerCharacterProfiles()
+    -- Must run on the RAW SavedVariables table, before AceDB attaches its
+    -- defaults metatable (afterwards a stripped key is indistinguishable from
+    -- a key that legitimately holds the default value).
+    self:MigrateDynamicCVarDefaults()
 
     if AceDB and AceDB.New then
         self.db = AceDB:New("MaxCameraDistanceDB", defaultsWrapper)

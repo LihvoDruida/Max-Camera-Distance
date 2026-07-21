@@ -30,9 +30,18 @@ local C_Timer = C_Timer
 local pcall = pcall
 
 -- Minimap libs
-local LDB = (LibStub and LibStub("LibDataBroker-1.1", true))
-local LDBIcon = (LibStub and LibStub("LibDBIcon-1.0", true))
-local ACD = (LibStub and LibStub("AceConfigDialog-3.0", true))
+-- Resolved lazily: a provider addon can finish loading after this file, in which
+-- case a one-shot LibStub lookup at load time would leave these nil forever.
+local LDB, LDBIcon, ACD
+
+local function ResolveOptionalLibs()
+    if not LibStub then return end
+    LDB = LDB or LibStub("LibDataBroker-1.1", true)
+    LDBIcon = LDBIcon or LibStub("LibDBIcon-1.0", true)
+    ACD = ACD or LibStub("AceConfigDialog-3.0", true)
+end
+
+ResolveOptionalLibs()
 
 local ENABLE_LOGGING = false
 local minimapInited = false
@@ -186,10 +195,12 @@ end
 
 local function InitMinimapButton()
     if minimapInited then return end
-    minimapInited = true
 
+    ResolveOptionalLibs()
     if not LDB or not LDBIcon then return end
     if not ns.Database or not ns.Database.db or not ns.Database.db.profile then return end
+
+    minimapInited = true
 
     ns.Database.db.profile.minimap = ns.Database.db.profile.minimap or { hide = false }
 
@@ -280,6 +291,18 @@ end
 eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
     InvalidateMountCache()
     InvalidateRuntimeCaches()
+
+    if isLogin or isReload then
+        SafeCall(InitMinimapButton, "InitMinimapButton")
+    end
+
+    -- Turning/pitch speed and the other non-zoom CVars must be restored on EVERY
+    -- world entry, including logins where the player is dead or a ghost and the
+    -- Smart Zoom path below bails out.
+    if ns.Functions and ns.Functions.ApplyManagedCVars then
+        SafeCall(ns.Functions.ApplyManagedCVars, "ApplyManagedCVars", ns.Functions)
+    end
+
     if not IsPlayerReady() then return end
     if not (ns.Functions and ns.Functions.AdjustCamera) then return end
 

@@ -83,6 +83,14 @@ function Compat.SafeGetCVarDefault(name)
     return nil
 end
 
+-- Returns the CLIENT'S BUILT-IN default for a CVar as a number.
+-- Unlike SafeGetCVarNumber this value never drifts, so it is safe to use as a
+-- SavedVariables default (see the note in Database.lua about AceDB default stripping).
+function Compat.SafeGetCVarNumberDefault(name)
+    local value = Compat.SafeGetCVarDefault(name)
+    return value ~= nil and tonumber(value) or nil
+end
+
 function Compat.SafeGetCVarNumberAny(names)
     if type(names) == 'string' then
         return Compat.SafeGetCVarNumber(names), names
