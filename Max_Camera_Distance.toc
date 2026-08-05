@@ -1,12 +1,12 @@
 ## X-Flavor: retail
-## X-Expansion: Midnight
-## Interface: 120007
+## X-Expansion: Midnight (12.0.7 / 12.1.0)
+## Interface: 120007, 120100
 
 ## Title: <|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
 ## Notes: Smart camera distance with safer cross-version compatibility guards.
 ## Notes-zhCN: 智能镜头距离，具备更安全的跨版本兼容性保护措施。
 ## IconTexture: Interface\AddOns\Max_Camera_Distance\assets\icon
-## Version: v7.4.3
+## Version: v7.5.0
 ## Author: melles1991
 ## DefaultState: Enabled
 ## OptionalDeps: Ace3, LibMountInfo, LibDataBroker-1.1, LibDBIcon-1.0

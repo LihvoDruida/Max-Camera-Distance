@@ -26,40 +26,53 @@ local GetShapeshiftFormID = _G.GetShapeshiftFormID
 
 local modelFrame = CreateFrame and CreateFrame("PlayerModel") or nil
 
+-- UnitClass, UnitRace and UnitSex are all documented as conditionally secret,
+-- and 12.1 extended that to more unit APIs whenever the unit's identity is
+-- restricted. Every value below is subsequently used as a TABLE KEY, and
+-- indexing with a secret is an immediate Lua error, so strip anything
+-- unreadable to nil here - the callers already treat nil as "no override".
+local Plain = Compat.Plain or function(value) return value end
+
 local function SafeUnitRace(unit)
-    if UnitRace then
-        return UnitRace(unit)
-    end
-    return nil, nil
+    if not UnitRace then return nil, nil end
+    local ok, raceName, raceFile = pcall(UnitRace, unit)
+    if not ok then return nil, nil end
+    return Plain(raceName), Plain(raceFile)
 end
 
 local function SafeUnitSex(unit)
-    if UnitSex then
-        return UnitSex(unit)
-    end
-    return nil
+    if not UnitSex then return nil end
+    local ok, sex = pcall(UnitSex, unit)
+    if not ok then return nil end
+    return Plain(sex)
 end
 
 local function SafeUnitClass(unit)
-    if UnitClass then
-        return UnitClass(unit)
-    end
-    return nil, nil
+    if not UnitClass then return nil, nil end
+    local ok, className, classFile = pcall(UnitClass, unit)
+    if not ok then return nil, nil end
+    return Plain(className), Plain(classFile)
 end
 
+
+local IsTruthySafe = Compat.IsTruthy or function(value) return value and true or false end
 
 local function SafeAuraSpellIdAtIndex(unit, index)
     if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
         local ok, aura = pcall(C_UnitAuras.GetBuffDataByIndex, unit, index)
-        if ok and aura and aura.spellId and (not issecretvalue or not issecretvalue(aura.spellId)) then
-            return aura.spellId
+        if not ok or not IsTruthySafe(aura) then
+            return nil
+        end
+        local okId, spellId = pcall(function() return aura.spellId end)
+        if okId and spellId ~= nil and (not issecretvalue or not issecretvalue(spellId)) then
+            return spellId
         end
         return nil
     end
 
     if UnitBuff then
         local ok, _, _, _, _, _, _, _, _, _, spellId = pcall(UnitBuff, unit, index)
-        if ok then
+        if ok and (not issecretvalue or not issecretvalue(spellId)) then
             return spellId
         end
     end
@@ -67,7 +80,18 @@ local function SafeAuraSpellIdAtIndex(unit, index)
     return nil
 end
 
+-- Every caller asks whether the PLAYER has one specific, known spell ID. On
+-- 12.1 the index-based route (GetBuffDataByIndex / UnitBuff) raises a Lua error
+-- the moment auras turn secret - combat, encounters, M+ and PvP, i.e. most of
+-- the time the shoulder offset actually needs recomputing. The spellID route is
+-- explicitly still permitted for addons, so prefer it and keep the index scan
+-- only for clients that do not offer GetPlayerAuraBySpellID.
 local function HasAuraSpell(unit, wantedSpellId)
+    if unit == "player" and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, wantedSpellId)
+        return ok and IsTruthySafe(aura)
+    end
+
     for i = 1, 40 do
         local spellId = SafeAuraSpellIdAtIndex(unit, i)
         if spellId == wantedSpellId then

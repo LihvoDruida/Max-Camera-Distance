@@ -40,6 +40,14 @@ Compat.IS_TBC_ANNIVERSARY = (Compat.INTERFACE >= 20000 and Compat.INTERFACE < 30
 Compat.IS_CLASSIC_ERA = (Compat.INTERFACE >= 10000 and Compat.INTERFACE < 20000)
 Compat.IS_CLASSIC = not Compat.IS_RETAIL
 
+-- Midnight (12.0) introduced Secret Values; 12.1 tightened them considerably,
+-- most importantly by making every index/slot/instanceID aura lookup raise a
+-- Lua error while auras are secret. Feature detection is still preferred over
+-- version gates below, but these flags let modules pick the cheaper path.
+Compat.IS_MIDNIGHT = Compat.IS_RETAIL and Compat.INTERFACE >= 120000
+Compat.IS_12_1_OR_LATER = Compat.IS_RETAIL and Compat.INTERFACE >= 120100
+Compat.HAS_SECRET_VALUES = type(_G.issecretvalue) == 'function'
+
 if Compat.IS_RETAIL then
     Compat.CLIENT_TAG = 'Retail'
 elseif Compat.IS_MOP_CLASSIC then
@@ -58,6 +66,82 @@ end
 
 Compat.MAX_CAMERA_YARDS = Compat.IS_RETAIL and 39 or 50
 Compat.CONVERSION_RATIO = Compat.IS_RETAIL and 15 or 12.5
+
+-- ---------------------------------------------------------------------
+-- Secret value helpers (Midnight 12.0+, tightened in 12.1)
+-- ---------------------------------------------------------------------
+-- Tainted code may STORE and PASS secret values freely, but evaluating one in a
+-- condition, comparison or table index is an immediate Lua error. Every value
+-- that can come back from a unit/aura API therefore has to be screened before
+-- it is used, not merely wrapped in pcall at the call site.
+local issecretvalue = _G.issecretvalue
+local canaccessvalue = _G.canaccessvalue
+local canaccesstable = _G.canaccesstable
+
+function Compat.IsSecret(value)
+    if type(issecretvalue) ~= 'function' then
+        return false
+    end
+    local ok, result = pcall(issecretvalue, value)
+    return ok and result and true or false
+end
+
+-- True when the current execution context is allowed to operate on secrets at
+-- all. Untainted code can; addon code generally cannot.
+function Compat.CanAccessSecrets(value)
+    if type(canaccessvalue) ~= 'function' then
+        return true
+    end
+    local ok, result = pcall(canaccessvalue, value)
+    return ok and result and true or false
+end
+
+function Compat.CanAccessTable(value)
+    if type(value) ~= 'table' then
+        return false
+    end
+    if type(canaccesstable) ~= 'function' then
+        return true
+    end
+    local ok, result = pcall(canaccesstable, value)
+    return ok and result and true or false
+end
+
+-- Secret-safe truthiness. Returns false for secrets instead of erroring, which
+-- is the correct fallback everywhere in this addon: an unreadable aura or combat
+-- flag simply means "do not switch camera state on account of it".
+function Compat.IsTruthy(value)
+    if value == nil then
+        return false
+    end
+    if Compat.IsSecret(value) then
+        return false
+    end
+    local ok, result = pcall(function() return value and true or false end)
+    return ok and result and true or false
+end
+
+-- Returns value only when it is a plain, readable value; nil otherwise. Use for
+-- anything that will be compared or used as a table key.
+function Compat.Plain(value)
+    if value == nil or Compat.IsSecret(value) then
+        return nil
+    end
+    return value
+end
+
+-- 12.1 added C_CVar.AreCVarsLoaded. Probing CVars before they exist reports
+-- "unsupported" and would permanently disable feature-gated options, so treat an
+-- unavailable API as "loaded" and only ever return false when we truly know.
+function Compat.AreCVarsLoaded()
+    if C_CVar and C_CVar.AreCVarsLoaded then
+        local ok, result = pcall(C_CVar.AreCVarsLoaded)
+        if ok then
+            return result and true or false
+        end
+    end
+    return true
+end
 
 function Compat.SafeGetCVar(name)
     if C_CVar and C_CVar.GetCVar then

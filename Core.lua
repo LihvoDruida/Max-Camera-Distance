@@ -268,23 +268,20 @@ local watchedCVars = {
     cameraIndirectVisibility = true,
     cameraIndirectOffset = true,
     cameraView = true,
-}
 
-if Compat.HasCVar and Compat.HasCVar("test_cameraOverShoulder") then
-    watchedCVars.test_cameraOverShoulder = true
-end
-if Compat.HasCVar and Compat.HasCVar("test_cameraDynamicPitch") then
-    watchedCVars.test_cameraDynamicPitch = true
-end
-if Compat.HasCVar and Compat.HasCVar("occludedSilhouettePlayer") then
-    watchedCVars.occludedSilhouettePlayer = true
-end
-if Compat.HasCVar and Compat.HasCVar("resampleAlwaysSharpen") then
-    watchedCVars.resampleAlwaysSharpen = true
-end
-if Compat.HasCVar and Compat.HasCVar("SoftTargetIconGameObject") then
-    watchedCVars.SoftTargetIconGameObject = true
-end
+    -- These used to be added only after a HasCVar() probe at file-load time.
+    -- That probe runs before the addon is fully loaded, and 12.1's new
+    -- C_CVar.AreCVarsLoaded exists precisely because CVars are not guaranteed to
+    -- be readable that early: a false negative silently dropped the CVar from
+    -- the watch list for the whole session. CVAR_UPDATE only ever fires for
+    -- CVars the client actually has, so listing them unconditionally is both
+    -- cheaper and correct on every flavor.
+    test_cameraOverShoulder = true,
+    test_cameraDynamicPitch = true,
+    occludedSilhouettePlayer = true,
+    resampleAlwaysSharpen = true,
+    SoftTargetIconGameObject = true,
+}
 
 -- Event handlers
 local eventHandlers = {}

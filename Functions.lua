@@ -99,17 +99,31 @@ local function CanonicalCVarName(cvarName)
     return CVAR_CANONICAL[cvarName] or cvarName
 end
 
-local function SafePlayerAuraBySpellID(spellID)
+-- Patch 12.1 made AuraData structs fully secret while auras are secret (combat,
+-- encounters, M+, PvP). The spellID-based lookups below are still legal to CALL
+-- there, but the table that comes back may be a secret, and `if aura then` on a
+-- secret is an immediate Lua error - the pcall around the API call does not
+-- cover the truthiness test in the caller. So the presence check happens here,
+-- once, and every call site gets a plain boolean.
+local IsTruthySafe = Compat.IsTruthy or function(value) return value and true or false end
+
+local function HasPlayerAura(spellID)
     if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then
-        return nil
+        return false
     end
 
     local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellID)
-    if ok then
-        return aura
+    if not ok then
+        return false
     end
 
-    return nil
+    return IsTruthySafe(aura)
+end
+
+-- Kept for backwards compatibility with any external caller; it now answers the
+-- same question as HasPlayerAura instead of handing out a possibly-secret table.
+local function SafePlayerAuraBySpellID(spellID)
+    return HasPlayerAura(spellID) or nil
 end
 
 -- =====================================================================
@@ -374,10 +388,15 @@ local function ClampNumber(value, minValue, maxValue)
     return num
 end
 
+-- The pcall only protects the CALL. Coercing the result with `and result and
+-- true` happens back in tainted context, so a secret return value (12.0+ marks
+-- plenty of unit APIs as conditionally secret) would error here rather than at
+-- the API. IsTruthySafe screens the value before it is ever used in a condition.
 local function SafeBoolCall(func, ...)
     if type(func) ~= "function" then return false end
     local ok, result = pcall(func, ...)
-    return ok and result and true or false
+    if not ok then return false end
+    return IsTruthySafe(result)
 end
 
 local function SafeValueCall(func, ...)
@@ -678,8 +697,8 @@ function Functions:IsSkyriding()
     end
 
     if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-        if SafePlayerAuraBySpellID(404464) then return true end
-        if SafePlayerAuraBySpellID(404468) then return false end
+        if HasPlayerAura(404464) then return true end
+        if HasPlayerAura(404468) then return false end
     end
 
     return false
@@ -770,13 +789,21 @@ function Functions:IsDragonRacingRaceActive()
 
     if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for spellID in pairs(DRAGONRACING_RACE_AURAS) do
-            if SafePlayerAuraBySpellID(spellID) then
+            if HasPlayerAura(spellID) then
                 return true
             end
         end
     end
 
-    if AuraUtil and AuraUtil.ForEachAura then
+    -- AuraUtil.ForEachAura walks auras by index. As of 12.1, every index-, slot-
+    -- and instanceID-based aura lookup raises a Lua error whenever auras are
+    -- secret - which is exactly when a dragonriding race is running. The
+    -- spellID path above already covers every ID in DRAGONRACING_RACE_AURAS on
+    -- those clients, so the scan is now a fallback only for builds that lack
+    -- GetPlayerAuraBySpellID (Classic flavors and pre-Midnight retail).
+    local hasSpellIDLookup = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID and true or false
+
+    if AuraUtil and AuraUtil.ForEachAura and not hasSpellIDLookup then
         local canaccessvalue = _G.canaccessvalue
         -- was misspelled as _G.isecretvalue, which silently disabled this guard
         -- and let secret aura spellIDs reach the table lookup below.
@@ -840,7 +867,7 @@ function Functions:IsFlyingTravelContext()
 
     if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for spellID in pairs(FLYING_TRAVEL_BUFF_IDS) do
-            if SafePlayerAuraBySpellID(spellID) then
+            if HasPlayerAura(spellID) then
                 return true
             end
         end
@@ -869,7 +896,7 @@ function Functions:IsTravelFormOnlyActive()
 
     if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for spellID in pairs(TRAVEL_BUFF_IDS) do
-            if SafePlayerAuraBySpellID(spellID) then
+            if HasPlayerAura(spellID) then
                 return true
             end
         end
@@ -935,7 +962,7 @@ function IsInTravelForm()
     if IS_RETAIL then
         if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
             for spellID in pairs(TRAVEL_BUFF_IDS) do
-                if SafePlayerAuraBySpellID(spellID) then return true end
+                if HasPlayerAura(spellID) then return true end
             end
         end
     else
@@ -1182,13 +1209,20 @@ function Functions:IsGroupInCombat()
 
     -- One pcall around the whole scan instead of three per unit. A 40-man raid
     -- used to cost up to 120 pcalls every time this cache expired.
+    -- Every one of these three calls is conditionally secret for group members
+    -- in instanced content. Previously a single secret return raised an error
+    -- that unwound the whole loop through the outer pcall, so one unreadable
+    -- unit made the entire raid read as "not in combat". Screening each result
+    -- keeps the scan going and simply ignores the units we cannot read.
     local function ScanUnits(prefix, count)
         for i = 1, count do
             local unit = prefix .. i
-            if UnitExists(unit)
-                and not UnitIsUnit(unit, "player")
-                and UnitAffectingCombat(unit) then
-                return true
+            local exists = IsTruthySafe(SafeValueCall(UnitExists, unit))
+            if exists then
+                local isSelf = IsTruthySafe(SafeValueCall(UnitIsUnit, unit, "player"))
+                if not isSelf and IsTruthySafe(SafeValueCall(UnitAffectingCombat, unit)) then
+                    return true
+                end
             end
         end
         return false
