@@ -7,6 +7,7 @@
     <Include file="locale\_manifest.xml"/>
     <Script file="Locales.lua"/>
     <Script file="Compat.lua"/>
+    <Script file="Contexts.lua"/>
     <Script file="Database.lua"/>
     <Script file="CVarGuard.lua"/>
     <Script file="CameraStateController.lua"/>

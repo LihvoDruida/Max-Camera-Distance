@@ -556,31 +556,50 @@ local function SanitizeRuntimeProfile(db)
     db.minZoomFactor = ClampNumber(db.minZoomFactor, 1, maxYards) or defaultNormal
     db.mountZoomFactor = ClampNumber(db.mountZoomFactor, 1, maxYards) or db.maxZoomFactor
     db.worldCombatZoomFactor = ClampNumber(db.worldCombatZoomFactor, 1, maxYards) or db.maxZoomFactor
-    db.partyCombatZoomFactor = ClampNumber(db.partyCombatZoomFactor, 1, maxYards) or db.worldCombatZoomFactor
-    db.raidCombatZoomFactor = ClampNumber(db.raidCombatZoomFactor, 1, maxYards) or db.worldCombatZoomFactor
-    db.pvpCombatZoomFactor = ClampNumber(db.pvpCombatZoomFactor, 1, maxYards) or db.partyCombatZoomFactor or db.raidCombatZoomFactor or db.worldCombatZoomFactor
+
+    -- Clamp every activity's distance and return delay from the taxonomy. Note
+    -- ns.Contexts is read here rather than through an upvalue: this function is
+    -- defined above the file-level Contexts local.
+    local contexts = ns.Contexts
+    if contexts and contexts.DEFINITIONS then
+        for _, def in pairs(contexts.DEFINITIONS) do
+            db[def.distanceKey] = ClampNumber(db[def.distanceKey], 1, maxYards)
+                or db.worldCombatZoomFactor
+            db[def.delayKey] = ClampNumber(db[def.delayKey], 0, 10)
+                or def.defaultDelay or 0.4
+        end
+    end
+
     db.groupCombatZoomFactor = nil
     db.moveViewDistance = ClampNumber(db.moveViewDistance, 20, 50) or 50
     db.cameraYawMoveSpeed = ClampNumber(db.cameraYawMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraYawMoveSpeed"), 1, 360) or 180)
     db.cameraPitchMoveSpeed = ClampNumber(db.cameraPitchMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraPitchMoveSpeed"), 1, 360) or 90)
     db.zoomTransitionTime = ClampNumber(db.zoomTransitionTime, 0, 2) or 0.5
     db.dismountDelay = ClampNumber(db.dismountDelay, 0, 10) or 0
-    db.worldCombatReturnDelay = ClampNumber(db.worldCombatReturnDelay, 0, 10) or 0.4
-    db.partyCombatReturnDelay = ClampNumber(db.partyCombatReturnDelay, 0, 10) or 0.8
-    db.raidCombatReturnDelay = ClampNumber(db.raidCombatReturnDelay, 0, 10) or 1.2
     db.cameraIndirectOffset = ClampNumber(db.cameraIndirectOffset, 0, 10) or 1.5
 end
 
+
+local Contexts = ns.Contexts
 
 local DISTANCE_PRESET_BINDINGS = {
     maxZoomFactor = "manualMaxPreset",
     minZoomFactor = "normalZoomPreset",
     mountZoomFactor = "mountZoomPreset",
-    worldCombatZoomFactor = "worldCombatPreset",
-    partyCombatZoomFactor = "partyCombatPreset",
-    raidCombatZoomFactor = "raidCombatPreset",
-    pvpCombatZoomFactor = "pvpCombatPreset",
 }
+
+-- One binding per activity, generated from ns.Contexts so the two lists cannot
+-- disagree about which preset key belongs to which distance.
+local COMBAT_CONTEXT_BY_DISTANCE_KEY = {}
+local DELAY_KEYS = {}
+
+if Contexts and Contexts.DEFINITIONS then
+    for id, def in pairs(Contexts.DEFINITIONS) do
+        DISTANCE_PRESET_BINDINGS[def.distanceKey] = def.presetKey
+        COMBAT_CONTEXT_BY_DISTANCE_KEY[def.distanceKey] = id
+        DELAY_KEYS[def.delayKey] = true
+    end
+end
 
 local PRESET_ORDER = { "manual", "client_default", "close", "balanced", "far", "max" }
 
@@ -646,12 +665,8 @@ local function GetDistanceValue(db, distanceKey)
 end
 
 local function GetContextDistanceKey(context)
-    if context == "pvp" then
-        return "pvpCombatZoomFactor"
-    elseif context == "raid" then
-        return "raidCombatZoomFactor"
-    elseif context == "party" then
-        return "partyCombatZoomFactor"
+    if Contexts and Contexts.GetDistanceKey then
+        return Contexts:GetDistanceKey(context)
     end
     return "worldCombatZoomFactor"
 end
@@ -1112,10 +1127,9 @@ end
 local function GetCombatReturnDelay(db, context)
     if not db then return 0 end
 
-    if context == "raid" then
-        return db.raidCombatReturnDelay or 0
-    elseif context == "party" then
-        return db.partyCombatReturnDelay or 0
+    if Contexts and Contexts.GetDelayKey then
+        local value = tonumber(db[Contexts:GetDelayKey(context)])
+        if value then return value end
     end
 
     return db.worldCombatReturnDelay or 0
@@ -1353,31 +1367,13 @@ function Functions:IsGroupInCombat()
     return result
 end
 
-local function GetCombatContextRaw()
-    local inInstance, instanceType = SafeIsInInstance()
-
-    if inInstance then
-        if instanceType == "arena" or instanceType == "pvp" then
-            return "pvp"
-        end
-
-        if instanceType == "raid" then
-            return "raid"
-        end
-
-        if instanceType == "party" or instanceType == "scenario" then
-            return "party"
-        end
+-- Activity detection now lives in Contexts.lua, which distinguishes arena from
+-- battleground from world PvP, and dungeon from Mythic+ from scenario, instead
+-- of collapsing them into the old "pvp" / "party" buckets.
+local function GetCombatContextRaw(db)
+    if Contexts and Contexts.Resolve then
+        return Contexts:Resolve(db)
     end
-
-    if SafeBoolCall(IsInRaid) then
-        return "raid"
-    end
-
-    if SafeBoolCall(IsInGroup) then
-        return "party"
-    end
-
     return "world"
 end
 
@@ -1494,7 +1490,7 @@ local function GetCombatSignals(db)
         hasThreat = ResolveThreatFlag(),
         isMounted = IsInTravelForm(),
         forceCombatZoom = (db and ShouldForceCombatZoom(db)) and true or false,
-        rawContext = GetCombatContextRaw(),
+        rawContext = GetCombatContextRaw(db),
     }, signalsMeta)
 
     runtimeCache.combatSignals = signals
@@ -1644,9 +1640,7 @@ local function BuildStatusSnapshot(db)
         occludedSilhouetteEnabled = (db and db.occludedSilhouettePlayer) and true or false,
         triggerConfig = triggerConfig,
         activeTriggers = activeTriggers,
-        worldCombatReturnDelay = (db and db.worldCombatReturnDelay) or 0,
-        partyCombatReturnDelay = (db and db.partyCombatReturnDelay) or 0,
-        raidCombatReturnDelay = (db and db.raidCombatReturnDelay) or 0,
+        activeReturnDelay = GetCombatReturnDelay(db, resolvedContext),
         mountReturnDelay = (db and db.dismountDelay) or 0,
         pendingReturnActive = pendingReturnActive,
         pendingReturnContext = pendingReturnContext,
@@ -2258,7 +2252,9 @@ function Functions:ShouldApplyOptionImmediately(key)
     local db = DB()
     if not db then return true end
 
-    if key == "worldCombatReturnDelay" or key == "partyCombatReturnDelay" or key == "raidCombatReturnDelay" or key == "dismountDelay" then
+    -- Return delays are hysteresis values: changing one must not yank the camera
+    -- right now, it only affects the next time combat ends.
+    if key == "dismountDelay" or DELAY_KEYS[key] then
         return false
     end
 
@@ -2270,12 +2266,10 @@ function Functions:ShouldApplyOptionImmediately(key)
         return state == ZOOM_STATE_MOUNT and GetDistancePresetId(db, key) == "manual"
     elseif key == "worldCombatZoomFactor" then
         return state == ZOOM_STATE_COMBAT and combatContext == "world" and GetDistancePresetId(db, key) == "manual"
-    elseif key == "partyCombatZoomFactor" then
-        return state == ZOOM_STATE_COMBAT and combatContext == "party" and GetDistancePresetId(db, key) == "manual"
-    elseif key == "raidCombatZoomFactor" then
-        return state == ZOOM_STATE_COMBAT and combatContext == "raid" and GetDistancePresetId(db, key) == "manual"
-    elseif key == "pvpCombatZoomFactor" then
-        return state == ZOOM_STATE_COMBAT and combatContext == "pvp" and GetDistancePresetId(db, key) == "manual"
+    elseif COMBAT_CONTEXT_BY_DISTANCE_KEY[key] then
+        return state == ZOOM_STATE_COMBAT
+            and combatContext == COMBAT_CONTEXT_BY_DISTANCE_KEY[key]
+            and GetDistancePresetId(db, key) == "manual"
     elseif key == "maxZoomFactor" then
         return not (db.autoCombatZoom or db.autoMountZoom) and GetDistancePresetId(db, key) == "manual"
     elseif key == "cameraIndirectOffset" then
@@ -2294,14 +2288,9 @@ function Functions:ShouldApplyOptionImmediately(key)
             return state == ZOOM_STATE_NONE and db.autoCombatZoom
         elseif distanceKey == "mountZoomFactor" then
             return state == ZOOM_STATE_MOUNT
-        elseif distanceKey == "worldCombatZoomFactor" then
-            return state == ZOOM_STATE_COMBAT and combatContext == "world"
-        elseif distanceKey == "partyCombatZoomFactor" then
-            return state == ZOOM_STATE_COMBAT and combatContext == "party"
-        elseif distanceKey == "raidCombatZoomFactor" then
-            return state == ZOOM_STATE_COMBAT and combatContext == "raid"
-        elseif distanceKey == "pvpCombatZoomFactor" then
-            return state == ZOOM_STATE_COMBAT and combatContext == "pvp"
+        elseif COMBAT_CONTEXT_BY_DISTANCE_KEY[distanceKey] then
+            return state == ZOOM_STATE_COMBAT
+                and combatContext == COMBAT_CONTEXT_BY_DISTANCE_KEY[distanceKey]
         end
     end
 

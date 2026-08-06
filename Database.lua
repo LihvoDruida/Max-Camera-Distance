@@ -175,15 +175,12 @@ local PROFILE_DEFAULTS = {
     combatZoomOnGroup = true,
     combatZoomOnThreat = true,
     mountZoomFactor = MAX_YARDS,
-    worldCombatZoomFactor = MAX_YARDS,
-    partyCombatZoomFactor = MAX_YARDS,
-    raidCombatZoomFactor = MAX_YARDS,
-    pvpCombatZoomFactor = MAX_YARDS,
 
-    -- return hysteresis (delay before zooming back in after leaving combat)
-    worldCombatReturnDelay = 0.4,
-    partyCombatReturnDelay = 0.8,
-    raidCombatReturnDelay = 1.2,
+    -- Per-activity combat distances and return delays are generated from
+    -- ns.Contexts.DEFINITIONS just below, so the taxonomy lives in exactly one
+    -- place. World PvP detection can be switched off for players who are
+    -- permanently flagged and do not want a separate distance for it.
+    worldPvpZoom = true,
 
     -- Smart Zoom restore behavior
     zoomRestoreSetting = "adaptive", -- never / adaptive / always
@@ -193,10 +190,6 @@ local PROFILE_DEFAULTS = {
     manualMaxPreset = "manual",
     normalZoomPreset = "manual",
     mountZoomPreset = "manual",
-    worldCombatPreset = "manual",
-    partyCombatPreset = "manual",
-    raidCombatPreset = "manual",
-    pvpCombatPreset = "manual",
 
     zoneZoomFactor = MAX_YARDS, -- legacy key kept for migration only
 
@@ -235,6 +228,17 @@ local PROFILE_DEFAULTS = {
     -- minimap
     minimap = { hide = false },
 }
+
+-- Per-activity combat keys. Generated rather than written out so that the set of
+-- activities cannot drift between Contexts.lua, Database.lua and Config.lua.
+local Contexts = ns.Contexts
+if Contexts and Contexts.DEFINITIONS then
+    for _, def in pairs(Contexts.DEFINITIONS) do
+        PROFILE_DEFAULTS[def.distanceKey] = MAX_YARDS
+        PROFILE_DEFAULTS[def.presetKey] = "manual"
+        PROFILE_DEFAULTS[def.delayKey] = def.defaultDelay or 0.4
+    end
+end
 
 Database.PROFILE_DEFAULTS = PROFILE_DEFAULTS
 
@@ -332,33 +336,51 @@ function Database:ApplyMigrations(profile)
         1,
         MAX_YARDS
     )
-    profile.partyCombatZoomFactor = Clamp(
-        tonumber(profile.partyCombatZoomFactor) or legacyGroupCombatZoom,
-        1,
-        MAX_YARDS
-    )
-    profile.raidCombatZoomFactor = Clamp(
-        tonumber(profile.raidCombatZoomFactor) or legacyGroupCombatZoom,
-        1,
-        MAX_YARDS
-    )
-    profile.pvpCombatZoomFactor = Clamp(
-        tonumber(profile.pvpCombatZoomFactor) or profile.zoneZoomFactor or profile.maxZoomFactor or MAX_YARDS,
-        1,
-        MAX_YARDS
-    )
 
-    -- Legacy split is migrated only once; it should not remain in runtime logic.
+    -- The four old buckets (world / party / raid / pvp) became eight, split by
+    -- PvE and PvP activity. Nobody should have to reconfigure anything: each new
+    -- key inherits the value of the old key it was carved out of, declared as
+    -- legacyDistanceKey in Contexts.lua. Dungeon, Mythic+ and Scenario all seed
+    -- from partyCombat*, while Arena, Battleground and World PvP seed from the
+    -- single old pvpCombat*. Once a key exists in the profile this is a no-op,
+    -- so it is safe to run on every load.
+    if Contexts and Contexts.DEFINITIONS then
+        for _, def in pairs(Contexts.DEFINITIONS) do
+            local current = tonumber(profile[def.distanceKey])
+            if current == nil then
+                local legacy = def.legacyDistanceKey and tonumber(profile[def.legacyDistanceKey]) or nil
+                current = legacy or legacyGroupCombatZoom
+            end
+            profile[def.distanceKey] = Clamp(current, 1, MAX_YARDS)
+
+            if profile[def.presetKey] == nil and def.legacyPresetKey then
+                profile[def.presetKey] = profile[def.legacyPresetKey]
+            end
+
+            if tonumber(profile[def.delayKey]) == nil then
+                local legacyDelay = def.legacyDelayKey and tonumber(profile[def.legacyDelayKey]) or nil
+                profile[def.delayKey] = legacyDelay or def.defaultDelay or 0.4
+            end
+            profile[def.delayKey] = Clamp(tonumber(profile[def.delayKey]), 0, 10)
+        end
+    end
+
+    -- Legacy keys are migrated only once; they should not remain in runtime logic.
     profile.groupCombatZoomFactor = nil
+    profile.partyCombatZoomFactor = nil
+    profile.pvpCombatZoomFactor = nil
+    profile.partyCombatPreset = nil
+    profile.pvpCombatPreset = nil
+    profile.partyCombatReturnDelay = nil
+
+    profile.worldPvpZoom = (profile.worldPvpZoom ~= false)
 
     -- manual mouse-wheel zoom speed is intentionally kept responsive (20..50).
     -- Older profiles may have stored very low values that make the wheel feel broken.
     profile.moveViewDistance = Clamp(tonumber(profile.moveViewDistance) or defaultMoveSpeed, 20, 50)
     profile.zoomTransitionTime = Clamp(tonumber(profile.zoomTransitionTime) or 0.5, 0, 2)
     profile.dismountDelay = Clamp(tonumber(profile.dismountDelay) or 0, 0, 10)
-    profile.worldCombatReturnDelay = Clamp(tonumber(profile.worldCombatReturnDelay) or PROFILE_DEFAULTS.worldCombatReturnDelay, 0, 10)
-    profile.partyCombatReturnDelay = Clamp(tonumber(profile.partyCombatReturnDelay) or PROFILE_DEFAULTS.partyCombatReturnDelay, 0, 10)
-    profile.raidCombatReturnDelay = Clamp(tonumber(profile.raidCombatReturnDelay) or PROFILE_DEFAULTS.raidCombatReturnDelay, 0, 10)
+    -- Per-activity return delays are clamped in the Contexts loop above.
     profile.cameraYawMoveSpeed = Clamp(tonumber(profile.cameraYawMoveSpeed) or defaultYaw, 1, 360)
     profile.cameraPitchMoveSpeed = Clamp(tonumber(profile.cameraPitchMoveSpeed) or defaultPitch, 1, 360)
 
@@ -381,10 +403,11 @@ function Database:ApplyMigrations(profile)
     profile.manualMaxPreset = NormalizePreset(profile.manualMaxPreset)
     profile.normalZoomPreset = NormalizePreset(profile.normalZoomPreset)
     profile.mountZoomPreset = NormalizePreset(profile.mountZoomPreset)
-    profile.worldCombatPreset = NormalizePreset(profile.worldCombatPreset)
-    profile.partyCombatPreset = NormalizePreset(profile.partyCombatPreset)
-    profile.raidCombatPreset = NormalizePreset(profile.raidCombatPreset)
-    profile.pvpCombatPreset = NormalizePreset(profile.pvpCombatPreset)
+    if Contexts and Contexts.DEFINITIONS then
+        for _, def in pairs(Contexts.DEFINITIONS) do
+            profile[def.presetKey] = NormalizePreset(profile[def.presetKey])
+        end
+    end
 
     local VALID_MOUNT_ZOOM_MODES = {
         all = true,
