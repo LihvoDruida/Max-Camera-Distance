@@ -17,6 +17,7 @@ ignore:
   - package-lock.json
   - release.sh
   - cliff.toml
+  - tools
   - .DS_Store
 
 externals:

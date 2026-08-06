@@ -1,6 +1,6 @@
-## X-Flavor: mainline
-## X-Expansion: Midnight
-## Interface: 120007, 120100
+## X-Flavor: tbc
+## X-Expansion: TBC Anniversary
+## Interface: 20506
 
 ## Title: <|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
 ## Notes: Smart camera distance with safer cross-version compatibility guards.

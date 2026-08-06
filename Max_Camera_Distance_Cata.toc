@@ -1,6 +1,6 @@
-## X-Flavor: bcc
-## X-Expansion: TBC Anniversary
-## Interface: 20505
+## X-Flavor: cata
+## X-Expansion: Cataclysm Classic
+## Interface: 40402
 
 ## Title: <|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
 ## Notes: Smart camera distance with safer cross-version compatibility guards.

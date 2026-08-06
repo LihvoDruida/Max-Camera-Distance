@@ -45,6 +45,12 @@ jobs:
           echo "FINAL_VERSION=$LATEST_TAG" >> $GITHUB_ENV
           echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
 
+      # Flavour .toc files are generated from Max_Camera_Distance.toc.
+      # Fail the build rather than shipping stale interface versions or a
+      # dash-suffixed file that no client will load.
+      - name: Verify .toc files are current
+        run: python3 tools/generate_tocs.py --check
+
       - name: Print Debug Info
         run: |
           echo "GitHub Ref: ${{ github.ref }}"
