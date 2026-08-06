@@ -1153,6 +1153,13 @@ local function ApplyZoomCap(targetYards)
     targetYards = NormalizeTargetYards(targetYards)
     local targetFactor = targetYards / CONVERSION_RATIO
 
+    -- Reactive Zoom keeps its own target zoom. Moving the cap underneath it
+    -- would leave that target outside the new range, and the next wheel notch
+    -- would ease back to a distance the player can no longer reach.
+    if ns.ReactiveZoom and ns.ReactiveZoom.ResetTarget then
+        ns.ReactiveZoom:ResetTarget()
+    end
+
     if SafeGetCVar("cameraDistanceMaxZoomFactor") ~= nil then
         UpdateCVar("cameraDistanceMaxZoomFactor", targetFactor)
     end

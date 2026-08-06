@@ -728,6 +728,10 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("zoomTransitionTime", val) end,
                         order = 20,
                     },
+                    -- Hidden where the CVar does not exist. cameraDistanceMoveSpeed
+                    -- is absent from the 12.0.7 and 12.1 CVar tables (and from the
+                    -- Classic ones), so on those clients this slider did nothing at
+                    -- all. Reactive Zoom below is the working replacement.
                     moveViewDistance = {
                         type = "range",
                         name = L["MOVE_VIEW_DISTANCE"],
@@ -735,9 +739,87 @@ function Config:SetupOptions()
                         min = 20,
                         max = 50,
                         step = 1,
+                        hidden = function() return not HasCVar("cameraDistanceMoveSpeed") end,
                         get = function() return GetOption("moveViewDistance") end,
                         set = function(_, val) SetOption("moveViewDistance", val) end,
                         order = 30,
+                    },
+
+                    reactiveZoomHeader = {
+                        type = "header",
+                        name = L["REACTIVE_ZOOM_HEADER"] or "Reactive Zoom",
+                        order = 31,
+                    },
+                    reactiveZoomDesc = {
+                        type = "description",
+                        name = L["REACTIVE_ZOOM_DESC"] or "Makes the mouse wheel cover more distance while you keep spinning it, instead of stepping one fixed notch at a time. Based on the Reactive Zoom feature of DynamicCam.",
+                        order = 32,
+                    },
+                    reactiveZoom = {
+                        type = "toggle",
+                        name = L["REACTIVE_ZOOM"] or "Enable Reactive Zoom",
+                        desc = L["REACTIVE_ZOOM_TOGGLE_DESC"] or "Replaces the client's fixed zoom steps with an accelerating, eased zoom.",
+                        get = function() return GetOption("reactiveZoom") end,
+                        set = function(_, val)
+                            SetOption("reactiveZoom", val)
+                            if ns.ReactiveZoom and ns.ReactiveZoom.Refresh then
+                                ns.ReactiveZoom:Refresh()
+                            end
+                        end,
+                        order = 33,
+                        width = "full",
+                    },
+                    reactiveZoomAddIncrementsAlways = {
+                        type = "range",
+                        name = L["REACTIVE_ZOOM_ALWAYS"] or "Extra Steps (always)",
+                        desc = L["REACTIVE_ZOOM_ALWAYS_DESC"] or "Added to every wheel notch. Raise this to make a single notch travel further.",
+                        min = 0, max = 5, step = 0.5,
+                        get = function() return GetOption("reactiveZoomAddIncrementsAlways") end,
+                        set = function(_, val) SetOption("reactiveZoomAddIncrementsAlways", val) end,
+                        order = 34,
+                        disabled = function() return not GetOption("reactiveZoom") end,
+                    },
+                    reactiveZoomAddIncrements = {
+                        type = "range",
+                        name = L["REACTIVE_ZOOM_EXTRA"] or "Extra Steps (while spinning)",
+                        desc = L["REACTIVE_ZOOM_EXTRA_DESC"] or "Added on top when the camera has not caught up yet, which is what makes fast spinning travel much further than slow clicking.",
+                        min = 0, max = 5, step = 0.5,
+                        get = function() return GetOption("reactiveZoomAddIncrements") end,
+                        set = function(_, val) SetOption("reactiveZoomAddIncrements", val) end,
+                        order = 35,
+                        disabled = function() return not GetOption("reactiveZoom") end,
+                    },
+                    reactiveZoomIncAddDifference = {
+                        type = "range",
+                        name = L["REACTIVE_ZOOM_THRESHOLD"] or "Spin Detection Threshold",
+                        desc = L["REACTIVE_ZOOM_THRESHOLD_DESC"] or "How far behind the camera must be before the extra steps kick in. Lower reacts sooner.",
+                        min = 0, max = 5, step = 0.1,
+                        get = function() return GetOption("reactiveZoomIncAddDifference") end,
+                        set = function(_, val) SetOption("reactiveZoomIncAddDifference", val) end,
+                        order = 36,
+                        disabled = function() return not GetOption("reactiveZoom") end,
+                    },
+                    reactiveZoomMaxZoomTime = {
+                        type = "range",
+                        name = L["REACTIVE_ZOOM_MAX_TIME"] or "Maximum Zoom Time",
+                        desc = L["REACTIVE_ZOOM_MAX_TIME_DESC"] or "Upper bound on how long one eased zoom may take. Lower feels snappier, higher feels smoother.",
+                        min = 0.05, max = 1, step = 0.05,
+                        get = function() return GetOption("reactiveZoomMaxZoomTime") end,
+                        set = function(_, val) SetOption("reactiveZoomMaxZoomTime", val) end,
+                        order = 37,
+                        disabled = function() return not GetOption("reactiveZoom") end,
+                    },
+                    reactiveZoomSpeed = {
+                        type = "range",
+                        name = L["CAMERA_ZOOM_SPEED"] or "Client Zoom Speed",
+                        desc = L["CAMERA_ZOOM_SPEED_DESC"] or "Blizzard's own cameraZoomSpeed CVar. Reactive Zoom uses it to work out how long a zoom should take.",
+                        min = 1, max = 50, step = 1,
+                        hidden = function() return not HasCVar("cameraZoomSpeed") end,
+                        get = function() return tonumber(Compat.SafeGetCVar and Compat.SafeGetCVar("cameraZoomSpeed")) or 20 end,
+                        set = function(_, val)
+                            if Compat.SafeSetCVar then Compat.SafeSetCVar("cameraZoomSpeed", val) end
+                        end,
+                        order = 38,
                     },
                     yawSpeed = {
                         type = "range",

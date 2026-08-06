@@ -313,6 +313,14 @@ eventHandlers.ADDON_LOADED = function(event, loadedAddon)
     SafeCall(InstallCameraViewHooks, "InstallCameraViewHooks")
     SafeCall(InitMinimapButton, "InitMinimapButton")
 
+    -- Reactive Zoom replaces the CameraZoomIn/Out globals. Install once, after
+    -- the profile exists, so the replacement can read its own settings. The
+    -- replacement is inert while the option is off, so installing it here does
+    -- not commit the player to anything.
+    if ns.ReactiveZoom and ns.ReactiveZoom.Install then
+        SafeCall(ns.ReactiveZoom.Install, "ReactiveZoom.Install", ns.ReactiveZoom)
+    end
+
     frame:UnregisterEvent("ADDON_LOADED")
 end
 

@@ -60,3 +60,11 @@ Fully compatible with:
 ## 🐞 Bug Reporting
 
 Found a bug or have a suggestion? Please submit a ticket via our [GitHub Issues](https://github.com/LihvoDruida/Max-Camera-Distance/issues) or leave a comment on [CurseForge](https://www.curseforge.com/wow/addons/max-camera-distance).
+
+## Credits
+
+- **LibCamera** by mpstark, bundled under the MIT License (see `libs/LibCamera/LICENSE.md`).
+- **Reactive Zoom** (`ReactiveZoom.lua`) is a port of the mouse-wheel zoom algorithm from
+  [DynamicCam](https://github.com/Mpstark/DynamicCam) by mpstark and LudiusMaximus, MIT Licensed.
+  The accelerating-increment algorithm is theirs; the profile plumbing, activity-aware cap
+  handling and cross-flavour guards are specific to this addon.

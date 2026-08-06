@@ -182,6 +182,14 @@ local PROFILE_DEFAULTS = {
     -- permanently flagged and do not want a separate distance for it.
     worldPvpZoom = true,
 
+    -- Reactive Zoom (see ReactiveZoom.lua). Opt-in: it changes how the mouse
+    -- wheel feels, so it must not be switched on behind the player's back.
+    reactiveZoom = false,
+    reactiveZoomAddIncrementsAlways = 1,
+    reactiveZoomAddIncrements = 2.5,
+    reactiveZoomIncAddDifference = 1.2,
+    reactiveZoomMaxZoomTime = 0.25,
+
     -- Smart Zoom restore behavior
     zoomRestoreSetting = "adaptive", -- never / adaptive / always
     respectManualStateZoom = true,
@@ -374,6 +382,12 @@ function Database:ApplyMigrations(profile)
     profile.partyCombatReturnDelay = nil
 
     profile.worldPvpZoom = (profile.worldPvpZoom ~= false)
+
+    profile.reactiveZoom = (profile.reactiveZoom == true)
+    profile.reactiveZoomAddIncrementsAlways = Clamp(tonumber(profile.reactiveZoomAddIncrementsAlways) or 1, 0, 5)
+    profile.reactiveZoomAddIncrements = Clamp(tonumber(profile.reactiveZoomAddIncrements) or 2.5, 0, 5)
+    profile.reactiveZoomIncAddDifference = Clamp(tonumber(profile.reactiveZoomIncAddDifference) or 1.2, 0, 5)
+    profile.reactiveZoomMaxZoomTime = Clamp(tonumber(profile.reactiveZoomMaxZoomTime) or 0.25, 0.05, 1)
 
     -- manual mouse-wheel zoom speed is intentionally kept responsive (20..50).
     -- Older profiles may have stored very low values that make the wheel feel broken.
