@@ -48,11 +48,26 @@ local function DB()
     return (ns.Database and ns.Database.db and ns.Database.db.profile) or nil
 end
 
+-- Hooked SetCVar callers may use any capitalisation, and so does the client's
+-- own CVar table ("CameraReduceUnexpectedMovement", "ResampleAlwaysSharpen").
+-- Every comparison in OnExternalCVarSet below is an ==, so normalise first.
+local CVAR_CANONICAL = {}
+for _, name in ipairs({
+    "cameraView",
+    "cameraZoomSpeed",
+    "CameraKeepCharacterCentered",
+    "cameraReduceUnexpectedMovement",
+    "test_cameraOverShoulder",
+    "test_cameraDynamicPitch",
+}) do
+    CVAR_CANONICAL[name:lower()] = name
+end
+
 local function NormalizeCVarName(name)
-    if name == "CameraReduceUnexpectedMovement" then
-        return "cameraReduceUnexpectedMovement"
+    if type(name) ~= "string" then
+        return name
     end
-    return name
+    return CVAR_CANONICAL[name:lower()] or name
 end
 
 local function GetCVarLookupNames(name)

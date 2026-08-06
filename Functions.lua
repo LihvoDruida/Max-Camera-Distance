@@ -91,13 +91,46 @@ local CVAR_ALIASES = {
     CameraReduceUnexpectedMovement = { "cameraReduceUnexpectedMovement", "CameraReduceUnexpectedMovement" },
 }
 
-local CVAR_CANONICAL = {
-    CameraReduceUnexpectedMovement = "cameraReduceUnexpectedMovement",
+-- The client's own spelling of a CVar is not always the spelling this addon
+-- uses. GetCVar/SetCVar are case-insensitive so writes always worked, but the
+-- CVAR_UPDATE event delivers the CLIENT's canonical name, and every dispatch
+-- below compares it with ==. The 12.1 CVar table registers, among others,
+-- "ResampleAlwaysSharpen" and "CameraReduceUnexpectedMovement" with capitals
+-- the addon does not use, so those updates silently fell through and the addon
+-- never re-applied the setting when something else changed it. Matching on a
+-- lowercased key makes the dispatch immune to this and to any future drift.
+local MANAGED_CVAR_NAMES = {
+    "cameraDistanceMaxZoomFactor",
+    "cameraDistanceMax",
+    "cameraDistanceMoveSpeed",
+    "cameraYawMoveSpeed",
+    "cameraPitchMoveSpeed",
+    "cameraZoomSpeed",
+    "cameraView",
+    "cameraIndirectVisibility",
+    "cameraIndirectOffset",
+    "CameraKeepCharacterCentered",
+    "cameraReduceUnexpectedMovement",
+    "test_cameraOverShoulder",
+    "test_cameraDynamicPitch",
+    "occludedSilhouettePlayer",
+    "resampleAlwaysSharpen",
+    "SoftTargetIconGameObject",
 }
 
-local function CanonicalCVarName(cvarName)
-    return CVAR_CANONICAL[cvarName] or cvarName
+local CVAR_CANONICAL = {}
+for _, name in ipairs(MANAGED_CVAR_NAMES) do
+    CVAR_CANONICAL[name:lower()] = name
 end
+
+local function CanonicalCVarName(cvarName)
+    if type(cvarName) ~= "string" then
+        return cvarName
+    end
+    return CVAR_CANONICAL[cvarName:lower()] or cvarName
+end
+
+ns.MANAGED_CVAR_NAMES = MANAGED_CVAR_NAMES
 
 -- Patch 12.1 made AuraData structs fully secret while auras are secret (combat,
 -- encounters, M+, PvP). The spellID-based lookups below are still legal to CALL

@@ -256,6 +256,9 @@ local function InitMinimapButton()
     end
 end
 
+-- Matched case-insensitively below: the client registers several of these with
+-- different capitalisation than the addon uses (e.g. "ResampleAlwaysSharpen"),
+-- and CVAR_UPDATE reports the CLIENT's spelling.
 local watchedCVars = {
     cameraDistanceMaxZoomFactor = true,
     cameraDistanceMax = true,
@@ -282,6 +285,11 @@ local watchedCVars = {
     resampleAlwaysSharpen = true,
     SoftTargetIconGameObject = true,
 }
+
+local watchedCVarsLower = {}
+for name in pairs(watchedCVars) do
+    watchedCVarsLower[name:lower()] = true
+end
 
 -- Event handlers
 local eventHandlers = {}
@@ -448,7 +456,8 @@ end
 
 eventHandlers.CVAR_UPDATE = function(event, cvarName, value)
     if not (ns.Functions and ns.Functions.OnCVarUpdate) then return end
-    if watchedCVars[cvarName] then
+    if type(cvarName) ~= "string" then return end
+    if watchedCVarsLower[cvarName:lower()] then
         SafeCall(ns.Functions.OnCVarUpdate, "OnCVarUpdate", ns.Functions, event, cvarName, value)
     end
 end
