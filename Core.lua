@@ -402,7 +402,13 @@ eventHandlers.UNIT_AURA = function(event, unit)
     if now > 0 and (now - lastAuraHandledAt) < UNIT_AURA_THROTTLE then return end
     lastAuraHandledAt = now
 
-    InvalidateMountCache()
+    -- Deliberately NOT InvalidateMountCache(). Which mount journal entry is
+    -- active cannot change because of an aura - that needs
+    -- PLAYER_MOUNT_DISPLAY_CHANGED, a vehicle event or a shapeshift, all of
+    -- which invalidate it below. Clearing it here meant that skyriding, where
+    -- vigor churns UNIT_AURA constantly, forced a full journal rescan up to ten
+    -- times a second. Aura-derived signals are still dropped, so travel-form
+    -- detection stays as responsive as before.
     InvalidateRuntimeCaches()
     RequestShoulderRefresh()
     -- Travel forms, skyriding/race auras and temporary vehicle-style buffs do not

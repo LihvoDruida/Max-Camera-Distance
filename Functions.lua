@@ -313,10 +313,34 @@ function Functions:SendMessage(message)
     print("|cff0070deMax Camera Distance|r: " .. tostring(message))
 end
 
-local function NotifyConfigChanged()
-    if ns.Config and ns.Config.NotifyChange then
-        ns.Config:NotifyChange()
+-- AceConfigRegistry:NotifyChange walks its callback registry and makes an open
+-- AceConfigDialog rebuild the whole options tree. UpdateSmartZoomState called
+-- this unconditionally, including on the two "nothing changed, bail out" early
+-- returns - so with the panel open it re-rendered on every queued camera pass.
+--
+-- The status panel only shows the state and the target distance, so notifying
+-- when neither moved is pure waste. A short floor also collapses the bursts that
+-- ScheduleStabilizedUpdate fires during login and zoning into a single refresh.
+local CONFIG_NOTIFY_MIN_INTERVAL = 0.2
+local lastNotifiedState, lastNotifiedTarget, lastNotifiedAt = nil, nil, 0
+
+local function NotifyConfigChanged(state, targetYards)
+    if not (ns.Config and ns.Config.NotifyChange) then return end
+
+    if state ~= nil then
+        local now = (GetTime and GetTime()) or 0
+        local unchanged = (state == lastNotifiedState) and (targetYards == lastNotifiedTarget)
+
+        if unchanged and now > 0 and (now - lastNotifiedAt) < CONFIG_NOTIFY_MIN_INTERVAL then
+            return
+        end
+
+        lastNotifiedState = state
+        lastNotifiedTarget = targetYards
+        lastNotifiedAt = now
     end
+
+    ns.Config:NotifyChange()
 end
 
 function Functions:InvalidateRuntimeCaches(scope)
@@ -751,6 +775,9 @@ local activeMountCache = {
     mountID = nil,
     mountTypeID = nil,
     isFlying = false,
+    -- Survives cache expiry on purpose: it is only a hint for where to look
+    -- first, and it is re-validated with GetMountInfoByID before being trusted.
+    lastKnownMountID = nil,
 }
 
 function Functions:InvalidateMountCache()
@@ -773,17 +800,43 @@ function Functions:GetActiveMountID()
         return activeMountCache.mountID
     end
 
+    -- Two cost fixes over the old scan.
+    --
+    -- 1. Check the previously active mount first. Re-summoning the same mount is
+    --    overwhelmingly the common case, and it turns a full journal walk into a
+    --    single lookup.
+    -- 2. One pcall around the whole loop instead of one per mount. A large
+    --    collection is well over a thousand entries, so the old version paid
+    --    1000+ pcalls per rebuild - and this rebuilds several times a second
+    --    while mounted.
     local mountID = nil
-    local okMountIDs, mountIDs = pcall(C_MountJournal.GetMountIDs)
-    if okMountIDs and type(mountIDs) == "table" then
-        for _, id in ipairs(mountIDs) do
-            local ok, _, _, _, isActive = pcall(C_MountJournal.GetMountInfoByID, id)
-            if ok and isActive then
-                mountID = id
-                break
-            end
+
+    local lastID = activeMountCache.lastKnownMountID
+    if lastID then
+        local okLast, _, _, _, lastActive = pcall(C_MountJournal.GetMountInfoByID, lastID)
+        if okLast and lastActive then
+            mountID = lastID
         end
     end
+
+    if not mountID then
+        local function ScanJournal()
+            local mountIDs = C_MountJournal.GetMountIDs()
+            if type(mountIDs) ~= "table" then return nil end
+            for _, id in ipairs(mountIDs) do
+                local _, _, _, isActive = C_MountJournal.GetMountInfoByID(id)
+                if isActive then
+                    return id
+                end
+            end
+            return nil
+        end
+
+        local okScan, scanned = pcall(ScanJournal)
+        mountID = okScan and scanned or nil
+    end
+
+    activeMountCache.lastKnownMountID = mountID or activeMountCache.lastKnownMountID
 
     activeMountCache.mounted = mounted
     activeMountCache.mountID = mountID
@@ -1200,6 +1253,25 @@ function Functions:RequestUpdate()
     updateFrame:Show()
 end
 
+-- Errors here used to reach the default error handler unprotected. Because this
+-- pass is re-queued by events that keep firing (combat, auras, zoning), a single
+-- bad state resolve turned into a wall of identical errors and every subsequent
+-- camera update in that frame was skipped. Now one failure is reported at most
+-- once every 10s and the other half of the pass still runs.
+local lastUpdateErrorAt = 0
+
+local function RunGuarded(func, label)
+    local ok, err = pcall(func)
+    if ok then return true end
+
+    local now = (GetTime and GetTime()) or 0
+    if now == 0 or (now - lastUpdateErrorAt) > 10 then
+        lastUpdateErrorAt = now
+        Functions:logMessage("error", label .. ": " .. tostring(err))
+    end
+    return false
+end
+
 updateFrame:SetScript("OnUpdate", function(self)
     if not updatePending then
         self:Hide()
@@ -1209,8 +1281,8 @@ updateFrame:SetScript("OnUpdate", function(self)
     self:Hide()
 
     -- Always refresh ActionCam too, so shoulder mode can switch on combat enter/leave
-    Functions:UpdateActionCam()
-    Functions:UpdateSmartZoomState("auto_update")
+    RunGuarded(function() Functions:UpdateActionCam() end, "UpdateActionCam")
+    RunGuarded(function() Functions:UpdateSmartZoomState("auto_update") end, "UpdateSmartZoomState")
 end)
 
 -- =====================================================================
@@ -1320,6 +1392,90 @@ local function GetCombatTargetYards(db, context)
     return value or db.worldCombatZoomFactor or db.maxZoomFactor or maxYards, distanceKey
 end
 
+-- Threat APIs conditionally return secrets since 12.0.1, and the whole point of
+-- a secret is that `threatStatus > 0` errors rather than lying. SafeValueCall
+-- only guards the CALL, so the comparison used to raise a Lua error on every
+-- camera pass inside instanced content - which is precisely where threat-driven
+-- combat zoom is supposed to work. An unreadable threat level means "no threat
+-- signal", and the player/group triggers still drive combat zoom there.
+local function ResolveThreatFlag()
+    local status = SafeValueCall(UnitThreatSituation, "player")
+    local plain = tonumber(Compat.Plain and Compat.Plain(status) or status)
+    return (plain ~= nil and plain > 0) and true or false
+end
+
+-- Signals split into two tiers.
+--
+-- The cheap tier is computed eagerly because the state machine always needs it.
+-- The expensive tier - anything that touches the mount journal, aura scans or
+-- shapeshift probes - is computed on FIRST ACCESS and then memoised.
+--
+-- This matters because the state machine is a priority ladder: AFK and combat
+-- both outrank mount, and each of their branches is guarded by its own db
+-- option. Previously every camera pass paid for IsFlyingMountActive (a scan of
+-- the entire mount journal), IsDragonRacingRaceActive and IsSkyriding even when
+-- the player was in combat and the result was discarded, or when
+-- autoMountZoom was switched off entirely and it could never be read.
+local LAZY_SIGNALS = {
+    mountZoomActive = function(db, s)
+        return s.isMounted and Functions:ShouldUseMountZoom(db) or false
+    end,
+    isSkyriding = function(db, s)
+        return s.isMounted and Functions:IsSkyriding() or false
+    end,
+    isDragonRacing = function(db, s)
+        return s.isMounted and Functions:IsDragonRacingRaceActive() or false
+    end,
+    dragonRacingFirstPerson = function(db)
+        return Functions:ShouldUseDragonRacingFirstPerson(db) and true or false
+    end,
+    mountZoomMode = function(db)
+        return Functions:GetMountZoomMode(db)
+    end,
+    isFlyingMount = function(db, s)
+        s:ResolveActiveMount()
+        return rawget(s, "isFlyingMount")
+    end,
+    mountTypeID = function(db, s)
+        s:ResolveActiveMount()
+        return rawget(s, "mountTypeID")
+    end,
+    activeMountID = function(db, s)
+        s:ResolveActiveMount()
+        return rawget(s, "activeMountID")
+    end,
+}
+
+local signalsMeta = {
+    __index = function(self, key)
+        local resolver = LAZY_SIGNALS[key]
+        if not resolver then return nil end
+
+        local value = resolver(rawget(self, "__db"), self)
+        rawset(self, key, value)
+        return value
+    end,
+}
+
+-- IsFlyingMountActive returns three values from one journal lookup, so resolve
+-- them together instead of scanning three times.
+local function ResolveActiveMount(self)
+    if rawget(self, "__mountResolved") then return end
+    rawset(self, "__mountResolved", true)
+
+    if not rawget(self, "isMounted") then
+        rawset(self, "isFlyingMount", false)
+        rawset(self, "mountTypeID", nil)
+        rawset(self, "activeMountID", nil)
+        return
+    end
+
+    local isFlying, mountTypeID, mountID = Functions:IsFlyingMountActive()
+    rawset(self, "isFlyingMount", isFlying and true or false)
+    rawset(self, "mountTypeID", mountTypeID)
+    rawset(self, "activeMountID", mountID)
+end
+
 local function GetCombatSignals(db)
     local now = GetTime and GetTime() or 0
     if runtimeCache.combatSignals
@@ -1328,33 +1484,18 @@ local function GetCombatSignals(db)
         return runtimeCache.combatSignals
     end
 
-    local threatStatus = SafeValueCall(UnitThreatSituation, "player")
-    local mountedRaw = IsInTravelForm()
-    local mountZoomActive = mountedRaw and Functions:ShouldUseMountZoom(db) or false
-    local isSkyriding = mountedRaw and Functions:IsSkyriding() or false
-    local isDragonRacing = mountedRaw and Functions:IsDragonRacingRaceActive() or false
-    local isFlyingMount, mountTypeID, activeMountID = false, nil, nil
+    local signals = setmetatable({
+        __db = db,
+        ResolveActiveMount = ResolveActiveMount,
 
-    if mountedRaw then
-        isFlyingMount, mountTypeID, activeMountID = Functions:IsFlyingMountActive()
-    end
-
-    local signals = {
+        -- Cheap tier: always needed by the state machine.
         playerInCombat = SafeBoolCall(UnitAffectingCombat, "player"),
         groupInCombat = Functions:IsGroupInCombat(),
-        hasThreat = (threatStatus ~= nil and threatStatus > 0) and true or false,
-        isMounted = mountedRaw,
-        mountZoomActive = mountZoomActive,
-        isSkyriding = isSkyriding,
-        isDragonRacing = isDragonRacing,
-        isFlyingMount = isFlyingMount and true or false,
-        mountTypeID = mountTypeID,
-        activeMountID = activeMountID,
-        mountZoomMode = Functions:GetMountZoomMode(db),
-        dragonRacingFirstPerson = Functions:ShouldUseDragonRacingFirstPerson(db),
+        hasThreat = ResolveThreatFlag(),
+        isMounted = IsInTravelForm(),
         forceCombatZoom = (db and ShouldForceCombatZoom(db)) and true or false,
         rawContext = GetCombatContextRaw(),
-    }
+    }, signalsMeta)
 
     runtimeCache.combatSignals = signals
     runtimeCache.combatSignalsDb = db
@@ -1383,7 +1524,13 @@ local function GetCombatActivation(db, signals)
     return isActive, triggerConfig, activeTriggers
 end
 
-local function BuildStatusSnapshot(db)
+-- Resolves ONLY what the camera pass needs: which state we are in and how far
+-- to zoom. Kept separate from BuildStatusSnapshot because that function
+-- allocates a ~50 field table and, more importantly, reads every mount signal
+-- in order to populate it - which defeats the lazy tier above. The camera pass
+-- runs on every queued update; the full snapshot is only needed by /mcd status
+-- and the options panel, where an extra mount journal lookup costs nothing.
+local function ResolveZoomTarget(db)
     local defaults = ns.Database and ns.Database.DEFAULTS
     local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or 39
 
@@ -1448,6 +1595,16 @@ local function BuildStatusSnapshot(db)
         targetYards = targetYards or db.maxZoomFactor or maxYards
     end
 
+    return state, targetYards, resolvedContext, signals, combatActive,
+        triggerConfig, activeTriggers, rawContext,
+        targetDistanceKey, targetSourceType, targetPresetId, maxYards
+end
+
+local function BuildStatusSnapshot(db)
+    local state, targetYards, resolvedContext, signals, _,
+        triggerConfig, activeTriggers, rawContext,
+        targetDistanceKey, targetSourceType, targetPresetId = ResolveZoomTarget(db)
+
     local pendingReturnActive = pendingReturnInfo ~= nil
     local pendingReturnContext = pendingReturnActive and pendingReturnInfo.context or nil
     local pendingReturnKind = pendingReturnActive and pendingReturnInfo.kind or nil
@@ -1506,9 +1663,11 @@ local function BuildStatusSnapshot(db)
     }
 end
 
+-- Called once per option row while the settings panel is drawing, so it must
+-- not allocate the full status snapshot just to read two fields off it.
 local function GetCurrentZoomContext(db)
-    local snapshot = BuildStatusSnapshot(db)
-    return snapshot.state, snapshot.resolvedContext, snapshot
+    local state, _, resolvedContext = ResolveZoomTarget(db)
+    return state, resolvedContext
 end
 
 ShouldForceCombatZoom = function(db)
@@ -2001,9 +2160,11 @@ end
 -- =====================================================================
 -- 12) SMART ZOOM CORE (FIXED: no “sticky” state)
 -- =====================================================================
+-- Hot path. Returns a tiny context table rather than the full status snapshot;
+-- UpdateSmartZoomState only ever reads resolvedContext off the third value.
 local function ComputeDesiredState(db)
-    local snapshot = BuildStatusSnapshot(db)
-    return snapshot.state, snapshot.targetYards, snapshot
+    local state, targetYards, resolvedContext = ResolveZoomTarget(db)
+    return state, targetYards, { resolvedContext = resolvedContext }
 end
 
 local function ClearStateManualOverride(state)
@@ -2200,11 +2361,11 @@ function Functions:UpdateSmartZoomState(event)
         if not capAligned then
             ApplyZoomCap(targetYards)
         end
-        NotifyConfigChanged()
+        NotifyConfigChanged(newState, targetYards)
         return
     end
     if stateSame and capAligned and event ~= "manual_update" then
-        NotifyConfigChanged()
+        NotifyConfigChanged(newState, targetYards)
         return
     end
 
