@@ -189,6 +189,7 @@ local PROFILE_DEFAULTS = {
     reactiveZoomAddIncrements = 2.5,
     reactiveZoomIncAddDifference = 1.2,
     reactiveZoomMaxZoomTime = 0.25,
+    reactiveZoomEasing = "OutQuad",
 
     -- Smart Zoom restore behavior
     zoomRestoreSetting = "adaptive", -- never / adaptive / always
@@ -388,6 +389,11 @@ function Database:ApplyMigrations(profile)
     profile.reactiveZoomAddIncrements = Clamp(tonumber(profile.reactiveZoomAddIncrements) or 2.5, 0, 5)
     profile.reactiveZoomIncAddDifference = Clamp(tonumber(profile.reactiveZoomIncAddDifference) or 1.2, 0, 5)
     profile.reactiveZoomMaxZoomTime = Clamp(tonumber(profile.reactiveZoomMaxZoomTime) or 0.25, 0.05, 1)
+
+    local VALID_EASING = { OutQuad = true, OutCubic = true, InOutQuad = true, Linear = true }
+    if not VALID_EASING[profile.reactiveZoomEasing] then
+        profile.reactiveZoomEasing = "OutQuad"
+    end
 
     -- manual mouse-wheel zoom speed is intentionally kept responsive (20..50).
     -- Older profiles may have stored very low values that make the wheel feel broken.

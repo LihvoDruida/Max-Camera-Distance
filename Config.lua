@@ -809,6 +809,24 @@ function Config:SetupOptions()
                         order = 37,
                         disabled = function() return not GetOption("reactiveZoom") end,
                     },
+                    reactiveZoomEasing = {
+                        type = "select",
+                        name = L["REACTIVE_ZOOM_EASING"] or "Zoom Curve",
+                        desc = L["REACTIVE_ZOOM_EASING_DESC"] or "How the eased zoom is distributed over time. Out curves leave immediately and slow into the target, which feels the most responsive on a wheel.",
+                        values = function()
+                            return {
+                                OutQuad = L["REACTIVE_ZOOM_EASING_OUTQUAD"] or "Responsive (Out Quad)",
+                                OutCubic = L["REACTIVE_ZOOM_EASING_OUTCUBIC"] or "Very Responsive (Out Cubic)",
+                                InOutQuad = L["REACTIVE_ZOOM_EASING_INOUTQUAD"] or "Smooth (In-Out Quad)",
+                                Linear = L["REACTIVE_ZOOM_EASING_LINEAR"] or "Constant (Linear)",
+                            }
+                        end,
+                        sorting = function() return { "OutQuad", "OutCubic", "InOutQuad", "Linear" } end,
+                        get = function() return GetOption("reactiveZoomEasing") end,
+                        set = function(_, val) SetOption("reactiveZoomEasing", val) end,
+                        order = 37.5,
+                        disabled = function() return not GetOption("reactiveZoom") end,
+                    },
                     reactiveZoomSpeed = {
                         type = "range",
                         name = L["CAMERA_ZOOM_SPEED"] or "Client Zoom Speed",

@@ -51,6 +51,16 @@ local OriginalCameraZoomOut = _G.CameraZoomOut
 local installed = false
 local reactiveZoomTarget = nil
 
+-- Forward declaration: HandleWheel below wakes this frame, and it is
+-- created further down. Without this the reference would compile to a
+-- global lookup and error the first time the wheel is turned.
+local watchdog
+
+local passthroughPending = false
+local passthroughActive = false
+local passthroughStartZoom = nil
+local lastWatchedZoom = nil
+
 -- =====================================================================
 -- Frame timing
 -- =====================================================================
@@ -80,6 +90,47 @@ local DEFAULTS = {
     reactiveZoomMaxZoomTime = 0.25,
 }
 
+-- =====================================================================
+-- Easing
+-- =====================================================================
+-- LibCamera falls back to easeInOutQuad, which ramps up slowly at the start.
+-- On a mouse wheel that reads as input lag: you turn the wheel and the camera
+-- takes a moment to get going. OutQuad leaves immediately and decelerates into
+-- the target, which is why DynamicCam defaults its reactive zoom to it.
+--
+-- Signature matches LibCamera/LibEasing: (time, begin, change, duration).
+local EASING = {}
+
+EASING.OutQuad = function(t, b, c, d)
+    t = t / d
+    return -c * t * (t - 2) + b
+end
+
+EASING.InOutQuad = function(t, b, c, d)
+    t = t / (d / 2)
+    if t < 1 then
+        return c / 2 * t * t + b
+    end
+    t = t - 1
+    return -c / 2 * (t * (t - 2) - 1) + b
+end
+
+EASING.Linear = function(t, b, c, d)
+    return c * t / d + b
+end
+
+EASING.OutCubic = function(t, b, c, d)
+    t = t / d - 1
+    return c * (t * t * t + 1) + b
+end
+
+ReactiveZoom.EASING_ORDER = { "OutQuad", "OutCubic", "InOutQuad", "Linear" }
+
+local function ResolveEasing(db)
+    local name = db and db.reactiveZoomEasing
+    return EASING[name] or EASING.OutQuad
+end
+
 local function Setting(db, key)
     local value = db and tonumber(db[key])
     if value == nil then return DEFAULTS[key] end
@@ -101,6 +152,8 @@ end
 -- the player is looking.
 function ReactiveZoom:ResetTarget()
     reactiveZoomTarget = nil
+    passthroughPending, passthroughActive = false, false
+    passthroughStartZoom, lastWatchedZoom = nil, nil
 end
 
 -- The furthest the camera can currently go, in the same units GetCameraZoom
@@ -114,9 +167,25 @@ local function CurrentMaxZoom()
     return factor * CONVERSION_RATIO
 end
 
--- Blizzard emits a zero-increment call after each wheel notch; forwarding it
--- would reset the easing for no reason.
+-- =====================================================================
+-- Passthrough tracking
+-- =====================================================================
+-- When we hand a notch back to Blizzard, the client animates it over SEVERAL
+-- frames. During those frames LibCamera reports "not zooming", so a naive
+-- watchdog would see target ~= currentZoom and helpfully "correct" the target
+-- to wherever the camera happens to be mid-flight - wiping out the very
+-- accumulation this feature exists for. The state machine below marks that
+-- window so the watchdog stays out of it.
+--
+-- Detection is indirect because the client offers no "zoom finished" signal:
+-- the zoom has STARTED once the camera leaves the value it had when we handed
+-- the notch over, and has FINISHED once the camera stops changing between
+-- frames.
 local function PassThrough(zoomIn, increments)
+    passthroughPending = true
+    passthroughActive = false
+    passthroughStartZoom = GetCameraZoom and GetCameraZoom() or nil
+
     if zoomIn then
         if OriginalCameraZoomIn then OriginalCameraZoomIn(increments) end
     else
@@ -156,6 +225,7 @@ local function HandleWheel(zoomIn, increments)
     end
 
     reactiveZoomTarget = reactiveZoomTarget or currentZoom
+    watchdog:Show()
 
     local maxZoom = CurrentMaxZoom()
 
@@ -200,7 +270,7 @@ local function HandleWheel(zoomIn, increments)
         return
     end
 
-    local ok = pcall(LibCamera.SetZoom, LibCamera, reactiveZoomTarget, zoomTime)
+    local ok = pcall(LibCamera.SetZoom, LibCamera, reactiveZoomTarget, zoomTime, ResolveEasing(db))
     if not ok then
         reactiveZoomTarget = nil
         PassThrough(zoomIn, increments)
@@ -213,16 +283,38 @@ end
 -- If anything moves the camera behind our back (a view change, an addon, the
 -- cap shrinking under us), the stored target goes stale. While no easing is in
 -- progress, keep it pinned to reality.
-local watchdog = CreateFrame("Frame")
+watchdog = CreateFrame("Frame")
 watchdog:Hide()
 watchdog:SetScript("OnUpdate", function(_, elapsed)
+    -- Always cheap: no API call, just arithmetic. The frame-time estimate has to
+    -- stay warm even while no zoom is in flight, because the very first notch
+    -- after a pause uses it to decide whether easing is worth it at all.
     TrackFrameTime(elapsed)
 
-    if reactiveZoomTarget == nil then return end
-    if LibCamera and LibCamera.IsZooming and LibCamera:IsZooming() then return end
+    -- Everything below costs an API call, so skip it unless there is a target
+    -- to look after. Previously this ran GetCameraZoom every frame for the whole
+    -- session, including while the feature was switched off.
+    if reactiveZoomTarget == nil then
+        passthroughPending, passthroughActive = false, false
+        return
+    end
 
     local currentZoom = GetCameraZoom and GetCameraZoom()
-    if type(currentZoom) == "number" and reactiveZoomTarget ~= currentZoom then
+    if type(currentZoom) ~= "number" then return end
+
+    if passthroughPending and passthroughStartZoom ~= currentZoom then
+        passthroughPending = false
+        passthroughActive = true
+    elseif passthroughActive and lastWatchedZoom == currentZoom then
+        passthroughActive = false
+    end
+
+    lastWatchedZoom = currentZoom
+
+    if passthroughPending or passthroughActive then return end
+    if LibCamera and LibCamera.IsZooming and LibCamera:IsZooming() then return end
+
+    if reactiveZoomTarget ~= currentZoom then
         reactiveZoomTarget = currentZoom
     end
 end)
@@ -264,13 +356,24 @@ function ReactiveZoom:Install()
     end
 
     installed = true
-    watchdog:Show()
+    if self:IsEnabled() then
+        watchdog:Show()
+    end
 end
 
 function ReactiveZoom:Refresh()
     self:ResetTarget()
     if self:IsEnabled() then
         self:Install()
+        -- Seed the target from where the camera actually is, so the first notch
+        -- after enabling accelerates from reality instead of from nothing.
+        local currentZoom = GetCameraZoom and GetCameraZoom()
+        if type(currentZoom) == "number" then
+            reactiveZoomTarget = currentZoom
+        end
+        watchdog:Show()
+    else
+        watchdog:Hide()
     end
 end
 
@@ -279,7 +382,11 @@ function ReactiveZoom:GetStatus()
         enabled = self:IsEnabled(),
         installed = installed,
         target = reactiveZoomTarget,
+        currentZoom = GetCameraZoom and GetCameraZoom() or nil,
+        maxZoom = CurrentMaxZoom(),
         secondsPerFrame = secondsPerFrame,
+        easing = (DB() and DB().reactiveZoomEasing) or "OutQuad",
+        passthrough = passthroughPending or passthroughActive,
         libCamera = LibCamera ~= nil,
     }
 end

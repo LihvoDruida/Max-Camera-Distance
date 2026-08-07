@@ -160,6 +160,12 @@ local function InstallCameraViewHooks()
     if type(hooksecurefunc) ~= "function" then return end
 
     local function ScheduleViewRestoreRefresh()
+        -- SetView / ResetView teleport the camera. Reactive Zoom's accumulated
+        -- target refers to the old position and must go.
+        if ns.ReactiveZoom and ns.ReactiveZoom.ResetTarget then
+            ns.ReactiveZoom:ResetTarget()
+        end
+
         if ns.Functions and ns.Functions.ScheduleStabilizedUpdate then
             SafeCall(ns.Functions.ScheduleStabilizedUpdate, "ScheduleStabilizedUpdate", ns.Functions, { 0, 0.10, 0.35, 0.75 }, true)
         elseif ns.Functions and ns.Functions.RequestUpdate then

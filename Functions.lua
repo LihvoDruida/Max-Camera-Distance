@@ -418,6 +418,15 @@ local function SafeLibCall(object, methodName, ...)
         return false
     end
 
+    -- Every LibCamera call routed through here drives the camera on the addon's
+    -- behalf. Reactive Zoom's wheel target describes where the PLAYER last
+    -- pointed the camera, so it is meaningless afterwards; leaving it in place
+    -- made the next wheel notch ease back to the pre-transition distance.
+    -- Catching it centrally covers all four call sites at once.
+    if ns.ReactiveZoom and ns.ReactiveZoom.ResetTarget then
+        ns.ReactiveZoom:ResetTarget()
+    end
+
     local ok, err = pcall(object[methodName], object, ...)
     if not ok then
         Functions:logMessage("error", tostring(methodName) .. " failed: " .. tostring(err))
@@ -2524,6 +2533,23 @@ function Functions:PrintRuntimeStatus()
     self:SendMessage(" - CVars: cameraDistanceMaxZoomFactor=" .. FormatCVar("cameraDistanceMaxZoomFactor") .. ", cameraDistanceMax=" .. FormatCVar("cameraDistanceMax") .. ", cameraDistanceMoveSpeed=" .. FormatCVar("cameraDistanceMoveSpeed") .. ", cameraZoomSpeed=" .. FormatCVar("cameraZoomSpeed"))
     self:SendMessage(" - timing: manualWheelSpeed=" .. tostring(db.moveViewDistance or "unknown") .. ", zoomTransitionTime=" .. tostring(db.zoomTransitionTime or "unknown"))
     self:SendMessage(" - CVars: keepCentered=" .. FormatCVar("CameraKeepCharacterCentered") .. ", reduceUnexpectedMovement=" .. FormatCVar("cameraReduceUnexpectedMovement") .. ", shoulder=" .. FormatCVar("test_cameraOverShoulder") .. ", dynamicPitch=" .. FormatCVar("test_cameraDynamicPitch"))
+
+    -- Reactive Zoom is hard to tune blind: the useful numbers are the live gap
+    -- between the wheel target and the camera, and the measured frame time that
+    -- decides whether a notch gets eased at all.
+    if ns.ReactiveZoom and ns.ReactiveZoom.GetStatus then
+        local rz = ns.ReactiveZoom:GetStatus()
+        self:SendMessage(" - reactiveZoom: enabled=" .. FormatBool(rz.enabled)
+            .. " installed=" .. FormatBool(rz.installed)
+            .. " libCamera=" .. FormatBool(rz.libCamera)
+            .. " easing=" .. tostring(rz.easing))
+        self:SendMessage(string.format(" - reactiveZoom: zoom=%.2f target=%s max=%.2f frame=%.1fms passthrough=%s",
+            tonumber(rz.currentZoom) or -1,
+            rz.target and string.format("%.2f", rz.target) or "none",
+            tonumber(rz.maxZoom) or -1,
+            (tonumber(rz.secondsPerFrame) or 0) * 1000,
+            FormatBool(rz.passthrough)))
+    end
 end
 
 function Functions:AdjustCamera(forceNow)
