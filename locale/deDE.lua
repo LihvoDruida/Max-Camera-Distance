@@ -384,6 +384,11 @@ L["REACTIVE_ZOOM_TOGGLE_DESC"] = "Ersetzt die festen Zoomschritte des Clients du
 L["WORLD_PVP_ZOOM"] = "Welt-PvP als eigene Aktivität behandeln"
 L["WORLD_PVP_ZOOM_DESC"] = "Wenn aktiv, wird im Freien bei PvP-Markierung oder aktivem Kriegsmodus die Welt-PvP-Distanz statt der Distanz für die offene Welt verwendet. Deaktiviert dies, wenn Ihr dauerhaft markiert seid und eine einzige Distanz für die offene Welt möchtet."
 
+
+-- Normal Distance baseline header
+L["NORMAL_DISTANCE_HEADER"] = "Normale Distanz"
+L["NORMAL_DISTANCE_HEADER_DESC"] = "Die Distanz, zu der die Kamera zurückkehrt, wenn Ihr weder im Kampf noch beritten seid. Jede Aktivität unten ist eine Abweichung von diesem Grundwert."
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value

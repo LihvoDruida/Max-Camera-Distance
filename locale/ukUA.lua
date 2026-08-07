@@ -405,6 +405,11 @@ L["STATUS_RUNTIME_GUARDS"] = 'Runtime-захист'
 L["STATUS_ACTIONCAM_SHOULDER"] = 'ActionCam плече'
 L["STATUS_DYNAMIC_PITCH"] = 'Динамічний нахил'
 
+
+-- Normal Distance baseline header
+L["NORMAL_DISTANCE_HEADER"] = "Звичайна дистанція"
+L["NORMAL_DISTANCE_HEADER_DESC"] = "Дистанція, до якої камера повертається, коли ви не в бою і не на маунті. Кожна активність нижче — це відхилення від цього базового значення."
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value

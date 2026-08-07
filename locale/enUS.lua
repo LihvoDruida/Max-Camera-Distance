@@ -373,6 +373,11 @@ L["STATUS_RUNTIME_GUARDS"] = 'Runtime Guards'
 L["STATUS_ACTIONCAM_SHOULDER"] = 'ActionCam Shoulder'
 L["STATUS_DYNAMIC_PITCH"] = 'Dynamic Pitch'
 
+
+-- Normal Distance baseline header
+L["NORMAL_DISTANCE_HEADER"] = "Normal Distance"
+L["NORMAL_DISTANCE_HEADER_DESC"] = "The distance the camera returns to when you are neither in combat nor mounted. Every activity below is a deviation from this baseline."
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value

@@ -384,6 +384,11 @@ L["REACTIVE_ZOOM_TOGGLE_DESC"] = "Remplace les pas de zoom fixes du client par u
 L["WORLD_PVP_ZOOM"] = "Traiter le JcJ en monde ouvert comme une activité distincte"
 L["WORLD_PVP_ZOOM_DESC"] = "Si activé, être marqué pour le JcJ ou avoir le mode Guerre actif à l'extérieur utilise la distance JcJ en monde ouvert plutôt que celle du monde ouvert. Désactivez si vous êtes marqué en permanence et souhaitez une distance unique."
 
+
+-- Normal Distance baseline header
+L["NORMAL_DISTANCE_HEADER"] = "Distance normale"
+L["NORMAL_DISTANCE_HEADER_DESC"] = "La distance à laquelle la caméra revient lorsque vous n'êtes ni en combat ni en monture. Chaque activité ci-dessous est un écart par rapport à cette valeur de référence."
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value

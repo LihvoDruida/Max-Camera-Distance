@@ -508,6 +508,12 @@ local function EachSupportedContext(callback)
     end
 end
 
+-- Returns the next free order. Callers MUST use it for anything that has to
+-- appear after the generated rows: the number of activities is data, so a
+-- hand-written order below the generated block will eventually land inside it.
+-- That is exactly what happened when four combat contexts became eight - the
+-- Normal Distance slider ended up rendered in the middle of the PvP group, and
+-- the mount preset and dismount delay landed inside the PvE group.
 local function InjectContextOptions(args, baseOrder, mode, maxDistance)
     local order = baseOrder
 
@@ -583,6 +589,8 @@ local function InjectContextOptions(args, baseOrder, mode, maxDistance)
             order = order + 1
         end
     end)
+
+    return order
 end
 
 function Config:SetupOptions()
@@ -922,7 +930,7 @@ function Config:SetupOptions()
                     mountPresetHeader = {
                         type = "header",
                         name = L["PRESET_MOUNT_GROUP_HEADER"] or "Mount / Travel",
-                        order = 30,
+                        order = 60,
                     },
                     mountZoomPreset = {
                         type = "select",
@@ -931,10 +939,10 @@ function Config:SetupOptions()
                         values = function() return GetPresetChoices("mountZoomFactor") end,
                         get = function() return GetPresetSelectValue("mountZoomFactor") end,
                         set = function(_, value) SetPresetSelectValue("mountZoomFactor", value) end,
-                        order = 31,
+                        order = 61,
                         disabled = function() return not GetOption("autoMountZoom") end,
                     },
-                    mountZoomPresetInfo = { type = "description", name = function() return BuildPresetStatusText("mountZoomFactor") end, order = 32, hidden = function() return not GetOption("autoMountZoom") end },
+                    mountZoomPresetInfo = { type = "description", name = function() return BuildPresetStatusText("mountZoomFactor") end, order = 62, hidden = function() return not GetOption("autoMountZoom") end },
                 },
             },
 
@@ -1015,6 +1023,19 @@ function Config:SetupOptions()
                         name = L["MANUAL_COMBAT_DESC"] or "These sliders are used only when their matching preset is set to Manual.",
                         order = 41,
                     },
+                    -- The Normal Distance is the baseline every activity returns
+                    -- to, so it gets its own header and sits ahead of the
+                    -- per-activity list instead of being buried inside it.
+                    normalDistanceHeader = {
+                        type = "header",
+                        name = L["NORMAL_DISTANCE_HEADER"] or "Normal Distance",
+                        order = 42,
+                    },
+                    normalDistanceDesc = {
+                        type = "description",
+                        name = L["NORMAL_DISTANCE_HEADER_DESC"] or "The distance the camera returns to when you are neither in combat nor mounted. Every activity below is a deviation from this baseline.",
+                        order = 43,
+                    },
                     combatMinZoom = {
                         type = "range",
                         name = (L["MIN_COMBAT_ZOOM_FACTOR"] or "Normal Distance") .. " (Yards)",
@@ -1024,7 +1045,7 @@ function Config:SetupOptions()
                         step = 1.0,
                         get = function() return GetOption("minZoomFactor") end,
                         set = function(_, val) SetOption("minZoomFactor", val) end,
-                        order = 46,
+                        order = 44,
                         disabled = function() return not GetOption("autoCombatZoom") or IsManualControlLocked("minZoomFactor") end,
                     },
                     mountHeader = { type = "header", name = L["MOUNT_SETTINGS_HEADER"], order = 60 },
@@ -1117,7 +1138,7 @@ function Config:SetupOptions()
                         step = 0.1,
                         get = function() return GetOption("dismountDelay") end,
                         set = function(_, val) SetOption("dismountDelay", val) end,
-                        order = 85,
+                        order = 95,
                         disabled = function() return not GetOption("autoMountZoom") end
                     },
                 },
@@ -1473,9 +1494,30 @@ function Config:SetupOptions()
 
     -- Generated per-activity rows. Injected here rather than written into the
     -- literal above because the set of activities is data, not layout.
-    InjectContextOptions(options.args.presetSettings.args, 21, "preset", maxDistance)
-    InjectContextOptions(options.args.smartSettings.args, 42, "slider", maxDistance)
-    InjectContextOptions(options.args.smartSettings.args, 82, "delay", maxDistance)
+    -- Reserved order bands. Each generated block gets a range with headroom, and
+    -- the static rows that follow start after that range - never at a number
+    -- picked to sit just past today's activity count. Re-anchoring the static
+    -- rows individually was tried and rejected: it moves a group's header
+    -- without moving the group's contents, which reorders the block itself.
+    local BANDS = {
+        preset = { first = 21, last = 59 },   -- mount presets resume at 60
+        slider = { first = 45, last = 59 },   -- mount settings resume at 60
+        delay  = { first = 82, last = 94 },   -- dismount delay sits at 95
+    }
+
+    for mode, band in pairs(BANDS) do
+        local args = (mode == "preset") and options.args.presetSettings.args
+            or options.args.smartSettings.args
+        local nextOrder = InjectContextOptions(args, band.first, mode, maxDistance)
+
+        -- A silent overrun is what produced the original bug, so say so loudly
+        -- rather than letting rows render inside the wrong group.
+        if nextOrder > band.last + 1 and ns.Functions and ns.Functions.logMessage then
+            ns.Functions:logMessage("error", string.format(
+                "Option order band '%s' overflowed (%d > %d); widen it in Config.lua.",
+                mode, nextOrder - 1, band.last))
+        end
+    end
 
     if not AceConfig then
         print(addonName .. ": AceConfig-3.0 not found.")

@@ -430,6 +430,11 @@ L["REACTIVE_ZOOM_TOGGLE_DESC"] = "用带加速的平滑缩放取代客户端固�
 L["WORLD_PVP_ZOOM"] = "将野外 PvP 视为独立活动"
 L["WORLD_PVP_ZOOM_DESC"] = "启用后，在户外被标记为 PvP 或开启战争模式时将使用野外 PvP 距离，而不是开放世界距离。如果你长期处于标记状态并希望开放世界只用一个距离，请关闭此项。"
 
+
+-- Normal Distance baseline header
+L["NORMAL_DISTANCE_HEADER"] = "常规距离"
+L["NORMAL_DISTANCE_HEADER_DESC"] = "当你既不在战斗中也未骑乘时，镜头恢复到的距离。下方每个活动都是相对于该基准的偏移。"
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value
