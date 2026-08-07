@@ -20,7 +20,7 @@ L["MOVE_VIEW_DISTANCE"] = "鼠标滚轮手动缩放速度"
 L["MOVE_VIEW_DISTANCE_DESC"] = "使用鼠标滚轮或缩放快捷键时镜头缩放的速度。仅影响手动缩放。"
 
 L["ZOOM_TRANSITION"] = "Smart Zoom 过渡时间"
-L["ZOOM_TRANSITION_DESC"] = "Smart Zoom 在战斗、坐骑、AFK、Dragonrace 和常规状态之间自动过渡的时间（秒）。不控制鼠标滚轮缩放。"
+L["ZOOM_TRANSITION_DESC"] = "智能缩放在 |cffff5555战斗|r、|cff66ccff坐骑|r、AFK、驭龙竞速和常规镜头状态之间自动过渡的时间（秒）。不控制鼠标滚轮缩放。"
 L["YAW_MOVE_SPEED"] = "水平旋转速度"
 L["YAW_MOVE_SPEED_DESC"] = "调整鼠标转向时镜头水平旋转（偏航）的速度。"
 
@@ -142,7 +142,6 @@ L["AFK_EXIT_MSG"] = "暂离模式：已禁用（恢复界面和镜头）。"
 -- ============================================================================
 -- 命令 / 帮助
 -- ============================================================================
-L["CMD_USAGE"] = "用法：/mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off"
 
 -- 可选（若其他文件中使用）
 L["ZOOM_SET_MESSAGE"] = "缩放已设置为 %s（%.1f码）"
@@ -157,7 +156,6 @@ L["HOOK_MOUSE_SPEED_PATH"] = "/mcd config -> 通用设置"
 -- ============================================================================
 -- 调试
 -- ============================================================================
-L["DEBUG_SETTINGS"] = "调试设置"
 L["ENABLE_DEBUG_LOGGING"] = "启用日志记录"
 L["ENABLE_DEBUG_LOGGING_DESC"] = "在聊天框打印关于状态变化 |cffff5555（战斗/坐骑/暂离）|r 和 CVar 更新的调试信息。"
 L["DEBUG_LEVEL"] = "调试等级"
@@ -379,6 +377,58 @@ L["STATUS_STATE_MANUAL"] = '手动'
 L["STATUS_RUNTIME_GUARDS"] = '运行时保护'
 L["STATUS_ACTIONCAM_SHOULDER"] = 'ActionCam 肩偏移'
 L["STATUS_DYNAMIC_PITCH"] = '动态俯仰'
+
+
+-- Added: PvE/PvP activity contexts and Reactive Zoom
+L["CAMERA_ZOOM_SPEED"] = "客户端缩放速度"
+L["CAMERA_ZOOM_SPEED_DESC"] = "暴雪自带的 cameraZoomSpeed 控制台变量。响应式缩放用它来计算一次缩放应持续多久。"
+L["CONTEXT_ARENA"] = "竞技场"
+L["CONTEXT_ARENA_DELAY_DESC"] = "竞技场战斗结束后恢复到常规距离的延迟。"
+L["CONTEXT_ARENA_DESC"] = "竞技场内使用的距离。"
+L["CONTEXT_BATTLEGROUND"] = "战场"
+L["CONTEXT_BATTLEGROUND_DELAY_DESC"] = "战场战斗结束后恢复到常规距离的延迟。"
+L["CONTEXT_BATTLEGROUND_DESC"] = "普通战场和评级战场内使用的距离。"
+L["CONTEXT_DUNGEON"] = "地下城"
+L["CONTEXT_DUNGEON_DELAY_DESC"] = "地下城战斗结束后恢复到常规距离的延迟。"
+L["CONTEXT_DUNGEON_DESC"] = "普通、英雄和史诗地下城内使用的距离。"
+L["CONTEXT_GROUP_NEUTRAL"] = "活动之外"
+L["CONTEXT_GROUP_PVE"] = "PvE 活动"
+L["CONTEXT_GROUP_PVP"] = "PvP 活动"
+L["CONTEXT_MYTHIC_PLUS"] = "史诗钥石"
+L["CONTEXT_MYTHIC_PLUS_DELAY_DESC"] = "史诗钥石战斗结束后恢复到常规距离的延迟。"
+L["CONTEXT_MYTHIC_PLUS_DESC"] = "史诗钥石挑战进行期间使用的距离。"
+L["CONTEXT_RAID"] = "团队副本"
+L["CONTEXT_RAID_DELAY_DESC"] = "团队副本战斗结束后恢复到常规距离的延迟。"
+L["CONTEXT_RAID_DESC"] = "团队副本以及世界首领战斗中使用的距离。"
+L["CONTEXT_SCENARIO"] = "场景战役与地下堡"
+L["CONTEXT_SCENARIO_DELAY_DESC"] = "场景战役或地下堡战斗结束后恢复到常规距离的延迟。"
+L["CONTEXT_SCENARIO_DESC"] = "场景战役、地下堡及其他副本活动中使用的距离。"
+L["CONTEXT_WORLD"] = "开放世界"
+L["CONTEXT_WORLD_DELAY_DESC"] = "开放世界战斗结束后恢复到常规距离的延迟。"
+L["CONTEXT_WORLD_DESC"] = "在任何活动之外的开放世界战斗中使用的距离。"
+L["CONTEXT_WORLD_PVP"] = "野外 PvP"
+L["CONTEXT_WORLD_PVP_DELAY_DESC"] = "野外 PvP 战斗结束后恢复到常规距离的延迟。"
+L["CONTEXT_WORLD_PVP_DESC"] = "在户外被标记为 PvP 或开启战争模式时使用的距离。"
+L["REACTIVE_ZOOM"] = "启用响应式缩放"
+L["REACTIVE_ZOOM_ALWAYS"] = "额外步进（始终）"
+L["REACTIVE_ZOOM_ALWAYS_DESC"] = "加到每一次滚轮刻度上。调高可让单次滚动走得更远。"
+L["REACTIVE_ZOOM_DESC"] = "只要你持续滚动，鼠标滚轮就会走过更长的距离，而不是每次固定一格。基于 DynamicCam 的响应式缩放。"
+L["REACTIVE_ZOOM_EASING"] = "缩放曲线"
+L["REACTIVE_ZOOM_EASING_DESC"] = "平滑缩放在时间上的分布方式。Out 类曲线立即启动并在接近目标时减速，在滚轮上手感最跟手。"
+L["REACTIVE_ZOOM_EASING_INOUTQUAD"] = "平滑（In-Out Quad）"
+L["REACTIVE_ZOOM_EASING_LINEAR"] = "匀速（线性）"
+L["REACTIVE_ZOOM_EASING_OUTCUBIC"] = "非常跟手（Out Cubic）"
+L["REACTIVE_ZOOM_EASING_OUTQUAD"] = "跟手（Out Quad）"
+L["REACTIVE_ZOOM_EXTRA"] = "额外步进（滚动中）"
+L["REACTIVE_ZOOM_EXTRA_DESC"] = "当镜头尚未跟上目标时额外叠加。正是这一点让快速滚动比慢速点动走得远得多。"
+L["REACTIVE_ZOOM_HEADER"] = "响应式缩放"
+L["REACTIVE_ZOOM_MAX_TIME"] = "最长缩放时间"
+L["REACTIVE_ZOOM_MAX_TIME_DESC"] = "单次平滑缩放的时长上限。越低越干脆，越高越平滑。"
+L["REACTIVE_ZOOM_THRESHOLD"] = "滚动检测阈值"
+L["REACTIVE_ZOOM_THRESHOLD_DESC"] = "镜头需要落后多少才会触发额外步进。数值越低反应越早。"
+L["REACTIVE_ZOOM_TOGGLE_DESC"] = "用带加速的平滑缩放取代客户端固定的缩放步进。"
+L["WORLD_PVP_ZOOM"] = "将野外 PvP 视为独立活动"
+L["WORLD_PVP_ZOOM_DESC"] = "启用后，在户外被标记为 PvP 或开启战争模式时将使用野外 PvP 距离，而不是开放世界距离。如果你长期处于标记状态并希望开放世界只用一个距离，请关闭此项。"
 
 if AceTable then
     for key, value in pairs(L) do

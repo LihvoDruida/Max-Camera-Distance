@@ -166,7 +166,6 @@ L["AFK_EXIT_MSG"] = "AFK Mode: disabled (restored UI and camera)."
 -- ============================================================================
 -- Commands / Help
 -- ============================================================================
-L["CMD_USAGE"] = "Usage: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off"
 
 -- Optional (if used anywhere in other files)
 L["ZOOM_SET_MESSAGE"] = "Zoom set to %s (%.1f yards)"
@@ -181,7 +180,6 @@ L["HOOK_MOUSE_SPEED_PATH"] = "/mcd config -> General Settings"
 -- ============================================================================
 -- Debug
 -- ============================================================================
-L["DEBUG_SETTINGS"] = "Debug Settings"
 L["ENABLE_DEBUG_LOGGING"] = "Enable Logging"
 L["ENABLE_DEBUG_LOGGING_DESC"] = "Prints debug information to chat about state changes |cffff5555(Combat/Mount/AFK)|r and CVar updates."
 L["DEBUG_LEVEL"] = "Debug Level"
