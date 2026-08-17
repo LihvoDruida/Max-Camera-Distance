@@ -182,6 +182,14 @@ local PROFILE_DEFAULTS = {
     -- permanently flagged and do not want a separate distance for it.
     worldPvpZoom = true,
 
+    -- Adaptive combat return. While farming, combat genuinely drops between
+    -- mobs and the fixed delay expires in the gap, so the camera pumps in and
+    -- out on every pull. When on, the delay stretches to cover the lulls the
+    -- player is actually producing. Default on: it only ever makes the camera
+    -- calmer, and it collapses back to the configured delay by itself.
+    adaptiveCombatReturn = true,
+    adaptiveCombatReturnMax = 5,
+
     -- Reactive Zoom (see ReactiveZoom.lua). Opt-in: it changes how the mouse
     -- wheel feels, so it must not be switched on behind the player's back.
     reactiveZoom = false,
@@ -383,6 +391,9 @@ function Database:ApplyMigrations(profile)
     profile.partyCombatReturnDelay = nil
 
     profile.worldPvpZoom = (profile.worldPvpZoom ~= false)
+
+    profile.adaptiveCombatReturn = (profile.adaptiveCombatReturn ~= false)
+    profile.adaptiveCombatReturnMax = Clamp(tonumber(profile.adaptiveCombatReturnMax) or 5, 1, 15)
 
     profile.reactiveZoom = (profile.reactiveZoom == true)
     profile.reactiveZoomAddIncrementsAlways = Clamp(tonumber(profile.reactiveZoomAddIncrementsAlways) or 1, 0, 5)

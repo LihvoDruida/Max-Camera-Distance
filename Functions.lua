@@ -1144,6 +1144,134 @@ local function GetCombatReturnDelay(db, context)
     return db.worldCombatReturnDelay or 0
 end
 
+-- =====================================================================
+-- ADAPTIVE RETURN DELAY
+-- =====================================================================
+-- The problem this solves: while farming, mobs are spaced far enough apart that
+-- combat genuinely drops between them. The fixed return delay (0.4s in the open
+-- world) expires during that lull, the camera zooms all the way in, and the next
+-- pull immediately zooms it back out. The result is a camera that pumps in and
+-- out on every mob even though the player never stopped fighting.
+--
+-- Raising the fixed delay is not a fix: it would also make the camera linger
+-- after the player has genuinely finished, and the right value differs per zone,
+-- per class, and per pull.
+--
+-- Instead, measure the player's actual rhythm. Every time combat restarts we
+-- record how long the lull was. If those lulls keep being short, we are farming,
+-- so the return delay grows to cover them and the camera simply stays out. When
+-- the lulls stop arriving the samples age out and the delay returns to the
+-- configured value on its own.
+-- All rhythm state lives in one table: Lua 5.1 allows only 200 locals per chunk
+-- and this file is already close to that ceiling.
+local rhythm = {
+    gaps = {},          -- ring buffer of recent lull lengths
+    at = {},            -- when each lull ended, for ageing
+    count = 0,
+    lastEndAt = nil,
+    lastApplied = nil,  -- last adaptive delay actually used, for /mcd status
+
+    SAMPLES = 5,        -- a few pulls is enough to establish a rhythm
+    GAP_MAX = 12,       -- a longer lull is a break, not a farming gap
+    WINDOW = 45,        -- samples older than this stop counting
+    MARGIN = 0.6,       -- headroom over the observed lull
+    MIN_SAMPLES = 2,    -- one long lull must not trigger farming mode
+}
+
+local function ResetCombatRhythm()
+    for i = 1, rhythm.SAMPLES do
+        rhythm.gaps[i] = nil
+        rhythm.at[i] = nil
+    end
+    rhythm.count = 0
+    rhythm.lastEndAt = nil
+    rhythm.lastApplied = nil
+end
+
+-- Called when the zoom state leaves combat.
+local function NoteCombatEnded()
+    rhythm.lastEndAt = (GetTime and GetTime()) or nil
+end
+
+-- Called when the zoom state enters combat. The interesting number is how long
+-- the player was out of combat before this pull.
+local function NoteCombatStarted()
+    local now = (GetTime and GetTime()) or nil
+    if not now or not rhythm.lastEndAt then
+        rhythm.lastEndAt = nil
+        return
+    end
+
+    local gap = now - rhythm.lastEndAt
+    rhythm.lastEndAt = nil
+
+    -- Ignore lulls long enough to mean the player actually stopped. Recording
+    -- them would inflate the delay long after farming ended.
+    if gap <= 0 or gap > rhythm.GAP_MAX then
+        return
+    end
+
+    rhythm.count = rhythm.count + 1
+    local slot = ((rhythm.count - 1) % rhythm.SAMPLES) + 1
+    -- Parallel arrays rather than a table per sample: this runs on every pull,
+    -- and a farming session is thousands of pulls of needless garbage.
+    rhythm.gaps[slot] = gap
+    rhythm.at[slot] = now
+end
+
+-- Returns the delay to actually use, and whether adaptation changed it.
+local function GetAdaptiveReturnDelay(db, context)
+    local base = GetCombatReturnDelay(db, context)
+
+    if not db or db.adaptiveCombatReturn == false then
+        return base, false
+    end
+
+    local now = (GetTime and GetTime()) or 0
+    if now == 0 then return base, false end
+
+    -- Use the LONGEST recent lull, not the average: the delay has to cover the
+    -- worst gap seen, otherwise the camera still snaps in on the slowest pull.
+    local longest, samples = 0, 0
+    for i = 1, rhythm.SAMPLES do
+        local gap = rhythm.gaps[i]
+        if gap and (now - rhythm.at[i]) <= rhythm.WINDOW then
+            samples = samples + 1
+            if gap > longest then longest = gap end
+        end
+    end
+
+    if samples < rhythm.MIN_SAMPLES then
+        return base, false
+    end
+
+    local cap = tonumber(db.adaptiveCombatReturnMax) or 5
+    local adaptive = math.min(cap, longest + rhythm.MARGIN)
+
+    if adaptive <= base then
+        rhythm.lastApplied = nil
+        return base, false
+    end
+
+    rhythm.lastApplied = adaptive
+    return adaptive, true
+end
+
+-- Diagnostics for /mcd status.
+local function GetRhythmStatus(db)
+    local now = (GetTime and GetTime()) or 0
+    local longest, samples = 0, 0
+    for i = 1, rhythm.SAMPLES do
+        local gap = rhythm.gaps[i]
+        if gap and (now - rhythm.at[i]) <= rhythm.WINDOW then
+            samples = samples + 1
+            if gap > longest then longest = gap end
+        end
+    end
+    return samples, longest, rhythm.lastApplied,
+        (db and db.adaptiveCombatReturn ~= false) and true or false
+end
+
 local function GetPendingReturnRemaining()
     if not pendingReturnInfo or not pendingReturnInfo.fireAt or not GetTime then
         return 0
@@ -2378,6 +2506,17 @@ function Functions:UpdateSmartZoomState(event)
     stateToken = stateToken + 1
     currentZoomState = newState
 
+    -- Record the player's combat rhythm across this transition. This has to
+    -- happen before the delay is computed below, so the lull that just ended is
+    -- already part of the sample set that decides how long to wait.
+    if newState == ZOOM_STATE_COMBAT then
+        if previousState ~= ZOOM_STATE_COMBAT then
+            NoteCombatStarted()
+        end
+    elseif previousState == ZOOM_STATE_COMBAT then
+        NoteCombatEnded()
+    end
+
     if newState == ZOOM_STATE_NONE and event ~= "manual_update" then
         local delay = 0
         local returnKind = nil
@@ -2386,7 +2525,9 @@ function Functions:UpdateSmartZoomState(event)
         if previousState == ZOOM_STATE_COMBAT then
             returnKind = "combat"
             returnContext = previousCombatContext or "world"
-            delay = GetCombatReturnDelay(db, returnContext)
+            -- Adaptive: while the player keeps re-pulling, this stretches to
+            -- cover the observed lulls so the camera stops pumping in and out.
+            delay = GetAdaptiveReturnDelay(db, returnContext)
         elseif previousState == ZOOM_STATE_MOUNT then
             returnKind = "mount"
             delay = db.dismountDelay or 0
@@ -2447,6 +2588,10 @@ function Functions:UpdateSmartZoomState(event)
         end
         NotifyConfigChanged()
     end
+end
+
+function Functions:ResetCombatRhythm()
+    ResetCombatRhythm()
 end
 
 function Functions:GetStatusSnapshot()
@@ -2533,6 +2678,16 @@ function Functions:PrintRuntimeStatus()
     self:SendMessage(" - CVars: cameraDistanceMaxZoomFactor=" .. FormatCVar("cameraDistanceMaxZoomFactor") .. ", cameraDistanceMax=" .. FormatCVar("cameraDistanceMax") .. ", cameraDistanceMoveSpeed=" .. FormatCVar("cameraDistanceMoveSpeed") .. ", cameraZoomSpeed=" .. FormatCVar("cameraZoomSpeed"))
     self:SendMessage(" - timing: manualWheelSpeed=" .. tostring(db.moveViewDistance or "unknown") .. ", zoomTransitionTime=" .. tostring(db.zoomTransitionTime or "unknown"))
     self:SendMessage(" - CVars: keepCentered=" .. FormatCVar("CameraKeepCharacterCentered") .. ", reduceUnexpectedMovement=" .. FormatCVar("cameraReduceUnexpectedMovement") .. ", shoulder=" .. FormatCVar("test_cameraOverShoulder") .. ", dynamicPitch=" .. FormatCVar("test_cameraDynamicPitch"))
+
+    -- Adaptive return: without these numbers there is no way to tell whether
+    -- the camera stayed out because adaptation kicked in or because the pull
+    -- simply never ended.
+    do
+        local samples, longest, applied, enabled = GetRhythmStatus(db)
+        self:SendMessage(string.format(" - adaptiveReturn: enabled=%s samples=%d longestGap=%.1fs applied=%s",
+            FormatBool(enabled), samples, longest,
+            applied and string.format("%.1fs", applied) or "base"))
+    end
 
     -- Reactive Zoom is hard to tune blind: the useful numbers are the live gap
     -- between the wheel target and the camera, and the measured frame time that

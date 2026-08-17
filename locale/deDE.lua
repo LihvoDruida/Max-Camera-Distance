@@ -389,6 +389,13 @@ L["WORLD_PVP_ZOOM_DESC"] = "Wenn aktiv, wird im Freien bei PvP-Markierung oder a
 L["NORMAL_DISTANCE_HEADER"] = "Normale Distanz"
 L["NORMAL_DISTANCE_HEADER_DESC"] = "Die Distanz, zu der die Kamera zurückkehrt, wenn Ihr weder im Kampf noch beritten seid. Jede Aktivität unten ist eine Abweichung von diesem Grundwert."
 
+
+-- Adaptive combat return delay
+L["ADAPTIVE_RETURN"] = "Adaptive Rückkehrverzögerung"
+L["ADAPTIVE_RETURN_DESC"] = "Solange Ihr weiter pullt, misst die Kamera die Pausen zwischen den Gegnern und wartet lange genug, um sie zu überbrücken, statt bei jedem Pull heranzuzoomen und sofort wieder heraus. Sobald Ihr aufhört, kehrt sie von selbst zu Eurer eingestellten Verzögerung zurück."
+L["ADAPTIVE_RETURN_MAX"] = "Obergrenze der adaptiven Verzögerung"
+L["ADAPTIVE_RETURN_MAX_DESC"] = "Der höchste Wert, auf den die adaptive Verzögerung anwachsen darf. Eure eingestellte Verzögerung je Aktivität bleibt die Untergrenze."
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value

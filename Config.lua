@@ -973,6 +973,35 @@ function Config:SetupOptions()
                         width = "full",
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
+                    adaptiveCombatReturn = {
+                        type = "toggle",
+                        name = L["ADAPTIVE_RETURN"] or "Adaptive Return Delay",
+                        desc = L["ADAPTIVE_RETURN_DESC"] or "While you keep pulling, the camera measures how long the lulls between mobs are and waits long enough to cover them, instead of zooming in and straight back out on every pull. It returns to your configured delay on its own once you stop.",
+                        get = function() return GetOption("adaptiveCombatReturn") end,
+                        set = function(_, val)
+                            SetOption("adaptiveCombatReturn", val)
+                            -- Drop measurements taken while it was on, so
+                            -- re-enabling it starts from the current rhythm.
+                            if ns.Functions and ns.Functions.ResetCombatRhythm then
+                                ns.Functions:ResetCombatRhythm()
+                            end
+                        end,
+                        order = 13,
+                        width = "full",
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                    },
+                    adaptiveCombatReturnMax = {
+                        type = "range",
+                        name = L["ADAPTIVE_RETURN_MAX"] or "Adaptive Delay Ceiling",
+                        desc = L["ADAPTIVE_RETURN_MAX_DESC"] or "The longest the adaptive delay is ever allowed to grow. Your configured per-activity delay stays the floor.",
+                        min = 1, max = 15, step = 0.5,
+                        get = function() return GetOption("adaptiveCombatReturnMax") end,
+                        set = function(_, val) SetOption("adaptiveCombatReturnMax", val) end,
+                        order = 14,
+                        disabled = function()
+                            return not GetOption("autoCombatZoom") or not GetOption("adaptiveCombatReturn")
+                        end,
+                    },
                     combatTriggerHeader = {
                         type = "header",
                         name = L["COMBAT_TRIGGER_HEADER"] or "Combat Triggers",

@@ -378,6 +378,13 @@ L["STATUS_DYNAMIC_PITCH"] = 'Dynamic Pitch'
 L["NORMAL_DISTANCE_HEADER"] = "Normal Distance"
 L["NORMAL_DISTANCE_HEADER_DESC"] = "The distance the camera returns to when you are neither in combat nor mounted. Every activity below is a deviation from this baseline."
 
+
+-- Adaptive combat return delay
+L["ADAPTIVE_RETURN"] = "Adaptive Return Delay"
+L["ADAPTIVE_RETURN_DESC"] = "While you keep pulling, the camera measures how long the lulls between mobs are and waits long enough to cover them, instead of zooming in and straight back out on every pull. It returns to your configured delay on its own once you stop."
+L["ADAPTIVE_RETURN_MAX"] = "Adaptive Delay Ceiling"
+L["ADAPTIVE_RETURN_MAX_DESC"] = "The longest the adaptive delay is ever allowed to grow. Your configured per-activity delay stays the floor."
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value

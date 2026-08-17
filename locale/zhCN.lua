@@ -435,6 +435,13 @@ L["WORLD_PVP_ZOOM_DESC"] = "启用后，在户外被标记为 PvP 或开启战�
 L["NORMAL_DISTANCE_HEADER"] = "常规距离"
 L["NORMAL_DISTANCE_HEADER_DESC"] = "当你既不在战斗中也未骑乘时，镜头恢复到的距离。下方每个活动都是相对于该基准的偏移。"
 
+
+-- Adaptive combat return delay
+L["ADAPTIVE_RETURN"] = "自适应恢复延迟"
+L["ADAPTIVE_RETURN_DESC"] = "当你持续拉怪时，镜头会测量怪物之间的空档有多长，并等待足够久以覆盖这些空档，而不是每次拉怪都先拉近再立刻拉远。一旦你停下，它会自动回到你设定的延迟。"
+L["ADAPTIVE_RETURN_MAX"] = "自适应延迟上限"
+L["ADAPTIVE_RETURN_MAX_DESC"] = "自适应延迟能增长到的最大值。你为各活动设定的延迟仍是下限。"
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value

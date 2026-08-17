@@ -389,6 +389,13 @@ L["WORLD_PVP_ZOOM_DESC"] = "Si activé, être marqué pour le JcJ ou avoir le mo
 L["NORMAL_DISTANCE_HEADER"] = "Distance normale"
 L["NORMAL_DISTANCE_HEADER_DESC"] = "La distance à laquelle la caméra revient lorsque vous n'êtes ni en combat ni en monture. Chaque activité ci-dessous est un écart par rapport à cette valeur de référence."
 
+
+-- Adaptive combat return delay
+L["ADAPTIVE_RETURN"] = "Délai de retour adaptatif"
+L["ADAPTIVE_RETURN_DESC"] = "Tant que vous enchaînez les packs, la caméra mesure la durée des accalmies entre les monstres et attend assez longtemps pour les couvrir, au lieu de se rapprocher puis de s'éloigner à chaque pull. Dès que vous vous arrêtez, elle revient d'elle-même au délai que vous avez configuré."
+L["ADAPTIVE_RETURN_MAX"] = "Plafond du délai adaptatif"
+L["ADAPTIVE_RETURN_MAX_DESC"] = "La valeur maximale que le délai adaptatif peut atteindre. Le délai configuré pour l'activité reste le plancher."
+
 if AceTable then
     for key, value in pairs(L) do
         AceTable[key] = value
