@@ -6,7 +6,7 @@
 ## Notes: Smart camera distance with safer cross-version compatibility guards.
 ## Notes-zhCN: 智能镜头距离，具备更安全的跨版本兼容性保护措施。
 ## IconTexture: Interface\AddOns\Max_Camera_Distance\assets\icon
-## Version: v7.5.0
+## Version: v7.5.1
 ## Author: melles1991
 ## DefaultState: Enabled
 ## OptionalDeps: Ace3, LibMountInfo, LibDataBroker-1.1, LibDBIcon-1.0

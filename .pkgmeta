@@ -18,6 +18,8 @@ ignore:
   - release.sh
   - cliff.toml
   - tools
+  - tests
+  - check_all.sh
   - .DS_Store
 
 externals:

@@ -240,6 +240,12 @@ local function InitMinimapButton()
         label = L["ADDON_TITLE"] or "Max Camera Distance",
 
         OnClick = function(_, button)
+            if ns.Config and ns.Config.Open then
+                ns.Config:Open()
+                return
+            end
+
+            ResolveOptionalLibs()
             if ACD and ACD.Open then
                 local ok, err = pcall(ACD.Open, ACD, addonName)
                 if not ok then
@@ -328,6 +334,34 @@ eventHandlers.ADDON_LOADED = function(event, loadedAddon)
     end
 
     frame:UnregisterEvent("ADDON_LOADED")
+end
+
+-- Every addon has finished loading by the time PLAYER_LOGIN fires, so this is
+-- the first moment at which a library provider that sorts AFTER
+-- "Max_Camera_Distance" alphabetically is guaranteed to be visible in LibStub.
+-- ADDON_LOADED is too early for that, and because WoW stores the enabled addon
+-- list per character, whether it was early enough differed from character to
+-- character - which is what made this look like a per-toon bug.
+eventHandlers.PLAYER_LOGIN = function()
+    ResolveOptionalLibs()
+
+    if ns.Database and ns.Database.UpgradeFallbackDB then
+        SafeCall(ns.Database.UpgradeFallbackDB, "UpgradeFallbackDB", ns.Database)
+    end
+
+    if ns.Database and not ns.Database.db and ns.Database.InitDB then
+        SafeCall(ns.Database.InitDB, "InitDB", ns.Database)
+    end
+
+    if ns.Config and ns.Config.EnsureRegistered then
+        SafeCall(ns.Config.EnsureRegistered, "EnsureRegistered", ns.Config)
+    end
+
+    SafeCall(InitMinimapButton, "InitMinimapButton")
+
+    if ns.ReactiveZoom and ns.ReactiveZoom.Install then
+        SafeCall(ns.ReactiveZoom.Install, "ReactiveZoom.Install", ns.ReactiveZoom)
+    end
 end
 
 eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)

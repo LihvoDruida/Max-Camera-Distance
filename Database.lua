@@ -3,7 +3,21 @@ local LibStub = _G.LibStub
 ns.Database = ns.Database or {}
 local Database = ns.Database
 
-local AceDB = LibStub and LibStub("AceDB-3.0", true)
+-- Resolved lazily for the same reason as the Ace3 libs in Config.lua: the addon
+-- that supplies AceDB may load after this one, and a one-shot lookup here
+-- silently downgraded the whole session to the fallback store.
+local AceDB
+
+local function ResolveAceDB()
+    LibStub = LibStub or _G.LibStub
+    if LibStub and not AceDB then
+        AceDB = LibStub("AceDB-3.0", true)
+    end
+    return AceDB
+end
+
+ResolveAceDB()
+
 local Compat = ns.Compat or {}
 
 local IS_RETAIL = Compat.IS_RETAIL and true or false
@@ -636,11 +650,15 @@ function Database:InitDB()
     -- a key that legitimately holds the default value).
     self:MigrateDynamicCVarDefaults()
 
+    ResolveAceDB()
+
     if AceDB and AceDB.New then
         self.db = AceDB:New("MaxCameraDistanceDB", defaultsWrapper)
+        self.usingFallbackDB = false
     else
         self.db = CreateFallbackDB(defaultsWrapper)
-        print(addonName .. ": AceDB-3.0 not found. Using basic saved-variable storage; profile UI is unavailable.")
+        self.usingFallbackDB = true
+        print(addonName .. ": AceDB-3.0 is not available yet. Using basic saved-variable storage for now; profile UI is unavailable.")
     end
 
     if not self.db then
@@ -650,6 +668,25 @@ function Database:InitDB()
 
     self:ApplyMigrations(self.db.profile)
     self:RegisterProfileCallbacks()
+end
+
+-- Called once at PLAYER_LOGIN, when every addon has finished loading. If AceDB
+-- only showed up after us, swap the fallback store out for the real thing.
+-- Safe because the fallback writes into MaxCameraDistanceDB.profiles[key] using
+-- exactly the layout AceDB expects, so the values are adopted as-is.
+function Database:UpgradeFallbackDB()
+    if not self.usingFallbackDB then return false end
+    if not ResolveAceDB() then return false end
+    if not (AceDB and AceDB.New) then return false end
+
+    self.db = nil
+    self.usingFallbackDB = false
+    self:InitDB()
+
+    if not self.db then return false end
+
+    self:OnProfileUpdate("AceDB became available")
+    return true
 end
 
 function Database:RegisterProfileCallbacks()

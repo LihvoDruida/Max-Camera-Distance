@@ -19,10 +19,35 @@ local L = setmetatable({}, {
         return key
     end,
 })
-local AceConfig = (LibStub and LibStub("AceConfig-3.0", true))
-local AceConfigDialog = (LibStub and LibStub("AceConfigDialog-3.0", true))
-local AceDBOptions = (LibStub and LibStub("AceDBOptions-3.0", true))
-local AceConfigRegistry = (LibStub and LibStub("AceConfigRegistry-3.0", true))
+-- Ace3 is supplied by whichever addon happens to embed it, and addons load in
+-- alphabetical folder order. A provider that sorts after "Max_Camera_Distance"
+-- (WeakAuras, Plater, TomTom, Questie ...) is not in LibStub yet while this file
+-- runs, so a one-shot lookup here left these nil for the whole session: the
+-- options table was never registered, and the only visible symptom was
+-- AceConfigDialog:Open() later complaining that the addon "isn't registered
+-- with AceConfigRegistry". Because the enabled addon list is stored PER
+-- CHARACTER, that made the failure look character-specific. Resolve lazily.
+local AceConfig, AceConfigDialog, AceDBOptions, AceConfigRegistry
+
+local function ResolveConfigLibs()
+    LibStub = LibStub or _G.LibStub
+    if not LibStub then return end
+
+    AceConfig = AceConfig or LibStub("AceConfig-3.0", true)
+    AceConfigDialog = AceConfigDialog or LibStub("AceConfigDialog-3.0", true)
+    AceDBOptions = AceDBOptions or LibStub("AceDBOptions-3.0", true)
+    AceConfigRegistry = AceConfigRegistry or LibStub("AceConfigRegistry-3.0", true)
+end
+
+ResolveConfigLibs()
+
+-- AddToBlizOptions must run exactly once. SetupOptions can now be retried, and
+-- a second call would add a duplicate "Max Camera Distance" category.
+local blizOptionsAdded = false
+
+function Config:ResolveLibs()
+    ResolveConfigLibs()
+end
 
 local Compat = ns.Compat or {}
 local IS_RETAIL = Compat.IS_RETAIL and true or false
@@ -141,9 +166,49 @@ local function GetOption(key)
 end
 
 function Config:NotifyChange()
-    if AceConfigRegistry and AceConfigRegistry.NotifyChange then
-        AceConfigRegistry:NotifyChange(addonName)
+    ResolveConfigLibs()
+    if not (AceConfigRegistry and AceConfigRegistry.NotifyChange) then return end
+    -- NotifyChange throws on an unregistered app name, and this runs from
+    -- profile callbacks that fire before SetupOptions has succeeded.
+    if not Config:IsRegistered() then return end
+    pcall(AceConfigRegistry.NotifyChange, AceConfigRegistry, addonName)
+end
+
+-- True once the options table is actually in AceConfigRegistry. This is the
+-- exact condition AceConfigDialog:Open() tests, so it is the only honest way to
+-- report "settings are available".
+function Config:IsRegistered()
+    ResolveConfigLibs()
+    if not AceConfigRegistry then return false end
+
+    if type(AceConfigRegistry.GetOptionsTable) == "function" then
+        local ok, tbl = pcall(AceConfigRegistry.GetOptionsTable, AceConfigRegistry, addonName)
+        if ok then return tbl ~= nil end
     end
+
+    local tables = rawget(AceConfigRegistry, "tables")
+    return type(tables) == "table" and tables[addonName] ~= nil
+end
+
+-- Called from every entry point that opens the settings window. If the options
+-- table is missing because Ace3 arrived late, build it now rather than showing
+-- the user a raw AceConfigRegistry error.
+function Config:EnsureRegistered()
+    if Config:IsRegistered() then return true end
+
+    if ns.Database and not ns.Database.db and ns.Database.InitDB then
+        local ok, err = pcall(ns.Database.InitDB, ns.Database)
+        if not ok then
+            print(addonName .. ": deferred DB init failed: " .. tostring(err))
+        end
+    end
+
+    local ok, err = pcall(Config.SetupOptions, Config)
+    if not ok then
+        print(addonName .. ": deferred options setup failed: " .. tostring(err))
+    end
+
+    return Config:IsRegistered()
 end
 
 local function BoolText(value)
@@ -594,7 +659,18 @@ local function InjectContextOptions(args, baseOrder, mode, maxDistance)
 end
 
 function Config:SetupOptions()
-    if not ns.Database or not ns.Database.db then return end
+    ResolveConfigLibs()
+
+    if Config:IsRegistered() then return true end
+
+    -- A silent return here was the whole reason this failure was undiagnosable:
+    -- the addon kept working, only the settings window was missing, and nothing
+    -- said why. Say it out loud.
+    if not ns.Database or not ns.Database.db then
+        print(addonName .. ": settings not built - database is not ready yet.")
+        return false
+    end
+
     local defaults = ns.Database.DEFAULTS
 
     local maxDistance = defaults.MAX_POSSIBLE_DISTANCE or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
@@ -1549,21 +1625,50 @@ function Config:SetupOptions()
     end
 
     if not AceConfig then
-        print(addonName .. ": AceConfig-3.0 not found.")
-        return
+        -- Not fatal and not final: PLAYER_LOGIN retries once every addon has
+        -- loaded, so a late Ace3 provider still gets us a settings window.
+        print(addonName .. ": AceConfig-3.0 is not available yet; settings will be built once it loads.")
+        return false
     end
 
     local okRegister, errRegister = pcall(AceConfig.RegisterOptionsTable, AceConfig, addonName, options)
     if not okRegister then
         print(addonName .. ": AceConfig registration failed: " .. tostring(errRegister))
-        return
+        return false
     end
 
-    if AceConfigDialog and AceConfigDialog.AddToBlizOptions then
+    if not blizOptionsAdded and AceConfigDialog and AceConfigDialog.AddToBlizOptions then
+        blizOptionsAdded = true
         local rootCategoryName = L["ADDON_TITLE"] or "Max Camera Distance"
         pcall(AceConfigDialog.AddToBlizOptions, AceConfigDialog, addonName, rootCategoryName)
         pcall(AceConfigDialog.AddToBlizOptions, AceConfigDialog, addonName, L["PROFILES"] or "Profiles", rootCategoryName, "profiles")
     end
+
+    return true
+end
+
+-- Opens the settings window, building the options table first if a late-loading
+-- Ace3 meant it was never built.
+function Config:Open()
+    ResolveConfigLibs()
+
+    if not Config:EnsureRegistered() then
+        print(addonName .. ": settings are unavailable because Ace3 (AceConfig-3.0) is not loaded. Run /mcd deps for details.")
+        return false
+    end
+
+    if not (AceConfigDialog and AceConfigDialog.Open) then
+        print(addonName .. ": AceConfigDialog-3.0 not found.")
+        return false
+    end
+
+    local ok, err = pcall(AceConfigDialog.Open, AceConfigDialog, addonName)
+    if not ok then
+        print(addonName .. ": settings window failed: " .. tostring(err))
+        return false
+    end
+
+    return true
 end
 
 local function ApplyHookTooltip(target, titleText, descText, pathText)

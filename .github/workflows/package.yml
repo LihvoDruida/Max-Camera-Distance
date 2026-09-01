@@ -51,6 +51,18 @@ jobs:
       - name: Verify .toc files are current
         run: python3 tools/generate_tocs.py --check
 
+      # Catches typos and malformed XML in the load manifests before the
+      # packager runs. Externals are not fetched yet at this point, so their
+      # paths are reported as warnings rather than failures.
+      - name: Verify XML manifests (source tree)
+        run: python3 tools/verify_manifest.py --allow-missing-externals
+
+      - name: Install Lua 5.1 (probes and bytecode audit)
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+
+      - name: Run full pre-release gate
+        run: ./check_all.sh
+
       - name: Print Debug Info
         run: |
           echo "GitHub Ref: ${{ github.ref }}"
@@ -82,6 +94,13 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
         uses: BigWigsMods/packager@v2
+
+      # The externals are only on disk once the packager has run. This is the
+      # step that proves every <Include>/<Script> in the shipped build resolves
+      # to a real file - i.e. that Ace3 is actually LOADED and not merely
+      # present in libs/.
+      - name: Verify XML manifests (packaged artifact)
+        run: python3 tools/verify_manifest.py --root .release/Max_Camera_Distance
 
       - name: Add Summary
         run: |

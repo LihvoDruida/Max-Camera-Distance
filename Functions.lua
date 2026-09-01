@@ -2633,6 +2633,21 @@ function Functions:GetDependencySnapshot()
         { label = "LibMountInfo", found = LibMountInfo ~= nil, optional = true },
         { label = "LibDataBroker", found = HasLib("LibDataBroker-1.1"), optional = true },
         { label = "LibDBIcon", found = HasLib("LibDBIcon-1.0"), optional = true },
+
+        -- The library being present is not the same as the options table having
+        -- been registered: if Ace3 arrived after this addon loaded, every lib
+        -- below reports "found" while the settings window still refuses to open.
+        -- This line is the one that distinguishes those two cases.
+        {
+            label = "Options registered",
+            found = (ns.Config and ns.Config.IsRegistered and ns.Config:IsRegistered()) or false,
+            required = true,
+        },
+        {
+            label = "Profile storage",
+            found = (ns.Database and ns.Database.db and not ns.Database.usingFallbackDB) or false,
+            required = true,
+        },
     }
 end
 
@@ -2974,7 +2989,9 @@ function Functions:SlashCmdHandler(msg)
         Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off")
 
     elseif command == "config" then
-        if ACD and ACD.Open then
+        if ns.Config and ns.Config.Open then
+            ns.Config:Open()
+        elseif ACD and ACD.Open then
             local ok, err = pcall(ACD.Open, ACD, addonName)
             if not ok then
                 Functions:SendMessage("Error: settings window failed: " .. tostring(err))
