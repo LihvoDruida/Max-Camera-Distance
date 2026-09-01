@@ -60,8 +60,12 @@ jobs:
       - name: Install Lua 5.1 (probes and bytecode audit)
         run: sudo apt-get update && sudo apt-get install -y lua5.1
 
+      # Invoked through bash on purpose. The executable bit is a git file mode,
+      # and it does not survive a checkout made on Windows, a zip round-trip, or
+      # a file added without `git update-index --chmod=+x`. Depending on it made
+      # the gate fail with exit 126 (Permission denied) rather than running.
       - name: Run full pre-release gate
-        run: ./check_all.sh
+        run: bash ./check_all.sh
 
       - name: Print Debug Info
         run: |

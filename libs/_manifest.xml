@@ -2,21 +2,50 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://www.blizzard.com/wow/ui ..\FrameXML\UI.xsd">
 
-    <!-- Core libraries bundled for nolib-safe releases. -->
-    <Script file="LibStub\LibStub.lua"/>
-    <Script file="CallbackHandler-1.0\CallbackHandler-1.0.lua"/>
+    <!--
+        Library load manifest.
 
-    <!-- Ace3 -->
+        The previous version of this file bundled only LibCamera and left Ace3,
+        LibDataBroker and LibDBIcon to be "provided by another addon". That is
+        not a supported arrangement: WoW loads addons in alphabetical folder
+        order, so whether LibStub / Ace3 already existed when this addon's files
+        ran depended entirely on which OTHER addons the player had enabled and
+        where their folder names sorted relative to "Max_Camera_Distance".
+        Because the enabled-addon list is stored PER CHARACTER, the same install
+        worked on most characters and failed on one, with the only symptom being
+        "Max_Camera_Distance isn't registered with AceConfigRegistry".
+
+        The paths below are the folders created by the externals in .pkgmeta.
+        The Ace3, CallbackHandler, LibStub and LibDataBroker paths were verified
+        against the upstream repository layouts; LibDBIcon comes from WoWAce SVN
+        and was not independently verified. tools/verify_manifest.py runs against
+        the packaged artifact in CI and fails the build if any reference here is
+        missing, so a wrong path cannot reach a release.
+    -->
+
+    <!--@no-lib-strip@-->
+    <Script file="LibStub\LibStub.lua"/>
+    <Include file="CallbackHandler-1.0\CallbackHandler-1.0.xml"/>
+
     <Include file="AceAddon-3.0\AceAddon-3.0.xml"/>
     <Include file="AceConsole-3.0\AceConsole-3.0.xml"/>
+    <Include file="AceLocale-3.0\AceLocale-3.0.xml"/>
     <Include file="AceGUI-3.0\AceGUI-3.0.xml"/>
     <Include file="AceConfig-3.0\AceConfig-3.0.xml"/>
     <Include file="AceDB-3.0\AceDB-3.0.xml"/>
     <Include file="AceDBOptions-3.0\AceDBOptions-3.0.xml"/>
-    <Include file="AceLocale-3.0\AceLocale-3.0.xml"/>
+
+    <Script file="LibDataBroker-1.1\LibDataBroker-1.1.lua"/>
+    <Script file="LibDBIcon-1.0\LibDBIcon-1.0.lua"/>
+    <!--@end-no-lib-strip@-->
+
+    <!--
+        LibCamera lives in the repository, not in externals, so it is loaded
+        unconditionally. It calls LibStub:NewLibrary() at file scope with no nil
+        guard, which is a second reason LibStub must be loaded above rather than
+        borrowed from whatever addon happened to load first.
+    -->
     <Script file="LibCamera\LibCamera.lua"/>
     <Script file="LibMountInfo\LibMountInfo.lua"/>
-    <Script file="LibDataBroker-1.1\LibDataBroker-1.1.lua"/>
-    <Include file="LibDBIcon-1.0\lib.xml"/>
 
 </Ui>
