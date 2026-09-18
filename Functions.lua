@@ -83,6 +83,7 @@ local IsInGroup            = IsInGroup
 local GetNumGroupMembers   = GetNumGroupMembers
 local GetNumSubgroupMembers= GetNumSubgroupMembers
 
+local IS_FOREVER = Compat.IS_FOREVER and true or false
 local USES_MODERN_API = Compat.USES_MODERN_API and true or false
 local CONVERSION_RATIO = Compat.CONVERSION_RATIO or (USES_MODERN_API and 15 or 12.5)
 
@@ -117,6 +118,12 @@ local MANAGED_CVAR_NAMES = {
     "resampleAlwaysSharpen",
     "SoftTargetIconGameObject",
 }
+
+if IS_FOREVER then
+    MANAGED_CVAR_NAMES[#MANAGED_CVAR_NAMES + 1] = "volumeFog"
+    MANAGED_CVAR_NAMES[#MANAGED_CVAR_NAMES + 1] = "volumeFogInterior"
+    MANAGED_CVAR_NAMES[#MANAGED_CVAR_NAMES + 1] = "volumeFogLevel"
+end
 
 local CVAR_CANONICAL = {}
 for _, name in ipairs(MANAGED_CVAR_NAMES) do
@@ -529,12 +536,20 @@ local function NormalizeManagedCVarValue(cvarName, value, db)
         or cvarName == "resampleAlwaysSharpen"
         or cvarName == "SoftTargetIconGameObject"
         or cvarName == "CameraKeepCharacterCentered"
-        or cvarName == "test_cameraDynamicPitch" then
+        or cvarName == "test_cameraDynamicPitch"
+        or cvarName == "volumeFog"
+        or cvarName == "volumeFogInterior" then
         local num = tonumber(value)
         if value == true or value == "true" or num == 1 then
             return 1
         end
         return 0
+    elseif cvarName == "volumeFogLevel" then
+        local level = ClampNumber(value, 0, 3)
+        if level == nil and db then
+            level = ClampNumber(db.volumeFogLevel, 0, 3)
+        end
+        return math_floor((level or 2) + 0.5)
     elseif cvarName == "cameraIndirectOffset" then
         return ClampNumber(value, 0, 10) or ((db and ClampNumber(db.cameraIndirectOffset, 0, 10)) or 1.5)
     elseif cvarName == "test_cameraOverShoulder" then
@@ -2695,6 +2710,9 @@ function Functions:PrintRuntimeStatus()
     self:SendMessage(" - CVars: cameraDistanceMaxZoomFactor=" .. FormatCVar("cameraDistanceMaxZoomFactor") .. ", cameraDistanceMax=" .. FormatCVar("cameraDistanceMax") .. ", cameraDistanceMoveSpeed=" .. FormatCVar("cameraDistanceMoveSpeed") .. ", cameraZoomSpeed=" .. FormatCVar("cameraZoomSpeed"))
     self:SendMessage(" - timing: manualWheelSpeed=" .. tostring(db.moveViewDistance or "unknown") .. ", zoomTransitionTime=" .. tostring(db.zoomTransitionTime or "unknown"))
     self:SendMessage(" - CVars: keepCentered=" .. FormatCVar("CameraKeepCharacterCentered") .. ", reduceUnexpectedMovement=" .. FormatCVar("cameraReduceUnexpectedMovement") .. ", shoulder=" .. FormatCVar("test_cameraOverShoulder") .. ", dynamicPitch=" .. FormatCVar("test_cameraDynamicPitch"))
+    if IS_FOREVER then
+        self:SendMessage(" - Forever fog: volumeFog=" .. FormatCVar("volumeFog") .. ", interior=" .. FormatCVar("volumeFogInterior") .. ", level=" .. FormatCVar("volumeFogLevel"))
+    end
 
     -- Adaptive return: without these numbers there is no way to tell whether
     -- the camera stayed out because adaptation kicked in or because the pull
@@ -2781,6 +2799,12 @@ function Functions:ApplyManagedCVars()
     UpdateCVar("occludedSilhouettePlayer", db.occludedSilhouettePlayer and 1 or 0)
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
+
+    if IS_FOREVER then
+        UpdateCVar("volumeFog", db.volumeFog and 1 or 0)
+        UpdateCVar("volumeFogInterior", db.volumeFogInterior and 1 or 0)
+        UpdateCVar("volumeFogLevel", db.volumeFogLevel)
+    end
 
     RequestCVarGuardRefresh(false)
 end
@@ -2922,6 +2946,17 @@ function Functions:OnCVarUpdate(_, cvarName, value)
             return
         end
         db.softTargetInteract = (desired == 1)
+    elseif IS_FOREVER and cvarName == "volumeFog" then
+        -- Blizzard's own graphics UI/console may change this CVar. Mirror that
+        -- external change into the profile instead of fighting it.
+        db.volumeFog = (numValue == 1)
+        NotifyConfigChanged()
+    elseif IS_FOREVER and cvarName == "volumeFogInterior" then
+        db.volumeFogInterior = (numValue == 1)
+        NotifyConfigChanged()
+    elseif IS_FOREVER and cvarName == "volumeFogLevel" then
+        db.volumeFogLevel = math_floor(ClampNumber(numValue, 0, 3) + 0.5)
+        NotifyConfigChanged()
     elseif cvarName == "test_cameraDynamicPitch" or cvarName == "test_cameraOverShoulder" then
         Functions:UpdateActionCam()
         return

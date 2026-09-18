@@ -144,6 +144,25 @@ local defaultIndirect   = SafeGetCVarDefault("cameraIndirectVisibility")
 local defaultIndirectOffset = SafeGetCVarDefault("cameraIndirectOffset")
 local defaultOccludedSilhouette = SafeGetCVarDefault("occludedSilhouettePlayer")
 
+-- WoW: Forever exposes the modern volumetric-fog CVars, but this feature is
+-- intentionally Forever-only in Max Camera Distance. Read Blizzard's own
+-- client defaults instead of the current values so AceDB defaults never drift
+-- with the user's graphics settings. The fallbacks match the current generated
+-- CVar metadata and are used only if the beta client does not expose defaults
+-- during early addon loading.
+local defaultVolumeFog = nil
+local defaultVolumeFogInterior = nil
+local defaultVolumeFogLevel = nil
+if IS_FOREVER then
+    defaultVolumeFog = SafeGetCVarDefault("volumeFog")
+    defaultVolumeFogInterior = SafeGetCVarDefault("volumeFogInterior")
+    defaultVolumeFogLevel = SafeGetCVarDefault("volumeFogLevel")
+
+    if defaultVolumeFog == nil then defaultVolumeFog = 1 end
+    if defaultVolumeFogInterior == nil then defaultVolumeFogInterior = 1 end
+    defaultVolumeFogLevel = Clamp(tonumber(defaultVolumeFogLevel) or 2, 0, 3)
+end
+
 -- ============================================================================
 -- PUBLIC CONSTANTS (used by Config/Functions)
 -- ============================================================================
@@ -168,6 +187,14 @@ Database.DEFAULT_DEBUG_LEVEL = {
     info = false,
     debug = false,
 }
+
+if IS_FOREVER then
+    Database.DEFAULTS.FOREVER_FOG = {
+        volumeFog = (tonumber(defaultVolumeFog) or 0) == 1,
+        volumeFogInterior = (tonumber(defaultVolumeFogInterior) or 0) == 1,
+        volumeFogLevel = defaultVolumeFogLevel,
+    }
+end
 
 -- ============================================================================
 -- PROFILE DEFAULTS (REAL DB KEYS)
@@ -263,6 +290,15 @@ local PROFILE_DEFAULTS = {
     -- minimap
     minimap = { hide = false },
 }
+
+-- These SavedVariables only exist on WoW: Forever. Keeping them out of the
+-- shared defaults prevents Retail/Classic profiles from acquiring settings they
+-- can never use.
+if IS_FOREVER then
+    PROFILE_DEFAULTS.volumeFog = (tonumber(defaultVolumeFog) or 0) == 1
+    PROFILE_DEFAULTS.volumeFogInterior = (tonumber(defaultVolumeFogInterior) or 0) == 1
+    PROFILE_DEFAULTS.volumeFogLevel = defaultVolumeFogLevel
+end
 
 -- Per-activity combat keys. Generated rather than written out so that the set of
 -- activities cannot drift between Contexts.lua, Database.lua and Config.lua.
@@ -488,6 +524,12 @@ function Database:ApplyMigrations(profile)
     profile.occludedSilhouettePlayer = NormalizeBoolean(profile.occludedSilhouettePlayer, PROFILE_DEFAULTS.occludedSilhouettePlayer)
     profile.resampleAlwaysSharpen = NormalizeBoolean(profile.resampleAlwaysSharpen, PROFILE_DEFAULTS.resampleAlwaysSharpen)
     profile.softTargetInteract = NormalizeBoolean(profile.softTargetInteract, PROFILE_DEFAULTS.softTargetInteract)
+    if IS_FOREVER then
+        profile.volumeFog = NormalizeBoolean(profile.volumeFog, PROFILE_DEFAULTS.volumeFog)
+        profile.volumeFogInterior = NormalizeBoolean(profile.volumeFogInterior, PROFILE_DEFAULTS.volumeFogInterior)
+        profile.volumeFogLevel = Clamp(tonumber(profile.volumeFogLevel) or PROFILE_DEFAULTS.volumeFogLevel, 0, 3)
+        profile.volumeFogLevel = math.floor(profile.volumeFogLevel + 0.5)
+    end
     profile.actionCamShoulderInCombat = NormalizeBoolean(profile.actionCamShoulderInCombat, PROFILE_DEFAULTS.actionCamShoulderInCombat)
     profile.actionCamShoulderOutOfCombat = NormalizeBoolean(profile.actionCamShoulderOutOfCombat, PROFILE_DEFAULTS.actionCamShoulderOutOfCombat)
     profile.actionCamPitch = NormalizeBoolean(profile.actionCamPitch, PROFILE_DEFAULTS.actionCamPitch)

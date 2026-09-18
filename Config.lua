@@ -51,6 +51,7 @@ end
 
 local Compat = ns.Compat or {}
 local IS_RETAIL = Compat.IS_RETAIL and true or false
+local IS_FOREVER = Compat.IS_FOREVER and true or false
 local USES_MODERN_API = Compat.USES_MODERN_API and true or false
 local HasCVar = Compat.HasCVar or function() return false end
 local SupportsFSRSharpen = Compat.SupportsFSRSharpen or function() return false end
@@ -153,6 +154,12 @@ local function SetOption(key, value)
         if ns.Functions and ns.Functions.RefreshAfkMode then
             ns.Functions:RefreshAfkMode(true)
         end
+    elseif IS_FOREVER and (key == "volumeFog" or key == "volumeFogInterior" or key == "volumeFogLevel") then
+        -- Graphics-only Forever settings should not force a camera state
+        -- recomputation just to write one CVar.
+        if ns.Functions and ns.Functions.ApplyManagedCVars then
+            ns.Functions:ApplyManagedCVars()
+        end
     elseif shouldApplyNow then
         ApplyNow()
     end
@@ -164,6 +171,18 @@ local function GetOption(key)
     local db = GetDB()
     if not db then return nil end
     return db[key]
+end
+
+local function GetForeverFogDefault(key, fallback)
+    local defaults = ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.FOREVER_FOG
+    if defaults and defaults[key] ~= nil then
+        return defaults[key]
+    end
+    return fallback
+end
+
+local function ForeverFogOptionVisible(cvarName)
+    return IS_FOREVER and HasCVar(cvarName)
 end
 
 function Config:NotifyChange()
@@ -1359,6 +1378,70 @@ function Config:SetupOptions()
                         order = 0.5,
                         width = "full",
                         hidden = function() return not hasQuestWatch end,
+                    },
+
+                    -- WoW: Forever-only volumetric fog controls. These directly
+                    -- mirror the client's CVars and are deliberately not exposed
+                    -- on Retail or the other Classic flavors.
+                    foreverFogHeader = {
+                        type = "header",
+                        name = L["FOREVER_FOG_HEADER"] or "WoW: Forever — Volumetric Fog",
+                        order = 20,
+                        hidden = function() return not IS_FOREVER end,
+                    },
+                    foreverFogDesc = {
+                        type = "description",
+                        name = L["FOREVER_FOG_DESC"] or "Forever-only graphics controls. Defaults are read from the game client; changing them writes the matching CVar immediately.",
+                        order = 20.1,
+                        width = "full",
+                        hidden = function() return not IS_FOREVER end,
+                    },
+                    volumeFog = {
+                        type = "toggle",
+                        name = L["FOREVER_VOLUME_FOG"] or "Volumetric Fog",
+                        desc = function()
+                            local default = GetForeverFogDefault("volumeFog", true) and "1" or "0"
+                            return string.format(L["FOREVER_VOLUME_FOG_DESC"] or "Controls volumeFog. 0 = disabled, 1 = enabled. Game default: %s.", default)
+                        end,
+                        get = function() return GetOption("volumeFog") end,
+                        set = function(_, val) SetOption("volumeFog", val) end,
+                        order = 21,
+                        width = "full",
+                        hidden = function() return not ForeverFogOptionVisible("volumeFog") end,
+                    },
+                    volumeFogInterior = {
+                        type = "toggle",
+                        name = L["FOREVER_VOLUME_FOG_INTERIOR"] or "Interior Volumetric Fog",
+                        desc = function()
+                            local default = GetForeverFogDefault("volumeFogInterior", true) and "1" or "0"
+                            return string.format(L["FOREVER_VOLUME_FOG_INTERIOR_DESC"] or "Controls volumeFogInterior. 0 = disabled, 1 = enabled. Game default: %s.", default)
+                        end,
+                        get = function() return GetOption("volumeFogInterior") end,
+                        set = function(_, val) SetOption("volumeFogInterior", val) end,
+                        order = 22,
+                        width = "full",
+                        hidden = function() return not ForeverFogOptionVisible("volumeFogInterior") end,
+                    },
+                    volumeFogLevel = {
+                        type = "select",
+                        name = L["FOREVER_VOLUME_FOG_LEVEL"] or "Volumetric Fog Quality",
+                        desc = function()
+                            local default = tonumber(GetForeverFogDefault("volumeFogLevel", 2)) or 2
+                            return string.format(L["FOREVER_VOLUME_FOG_LEVEL_DESC"] or "Controls volumeFogLevel. Supported values are 0 through 3. Game default: %d.", default)
+                        end,
+                        values = function()
+                            return {
+                                [0] = L["FOREVER_VOLUME_FOG_LEVEL_0"] or "0 — Minimum",
+                                [1] = L["FOREVER_VOLUME_FOG_LEVEL_1"] or "1 — Level 1",
+                                [2] = L["FOREVER_VOLUME_FOG_LEVEL_2"] or "2 — Level 2",
+                                [3] = L["FOREVER_VOLUME_FOG_LEVEL_3"] or "3 — Maximum",
+                            }
+                        end,
+                        get = function() return tonumber(GetOption("volumeFogLevel")) or 0 end,
+                        set = function(_, val) SetOption("volumeFogLevel", tonumber(val) or 0) end,
+                        order = 23,
+                        width = "full",
+                        hidden = function() return not ForeverFogOptionVisible("volumeFogLevel") end,
                     },
                     actionCamHeader = {
                         type = "header",

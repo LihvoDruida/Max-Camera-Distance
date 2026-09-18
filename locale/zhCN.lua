@@ -447,3 +447,17 @@ if AceTable then
         AceTable[key] = value
     end
 end
+
+-- 仅限 WoW: Forever 的体积雾
+L["FOREVER_FOG_HEADER"] = "WoW: Forever — 体积雾"
+L["FOREVER_FOG_DESC"] = "仅适用于 Forever 的图形设置。默认值直接从游戏客户端读取；更改后会立即写入对应的 CVar。"
+L["FOREVER_VOLUME_FOG"] = "体积雾"
+L["FOREVER_VOLUME_FOG_DESC"] = "控制 volumeFog。0 = 关闭，1 = 开启。游戏默认值：%s。"
+L["FOREVER_VOLUME_FOG_INTERIOR"] = "室内体积雾"
+L["FOREVER_VOLUME_FOG_INTERIOR_DESC"] = "控制 volumeFogInterior。0 = 关闭，1 = 开启。游戏默认值：%s。"
+L["FOREVER_VOLUME_FOG_LEVEL"] = "体积雾质量"
+L["FOREVER_VOLUME_FOG_LEVEL_DESC"] = "控制 volumeFogLevel。支持 0 到 3。游戏默认值：%d。"
+L["FOREVER_VOLUME_FOG_LEVEL_0"] = "0 — 最低"
+L["FOREVER_VOLUME_FOG_LEVEL_1"] = "1 — 等级 1"
+L["FOREVER_VOLUME_FOG_LEVEL_2"] = "2 — 等级 2"
+L["FOREVER_VOLUME_FOG_LEVEL_3"] = "3 — 最高"

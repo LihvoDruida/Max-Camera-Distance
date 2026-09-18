@@ -401,3 +401,17 @@ if AceTable then
         AceTable[key] = value
     end
 end
+
+-- Brouillard volumétrique réservé à WoW: Forever
+L["FOREVER_FOG_HEADER"] = "WoW: Forever — Brouillard volumétrique"
+L["FOREVER_FOG_DESC"] = "Réglages graphiques réservés à Forever. Les valeurs par défaut sont lues directement depuis le client du jeu ; les changements écrivent immédiatement la CVar correspondante."
+L["FOREVER_VOLUME_FOG"] = "Brouillard volumétrique"
+L["FOREVER_VOLUME_FOG_DESC"] = "Contrôle volumeFog. 0 = désactivé, 1 = activé. Valeur par défaut du jeu : %s."
+L["FOREVER_VOLUME_FOG_INTERIOR"] = "Brouillard volumétrique intérieur"
+L["FOREVER_VOLUME_FOG_INTERIOR_DESC"] = "Contrôle volumeFogInterior. 0 = désactivé, 1 = activé. Valeur par défaut du jeu : %s."
+L["FOREVER_VOLUME_FOG_LEVEL"] = "Qualité du brouillard volumétrique"
+L["FOREVER_VOLUME_FOG_LEVEL_DESC"] = "Contrôle volumeFogLevel. Valeurs prises en charge : 0 à 3. Valeur par défaut du jeu : %d."
+L["FOREVER_VOLUME_FOG_LEVEL_0"] = "0 — Minimum"
+L["FOREVER_VOLUME_FOG_LEVEL_1"] = "1 — Niveau 1"
+L["FOREVER_VOLUME_FOG_LEVEL_2"] = "2 — Niveau 2"
+L["FOREVER_VOLUME_FOG_LEVEL_3"] = "3 — Maximum"

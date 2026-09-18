@@ -1,67 +1,28 @@
-#### release 7.5.1
+## [9.4] - 2026-09-18
 
-**Fixed: settings window unavailable on some characters ("isn't registered with AceConfigRegistry")**
+- Added WoW: Forever-only volumetric fog controls under Extra Features.
+- Added `volumeFog` and `volumeFogInterior` as 0/1 toggles and `volumeFogLevel` as a 0-3 selector.
+- Fog defaults are read from the Forever client via the CVar default API, with safe metadata fallbacks, so a new/reset profile matches the game's own defaults.
+- Added CVAR_UPDATE synchronization so changes made through Blizzard graphics settings or `/console` are reflected back into the addon instead of being overwritten.
+- Added Forever fog values to `/mcd status` diagnostics.
 
-The addon never loaded Ace3 itself. `libs/_manifest.xml` bundled only LibCamera,
-while `.pkgmeta` downloaded LibStub, AceDB, AceConfig and the rest into `libs/`
-without anything ever including them. The addon therefore depended on some
-*other* installed addon having already put Ace3 into LibStub.
+## [9.3] - 2026-09-18
 
-WoW loads addons in alphabetical folder order, so whether that had happened by
-the time `Config.lua` ran depended on which other addons were enabled and how
-their folder names sorted against `Max_Camera_Distance`. `Config.lua` captured
-`AceConfig-3.0` into a file local once, at load time, so a provider that sorted
-later (WeakAuras, Plater, TomTom, Questie and so on) left it `nil` for the whole
-session. `SetupOptions` then returned early **in silence**, the options table was
-never registered, and the only visible symptom appeared much later, when the
-minimap button or `/mcd config` called `AceConfigDialog:Open()`.
+- Added first-class World of Warcraft: Forever / Camelot support for beta 1.60.1 (Interface 16001).
+- Added a dedicated `Max_Camera_Distance_Camelot.toc` and load-time Forever marker so Forever is not misdetected as Classic Era or Retail.
+- Split product identity from API-family detection with `IS_FOREVER` and `USES_MODERN_API`.
+- Forever now uses the modern camera/CVar API path while keeping Retail-only gameplay contexts such as Mythic+ separate.
+- Added Forever-aware runtime diagnostics to `/mcd status`.
+- Hid Retail-only Skyriding/Dragonriding race controls on Forever.
 
-Because WoW stores the enabled-addon list **per character**, the same install
-worked on most characters and failed on one. Reinstalling, deleting saved
-variables and switching profiles could not fix it, and the same character name
-on another realm worked fine. It was never a name conflict or a class issue.
+## [9.2] - 2026-09-01
 
-Changes:
+### 🐛 Bug Fixes
 
-- `libs/_manifest.xml` now actually loads LibStub, CallbackHandler, AceConsole,
-  AceLocale, AceGUI, AceConfig, AceDB, AceDBOptions, LibDataBroker and LibDBIcon.
-  LibCamera is loaded last; it calls `LibStub:NewLibrary()` at file scope with no
-  nil guard, so it was a second way a missing LibStub could break loading.
-- Ace3 and AceDB are now resolved lazily rather than once at file-load time.
-- New `PLAYER_LOGIN` handler retries initialisation. Every addon has finished
-  loading by then, so a late library provider is always picked up.
-- If AceDB only appears late, the temporary fallback profile store is upgraded to
-  a real AceDB profile and the settings made in the meantime are carried over.
-- `Config:Open()` builds the options table on demand, so opening settings can no
-  longer produce a raw AceConfigRegistry error.
-- `SetupOptions` no longer fails silently: it reports why settings were not built.
-- `AddToBlizOptions` is guarded against running twice now that setup can retry.
+- Make Ace3 initialization resilient to load order
 
-**Diagnostics**
 
-- `/mcd deps` gained two lines: `Options registered` and `Profile storage`.
-  Previously every library reported "found" while the settings window still
-  refused to open, because the libraries were checked at command time rather than
-  at load time. Those two lines report the condition that actually matters.
+### 📦 Other Changes
 
-**Build and CI**
+- Run release gate through bash
 
-- New `tools/verify_manifest.py` walks the XML manifests and fails if any
-  `<Script>`/`<Include>` points at a file that is not there. A referenced but
-  absent library loads as nil and fails silently at runtime, which is exactly how
-  this bug reached users.
-- The packaging workflow now verifies the manifests before packaging and again
-  against the packaged artifact, so "library is in the zip but never loaded"
-  cannot ship.
-- New `check_all.sh` gate: Lua 5.1 syntax, bytecode global-leak audit, XML
-  well-formedness, TOC currency, manifest references, and the probe suite.
-- New `tests/probe_lateace3.lua` reproduces the late-Ace3 load order and asserts
-  that registration, the profile upgrade and the settings window all recover.
-  Confirmed to fail against the pre-fix code.
-- Fixed the global-leak audit's `SETGLOBAL` pattern, which matched nothing and so
-  had been passing on every file regardless of content.
-
-#### release 5.4
-
-- Toc Bumps Cata and Retail
-- Fix camera distance adjustment in combat, optimize event handling and CVar updates.

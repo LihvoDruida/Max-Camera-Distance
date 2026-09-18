@@ -298,6 +298,12 @@ local watchedCVars = {
     SoftTargetIconGameObject = true,
 }
 
+if Compat.IS_FOREVER then
+    watchedCVars.volumeFog = true
+    watchedCVars.volumeFogInterior = true
+    watchedCVars.volumeFogLevel = true
+end
+
 local watchedCVarsLower = {}
 for name in pairs(watchedCVars) do
     watchedCVarsLower[name:lower()] = true

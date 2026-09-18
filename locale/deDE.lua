@@ -401,3 +401,17 @@ if AceTable then
         AceTable[key] = value
     end
 end
+
+-- Volumetrischer Nebel nur für WoW: Forever
+L["FOREVER_FOG_HEADER"] = "WoW: Forever — Volumetrischer Nebel"
+L["FOREVER_FOG_DESC"] = "Grafikoptionen nur für Forever. Standardwerte werden direkt aus dem Spielclient gelesen; Änderungen schreiben sofort die entsprechende CVar."
+L["FOREVER_VOLUME_FOG"] = "Volumetrischer Nebel"
+L["FOREVER_VOLUME_FOG_DESC"] = "Steuert volumeFog. 0 = aus, 1 = an. Spielstandard: %s."
+L["FOREVER_VOLUME_FOG_INTERIOR"] = "Volumetrischer Nebel in Innenräumen"
+L["FOREVER_VOLUME_FOG_INTERIOR_DESC"] = "Steuert volumeFogInterior. 0 = aus, 1 = an. Spielstandard: %s."
+L["FOREVER_VOLUME_FOG_LEVEL"] = "Qualität des volumetrischen Nebels"
+L["FOREVER_VOLUME_FOG_LEVEL_DESC"] = "Steuert volumeFogLevel. Unterstützte Werte: 0 bis 3. Spielstandard: %d."
+L["FOREVER_VOLUME_FOG_LEVEL_0"] = "0 — Minimum"
+L["FOREVER_VOLUME_FOG_LEVEL_1"] = "1 — Stufe 1"
+L["FOREVER_VOLUME_FOG_LEVEL_2"] = "2 — Stufe 2"
+L["FOREVER_VOLUME_FOG_LEVEL_3"] = "3 — Maximum"
