@@ -238,14 +238,23 @@ function CVarGuard:RestoreKeepCenteredIfPossible()
         return
     end
 
-    if savedUserValues.CameraKeepCharacterCentered ~= nil then
-        local changed = SetManagedCVar("CameraKeepCharacterCentered", savedUserValues.CameraKeepCharacterCentered)
-        savedUserValues.CameraKeepCharacterCentered = nil
+    local restoreValue = savedUserValues.CameraKeepCharacterCentered
+    if restoreValue == nil then return end
 
-        if changed then
-            stateCache.lastRestoreKeepCentered = true
-            debugCounters.restoredMotionSicknessSettings = debugCounters.restoredMotionSicknessSettings + 1
-        end
+    local current = SafeGetCVar("CameraKeepCharacterCentered")
+    local target = tonumber(restoreValue) or 0
+    if current == target then
+        savedUserValues.CameraKeepCharacterCentered = nil
+        return
+    end
+
+    local changed = SetManagedCVar("CameraKeepCharacterCentered", restoreValue)
+    if changed then
+        -- Only forget the user's value after the restore actually committed. A
+        -- secure-in-combat rejection must remain retryable after combat ends.
+        savedUserValues.CameraKeepCharacterCentered = nil
+        stateCache.lastRestoreKeepCentered = true
+        debugCounters.restoredMotionSicknessSettings = debugCounters.restoredMotionSicknessSettings + 1
     end
 end
 
@@ -255,19 +264,21 @@ function CVarGuard:RestoreReduceUnexpectedMovementIfPossible()
         return
     end
 
-    local restoreValue = nil
+    local restoreValue = savedUserValues.cameraReduceUnexpectedMovement
+    if restoreValue == nil then return end
 
-    if savedUserValues.cameraReduceUnexpectedMovement ~= nil then
-        restoreValue = savedUserValues.cameraReduceUnexpectedMovement
+    local current = SafeGetCVar("cameraReduceUnexpectedMovement")
+    local target = tonumber(restoreValue) or 0
+    if current == target then
         savedUserValues.cameraReduceUnexpectedMovement = nil
+        return
     end
 
-    if restoreValue ~= nil then
-        local changed = SetManagedCVar("cameraReduceUnexpectedMovement", restoreValue)
-        if changed then
-            stateCache.lastRestoreReduceUnexpectedMovement = true
-            debugCounters.restoredMotionSicknessSettings = debugCounters.restoredMotionSicknessSettings + 1
-        end
+    local changed = SetManagedCVar("cameraReduceUnexpectedMovement", restoreValue)
+    if changed then
+        savedUserValues.cameraReduceUnexpectedMovement = nil
+        stateCache.lastRestoreReduceUnexpectedMovement = true
+        debugCounters.restoredMotionSicknessSettings = debugCounters.restoredMotionSicknessSettings + 1
     end
 end
 

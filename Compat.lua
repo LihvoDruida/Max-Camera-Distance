@@ -15,6 +15,14 @@ local GetCVarDefault = GetCVarDefault
 local SetCVar = SetCVar
 local ReloadUI = ReloadUI
 local GetAddOnMetadata = GetAddOnMetadata
+local InCombatLockdown = InCombatLockdown
+
+-- Presence and write-policy metadata are immutable for a client session. Cache
+-- them once CVars are loaded instead of repeatedly querying C_CVar from config
+-- hidden callbacks and managed-CVar writes. Negative presence results are never
+-- cached before AreCVarsLoaded() says the table is ready.
+local cvarPresenceCache = {}
+local cvarWritePolicyCache = {}
 
 -- GetBuildInfo returns (version, build, date, tocversion). The 5th pcall result
 -- is tocversion, NOT the build number - every threshold below is an interface
@@ -54,7 +62,9 @@ Compat.IS_TBC_ANNIVERSARY = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 200
 Compat.IS_CLASSIC_ERA = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 10000 and Compat.INTERFACE < 20000)
 Compat.IS_CLASSIC = Compat.IS_MOP_CLASSIC or Compat.IS_CATA_CLASSIC or Compat.IS_WRATH_CLASSIC
     or Compat.IS_TBC_ANNIVERSARY or Compat.IS_CLASSIC_ERA
-Compat.IS_CLASSIC_FAMILY = Compat.IS_CLASSIC or Compat.IS_FOREVER
+-- Legacy aggregate kept for callers that need actual Classic products.
+-- Forever deliberately stays outside this family even though it shares modern APIs.
+Compat.IS_CLASSIC_FAMILY = Compat.IS_CLASSIC
 
 -- Midnight (12.0) introduced Secret Values; 12.1 tightened them considerably.
 -- Forever may expose some of the same modern helpers because it shares the
@@ -130,10 +140,13 @@ end
 -- is the correct fallback everywhere in this addon: an unreadable aura or combat
 -- flag simply means "do not switch camera state on account of it".
 function Compat.IsTruthy(value)
-    if value == nil then
+    -- IMPORTANT: issecretvalue() must be the first operation on a potentially
+    -- secret value. Even `value == nil` is a comparison and raises on boolean
+    -- secrets in tainted addon code.
+    if Compat.IsSecret(value) then
         return false
     end
-    if Compat.IsSecret(value) then
+    if value == nil then
         return false
     end
     local ok, result = pcall(function() return value and true or false end)
@@ -143,7 +156,12 @@ end
 -- Returns value only when it is a plain, readable value; nil otherwise. Use for
 -- anything that will be compared or used as a table key.
 function Compat.Plain(value)
-    if value == nil or Compat.IsSecret(value) then
+    -- Same ordering rule as IsTruthy: never compare first and ask whether the
+    -- value was secret afterwards.
+    if Compat.IsSecret(value) then
+        return nil
+    end
+    if value == nil then
         return nil
     end
     return value
@@ -261,7 +279,50 @@ function Compat.SafeCall(func, ...)
     return pcall(func, ...)
 end
 
+local function GetCVarWritePolicy(name)
+    if type(name) ~= 'string' then return nil end
+
+    local cached = cvarWritePolicyCache[name]
+    if cached then return cached end
+    if not Compat.AreCVarsLoaded() then return nil end
+
+    if C_CVar and C_CVar.GetCVarInfo then
+        local ok, value, _, _, _, isLockedFromUser, isSecure, isReadOnly = pcall(C_CVar.GetCVarInfo, name)
+        if ok and value ~= nil then
+            cached = {
+                locked = isLockedFromUser and true or false,
+                secure = isSecure and true or false,
+                readOnly = isReadOnly and true or false,
+            }
+            cvarWritePolicyCache[name] = cached
+            return cached
+        end
+    end
+
+    return nil
+end
+
+function Compat.CanSetCVar(name)
+    local policy = GetCVarWritePolicy(name)
+    if policy then
+        if policy.locked or policy.readOnly then
+            return false
+        end
+        if policy.secure and type(InCombatLockdown) == 'function' then
+            local ok, inCombat = pcall(InCombatLockdown)
+            if ok and inCombat then
+                return false
+            end
+        end
+    end
+    return true
+end
+
 function Compat.SafeSetCVar(name, value)
+    if not Compat.CanSetCVar(name) then
+        return false
+    end
+
     if C_CVar and C_CVar.SetCVar then
         local ok = pcall(C_CVar.SetCVar, name, value)
         if ok then
@@ -280,7 +341,29 @@ function Compat.SafeSetCVar(name, value)
 end
 
 function Compat.HasCVar(name)
-    return Compat.SafeGetCVar(name) ~= nil
+    if type(name) ~= 'string' then return false end
+
+    local cached = cvarPresenceCache[name]
+    if cached ~= nil then
+        return cached
+    end
+
+    local exists = Compat.SafeGetCVar(name) ~= nil
+    if exists then
+        cvarPresenceCache[name] = true
+    elseif Compat.AreCVarsLoaded() then
+        cvarPresenceCache[name] = false
+    end
+    return exists
+end
+
+function Compat.InvalidateCVarCaches()
+    for key in pairs(cvarPresenceCache) do
+        cvarPresenceCache[key] = nil
+    end
+    for key in pairs(cvarWritePolicyCache) do
+        cvarWritePolicyCache[key] = nil
+    end
 end
 
 function Compat.SupportsFSRSharpen()

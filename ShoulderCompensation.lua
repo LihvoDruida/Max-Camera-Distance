@@ -57,6 +57,13 @@ end
 
 local IsTruthySafe = Compat.IsTruthy or function(value) return value and true or false end
 
+local function SafeBoolCall(func, ...)
+    if type(func) ~= "function" then return false end
+    local ok, result = pcall(func, ...)
+    if not ok then return false end
+    return IsTruthySafe(result)
+end
+
 local function SafeAuraSpellIdAtIndex(unit, index)
     if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
         local ok, aura = pcall(C_UnitAuras.GetBuffDataByIndex, unit, index)
@@ -64,16 +71,14 @@ local function SafeAuraSpellIdAtIndex(unit, index)
             return nil
         end
         local okId, spellId = pcall(function() return aura.spellId end)
-        if okId and spellId ~= nil and (not issecretvalue or not issecretvalue(spellId)) then
-            return spellId
-        end
-        return nil
+        if not okId then return nil end
+        return Plain(spellId)
     end
 
     if UnitBuff then
         local ok, _, _, _, _, _, _, _, _, _, spellId = pcall(UnitBuff, unit, index)
-        if ok and (not issecretvalue or not issecretvalue(spellId)) then
-            return spellId
+        if ok then
+            return Plain(spellId)
         end
     end
 
@@ -463,8 +468,19 @@ Shoulder.state = Shoulder.state or {
 }
 
 function Shoulder:GetCurrentMountId()
+    -- Functions.lua owns the session mount-journal cache. Reuse it instead of
+    -- performing a second independent 1000+ entry scan for shoulder compensation.
+    -- The reference is resolved at call time, so load order is not a problem.
+    if ns.Compat and ns.Compat.USES_MODERN_API and ns.Functions and ns.Functions.GetActiveMountID then
+        local ok, mountId = pcall(ns.Functions.GetActiveMountID, ns.Functions)
+        if ok then
+            self.state.lastActiveMount = mountId
+            return mountId
+        end
+    end
+
     if not (C_MountJournal and C_MountJournal.GetMountInfoByID and C_MountJournal.GetMountIDs) then
-        return self.state.lastActiveMount
+        return nil
     end
 
     if self.state.lastActiveMount then
@@ -474,20 +490,24 @@ function Shoulder:GetCurrentMountId()
         end
     end
 
-    local okIds, ids = pcall(C_MountJournal.GetMountIDs)
-    if not okIds or type(ids) ~= "table" then
-        return self.state.lastActiveMount
-    end
-
-    for _, mountId in pairs(ids) do
-        local ok, _, _, _, active = pcall(C_MountJournal.GetMountInfoByID, mountId)
-        if ok and active then
-            self.state.lastActiveMount = mountId
-            return mountId
+    local function ScanJournal()
+        local ids = C_MountJournal.GetMountIDs()
+        if type(ids) ~= "table" then return nil end
+        for _, mountId in ipairs(ids) do
+            local _, _, _, active = C_MountJournal.GetMountInfoByID(mountId)
+            if active then
+                return mountId
+            end
         end
+        return nil
     end
 
-    return self.state.lastActiveMount
+    local ok, mountId = pcall(ScanJournal)
+    if ok then
+        self.state.lastActiveMount = mountId
+        return mountId
+    end
+    return nil
 end
 
 function Shoulder:GetCurrentModelId()
@@ -528,8 +548,17 @@ function Shoulder:GetCurrentModelId()
 end
 
 function Shoulder:GetVehicleId()
-    local vehicleGuid = UnitGUID and UnitGUID("vehicle")
-    if not vehicleGuid or (issecretvalue and issecretvalue(vehicleGuid)) then
+    local vehicleGuid = nil
+    if UnitGUID then
+        local ok, value = pcall(UnitGUID, "vehicle")
+        if ok then
+            vehicleGuid = value
+        end
+    end
+    -- UnitGUID may be secret under identity restrictions. Screen it before even
+    -- testing/comparing the value, then only pass a plain string to strsplit.
+    vehicleGuid = Plain(vehicleGuid)
+    if not vehicleGuid then
         return self.state.lastVehicleId
     end
 
@@ -609,7 +638,7 @@ function Shoulder:GetShapeshiftFactor()
 end
 
 function Shoulder:GetMountedFactor()
-    if not (IsMounted and IsMounted()) or (UnitOnTaxi and UnitOnTaxi("player")) then
+    if not SafeBoolCall(IsMounted) or SafeBoolCall(UnitOnTaxi, "player") then
         return nil
     end
 
@@ -656,7 +685,7 @@ function Shoulder:GetMountedFactor()
 end
 
 function Shoulder:GetVehicleFactor()
-    if not (UnitInVehicle and UnitInVehicle("player")) then
+    if not SafeBoolCall(UnitInVehicle, "player") then
         return nil
     end
 
@@ -704,9 +733,15 @@ function Shoulder:GetFactor()
 end
 
 function Shoulder:Invalidate()
+    -- UNIT_AURA can fire many times while the cache is already invalid. Make the
+    -- operation idempotent so repeated invalidations do not repeatedly touch the
+    -- model frame before anything has recomputed the factor.
+    local alreadyInvalid = self.state.cachedFactor == nil
+        and (self.state.cachedFactorExpiresAt or 0) == 0
     self.state.cachedFactor = nil
     self.state.cachedFactorExpiresAt = 0
 
+    if alreadyInvalid then return end
     if modelFrame and modelFrame.ClearModel then
         pcall(modelFrame.ClearModel, modelFrame)
     end

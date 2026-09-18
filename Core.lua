@@ -62,17 +62,18 @@ local function SafeCall(func, name, ...)
 end
 
 local function IsDeadOrGhostSafe(unit)
+    local truthy = Compat.IsTruthy or function(value) return value and true or false end
     if type(UnitIsDeadOrGhost) == "function" then
         local ok, result = pcall(UnitIsDeadOrGhost, unit)
-        if ok then return result and true or false end
+        if ok then return truthy(result) end
     end
     if type(UnitIsDead) == "function" then
         local ok, result = pcall(UnitIsDead, unit)
-        if ok and result then return true end
+        if ok and truthy(result) then return true end
     end
     if type(UnitIsGhost) == "function" then
         local ok, result = pcall(UnitIsGhost, unit)
-        if ok and result then return true end
+        if ok and truthy(result) then return true end
     end
     return false
 end
@@ -80,18 +81,18 @@ end
 local function IsPlayerReady()
     if type(UnitExists) ~= "function" then return false end
     local ok, exists = pcall(UnitExists, "player")
-    return ok and exists and not IsDeadOrGhostSafe("player")
+    local truthy = Compat.IsTruthy or function(value) return value and true or false end
+    return ok and truthy(exists) and not IsDeadOrGhostSafe("player")
 end
 
 -- Events that only ever matter for the player. Registering them globally means
 -- the handler is invoked for EVERY unit in the group: in a 40-man raid
--- UNIT_SPELLCAST_SUCCEEDED and UNIT_AURA fire hundreds of times per second and
--- each one paid for a pcall plus a table lookup before being discarded.
+-- UNIT_AURA and other unit-scoped events can fire at high frequency in groups.
+-- RegisterUnitEvent lets the client discard non-player traffic before Lua sees it.
 -- RegisterUnitEvent makes the client filter them for us.
 local PLAYER_ONLY_EVENTS = {
     UNIT_AURA = true,
     UNIT_MODEL_CHANGED = true,
-    UNIT_SPELLCAST_SUCCEEDED = true,
     UNIT_ENTERING_VEHICLE = true,
     UNIT_EXITING_VEHICLE = true,
 }
@@ -119,10 +120,15 @@ local function RequestSmartUpdate()
     end
 end
 
-local function InvalidateRuntimeCaches()
+local function InvalidateRuntimeCaches(scope)
     if ns.Functions and ns.Functions.InvalidateRuntimeCaches then
-        SafeCall(ns.Functions.InvalidateRuntimeCaches, "InvalidateRuntimeCaches", ns.Functions)
+        SafeCall(ns.Functions.InvalidateRuntimeCaches, "InvalidateRuntimeCaches", ns.Functions, scope)
     end
+end
+
+local function AuraAffectsSmartZoom()
+    local db = ns.Database and ns.Database.db and ns.Database.db.profile
+    return db and (db.autoMountZoom or db.dragonRacingRaceFirstPerson) and true or false
 end
 
 local function RefreshAfkRelevantState()
@@ -409,6 +415,14 @@ eventHandlers.PLAYER_REGEN_DISABLED = function(event)
     RefreshAfkRelevantState()
 end
 eventHandlers.PLAYER_REGEN_ENABLED = function(event)
+    -- CVarGuard may have deferred restoring a secure CVar while combat was
+    -- locked down. Force reconciliation here, but do NOT blindly re-apply every
+    -- managed CVar: doing so would briefly re-enable motion-sickness CVars while
+    -- an in-combat shoulder mode is still transitioning out.
+    local guard = ns.CVarGuard or ns.CVarMonitor
+    if guard and guard.Refresh then
+        SafeCall(guard.Refresh, "CVarGuard.RefreshAfterCombat", guard, true)
+    end
     RequestSmartUpdate(event)
     RefreshAfkRelevantState()
 end
@@ -439,7 +453,6 @@ end
 eventHandlers.UNIT_MODEL_CHANGED = function(event, unit)
     if unit ~= "player" then return end
     RequestShoulderRefresh()
-    RequestSmartUpdate()
 end
 
 -- UNIT_AURA on the player still fires constantly in combat, and each one used to
@@ -463,12 +476,20 @@ eventHandlers.UNIT_AURA = function(event, unit)
     -- vigor churns UNIT_AURA constantly, forced a full journal rescan up to ten
     -- times a second. Aura-derived signals are still dropped, so travel-form
     -- detection stays as responsive as before.
-    InvalidateRuntimeCaches()
+    local affectsSmartZoom = AuraAffectsSmartZoom()
+    if affectsSmartZoom then
+        -- Aura changes invalidate travel/race-derived signals, but they do not
+        -- change which group members are in combat. Preserve the group-combat
+        -- cache so raid aura churn cannot trigger repeated roster scans.
+        InvalidateRuntimeCaches("combat-only")
+    end
+
     RequestShoulderRefresh()
-    -- Travel forms, skyriding/race auras and temporary vehicle-style buffs do not
-    -- always flip PLAYER_MOUNT_DISPLAY_CHANGED immediately. Coalesced RequestUpdate
-    -- keeps reaction fast without running permanent OnUpdate work.
-    RequestSmartUpdate()
+
+    -- Combat-only and plain-distance profiles consume no aura-derived state.
+    if affectsSmartZoom then
+        RequestSmartUpdate()
+    end
 end
 
 eventHandlers.UNIT_ENTERING_VEHICLE = function(event, unit)
@@ -483,11 +504,6 @@ eventHandlers.UNIT_EXITING_VEHICLE = function(event, unit)
     InvalidateMountCache()
     RequestShoulderRefresh()
     RequestSmartUpdate()
-end
-
-eventHandlers.UNIT_SPELLCAST_SUCCEEDED = function(event, unit)
-    if unit ~= "player" then return end
-    RequestShoulderRefresh()
 end
 
 eventHandlers.LOADING_SCREEN_DISABLED = function()

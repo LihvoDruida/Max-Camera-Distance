@@ -1,7 +1,7 @@
 ---------------
 -- LIBCAMERA --
 ---------------
-local MAJOR, MINOR = "LibCamera-1.0", 3;
+local MAJOR, MINOR = "LibCamera-1.0", 4;
 local LibCamera = LibStub:NewLibrary(MAJOR, MINOR);
 
 if (not LibCamera) then
@@ -15,52 +15,51 @@ LibCamera.frame = LibCamera.frame or CreateFrame("Frame");
 -- LOCALS --
 ------------
 local onUpdateFunc = {};
+local onUpdateSnapshot = {};
 
 
 --------------
 -- ONUPDATE --
 --------------
-local lastUpdate;
+local updateAccumulator = 0;
 local MAX_UPDATE_TIME = 1.0/120.0;
-local function FrameOnUpdate(self, time)
-
-    if (not lastUpdate or (lastUpdate + MAX_UPDATE_TIME) < GetTime()) then
-
-        -- Calling the update function of reactive zoom easing
-        -- may call SetZoomUsingCVar() (if it misses the mark),
-        -- which will itself insert a new update function into
-        -- onUpdateFunc. Inserting into a table while traversing
-        -- can lead to "invalid key to 'next'" errors. So we have
-        -- to copy the table before we traverse it.
-        local onUpdateFuncCopy = {}
-        for k, func in pairs(onUpdateFunc) do
-            onUpdateFuncCopy[k] = func;
-        end
-
-        -- However, setting entries to nil while traversing a table is possible.
-        for k, func in pairs(onUpdateFuncCopy) do
-            if (func() == nil) then
-                onUpdateFunc[k] = nil;
-            end
-        end
-
-        lastUpdate = GetTime();
+local function FrameOnUpdate(self, elapsed)
+    if (next(onUpdateFunc) == nil) then
+        updateAccumulator = 0;
+        LibCamera.frame:SetScript("OnUpdate", nil);
+        return;
     end
 
-    -- remove onupdate if there isn't anything to check
+    updateAccumulator = updateAccumulator + (elapsed or 0);
+    if (updateAccumulator < MAX_UPDATE_TIME) then
+        return;
+    end
+    updateAccumulator = 0;
+
+    -- An update function may register another update function. Reuse one snapshot
+    -- table instead of allocating a new table on every animation tick.
+    for k in pairs(onUpdateSnapshot) do
+        onUpdateSnapshot[k] = nil;
+    end
+    for k, func in pairs(onUpdateFunc) do
+        onUpdateSnapshot[k] = func;
+    end
+
+    for k, func in pairs(onUpdateSnapshot) do
+        if (func() == nil) then
+            onUpdateFunc[k] = nil;
+        end
+    end
+
     if (next(onUpdateFunc) == nil) then
         LibCamera.frame:SetScript("OnUpdate", nil);
     end
-
 end
 
 local function SetupOnUpdate()
-    -- if we have checks to do and there isn't an OnUpdate on the frame, set it up
     if (next(onUpdateFunc) ~= nil and LibCamera.frame:GetScript("OnUpdate") == nil) then
+        updateAccumulator = 0;
         LibCamera.frame:SetScript("OnUpdate", FrameOnUpdate);
-
-        -- force the next update to happen on the NEXT frame
-        lastUpdate = GetTime();
     end
 end
 
@@ -117,16 +116,22 @@ local function safeSetCVar(name, value)
     return false;
 end
 
+local function positiveSpeed(value, fallback)
+    value = tonumber(value);
+    if (not value or value <= 0) then return fallback; end
+    return value;
+end
+
 local function getZoomSpeed()
-    return safeGetCVarNumber("cameraZoomSpeed", 20);
+    return positiveSpeed(safeGetCVarNumber("cameraZoomSpeed", 20), 20);
 end
 
 local function getYawSpeed()
-    return safeGetCVarNumber("cameraYawMoveSpeed", 180);
+    return positiveSpeed(safeGetCVarNumber("cameraYawMoveSpeed", 180), 180);
 end
 
 local function getPitchSpeed()
-    return safeGetCVarNumber("cameraPitchMoveSpeed", 90);
+    return positiveSpeed(safeGetCVarNumber("cameraPitchMoveSpeed", 90), 90);
 end
 
 
@@ -231,6 +236,8 @@ function LibCamera:SetZoom(endValue, duration, easingFunc, callback)
         easingFunc = easeInOutQuad;
     end
 
+    local zoomSpeed = getZoomSpeed();
+
     -- we want to start the counter on the frame the zoom started
     local beginTime;
     local beginValue;
@@ -241,13 +248,13 @@ function LibCamera:SetZoom(endValue, duration, easingFunc, callback)
     local func = function()
 
         -- func() gets called one frame after SetZoom(). This is why we set the values here!
-        beginTime = beginTime or GetTime();
+        local currentTime = GetTime();
+        beginTime = beginTime or currentTime;
         beginValue = beginValue or GetCameraZoom();
         change = change or (endValue - beginValue);
 
         frameCount = frameCount + 1;
 
-        local currentTime = GetTime();
         local currentValue = GetCameraZoom();
 
         local beyondPosition = (change > 0 and currentValue >= endValue) or (change < 0 and currentValue <= endValue);
@@ -302,9 +309,9 @@ function LibCamera:SetZoom(endValue, duration, easingFunc, callback)
 
 
             if (speed > 0) then
-                MoveViewOutStart(speed/getZoomSpeed());
+                MoveViewOutStart(speed/zoomSpeed);
             elseif (speed < 0) then
-                MoveViewInStart(-speed/getZoomSpeed());
+                MoveViewInStart(-speed/zoomSpeed);
             end
 
 
@@ -419,6 +426,7 @@ local customZoom;
 function LibCamera:CustomZoom(zoomFunction, callback)
     self:StopZooming();
 
+    local zoomSpeed = getZoomSpeed();
     local lastSpeed = 0;
     local func = function()
         local speed = zoomFunction();
@@ -439,9 +447,9 @@ function LibCamera:CustomZoom(zoomFunction, callback)
         if (speed == 0 and lastSpeed ~= 0) then
             reallyStopZooming();
         elseif (speed > 0) then
-            MoveViewOutStart(speed/getZoomSpeed());
+            MoveViewOutStart(speed/zoomSpeed);
         elseif (speed < 0) then
-            MoveViewInStart(-speed/getZoomSpeed());
+            MoveViewInStart(-speed/zoomSpeed);
         end
 
         lastSpeed = speed;
@@ -525,11 +533,12 @@ function LibCamera:Yaw(endValue, duration, easingFunc, callback)
     local beginValue = 0;
     local change = endValue - beginValue;
     local beginTime;
+    local yawSpeed = getYawSpeed();
 
     -- create a closure, for OnUpdate
     local func = function()
         local currentTime = GetTime();
-        beginTime = beginTime or GetTime();
+        beginTime = beginTime or currentTime;
 
         if (beginTime + duration > currentTime) then
             -- still in time
@@ -539,9 +548,9 @@ function LibCamera:Yaw(endValue, duration, easingFunc, callback)
             lastYaw = easingFunc(currentTime - beginTime, beginValue, change, duration);
 
             if (speed > 0) then
-                MoveViewRightStart(speed/getYawSpeed());
+                MoveViewRightStart(speed/yawSpeed);
             elseif (speed < 0) then
-                MoveViewLeftStart(-speed/getYawSpeed());
+                MoveViewLeftStart(-speed/yawSpeed);
             end
 
             return true;
@@ -576,6 +585,7 @@ function LibCamera:BeginContinuousYaw(endSpeed, duration)
     self:StopYawing();
 
     local beginTime;
+    local yawSpeed = getYawSpeed();
     local lastSpeed, lastTime;
     local isCoasting = false;
 
@@ -584,22 +594,22 @@ function LibCamera:BeginContinuousYaw(endSpeed, duration)
     local func = function()
         local speed = endSpeed;
         local currentTime = GetTime();
-        beginTime = beginTime or GetTime();
+        beginTime = beginTime or currentTime;
 
         -- accumulate the yaw into elapsed yaw, so that we can return it when we stop
         if (lastSpeed and lastTime) then
             elaspedYaw = elaspedYaw + (lastSpeed * (currentTime - lastTime))
         end
-        lastTime = GetTime();
+        lastTime = currentTime;
 
         if (beginTime + duration > currentTime) then
             -- linear increase of velocity
             speed = endSpeed * (currentTime - beginTime) / duration;
 
             if (speed > 0) then
-                MoveViewRightStart(speed/getYawSpeed());
+                MoveViewRightStart(speed/yawSpeed);
             elseif (speed < 0) then
-                MoveViewLeftStart(-speed/getYawSpeed());
+                MoveViewLeftStart(-speed/yawSpeed);
             end
 
             lastSpeed = speed;
@@ -609,9 +619,9 @@ function LibCamera:BeginContinuousYaw(endSpeed, duration)
             -- start yawing at the endSpeed if we haven't already
             if (not isCoasting) then
                 if (speed > 0) then
-                    MoveViewRightStart(speed/getYawSpeed());
+                    MoveViewRightStart(speed/yawSpeed);
                 elseif (speed < 0) then
-                    MoveViewLeftStart(-speed/getYawSpeed());
+                    MoveViewLeftStart(-speed/yawSpeed);
                 end
 
                 lastSpeed = speed;
@@ -684,11 +694,12 @@ function LibCamera:Pitch(endValue, duration, easingFunc, callback)
     local beginValue = 0;
     local change = endValue - beginValue;
     local beginTime;
+    local pitchSpeed = getPitchSpeed();
 
     -- create a closure, for OnUpdate
     local func = function()
         local currentTime = GetTime();
-        beginTime = beginTime or GetTime();
+        beginTime = beginTime or currentTime;
 
         if (beginTime + duration > currentTime) then
             -- still in time
@@ -698,9 +709,9 @@ function LibCamera:Pitch(endValue, duration, easingFunc, callback)
             lastPitch = easingFunc(currentTime - beginTime, beginValue, change, duration);
 
             if (speed > 0) then
-                MoveViewUpStart(speed/getPitchSpeed());
+                MoveViewUpStart(speed/pitchSpeed);
             elseif (speed < 0) then
-                MoveViewDownStart(-speed/getPitchSpeed());
+                MoveViewDownStart(-speed/pitchSpeed);
             end
 
             return true;

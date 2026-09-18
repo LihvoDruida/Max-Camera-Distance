@@ -304,7 +304,7 @@ L["HOOK_SILHOUETTE_LABEL_OBSCURED"] = "被遮蔽时显示轮廓"
 
 -- 摄像机碰撞
 L["INDIRECT_OFFSET"] = "碰撞灵敏度"
-L["INDIRECT_OFFSET_DESC"] = "控制 Blizzard 的降低镜头碰撞灵敏度。|cff66ccff0.0|r 为最小值，|cffff555510.0|r 为最大值，游戏默认值为 |cffffd1001.5|r。数值越高，在镜头被拉近前可容忍的遮挡越多。"
+L["INDIRECT_OFFSET_DESC"] = "控制 Blizzard 的降低镜头碰撞灵敏度。|cff66ccff0.0|r 为最小值，|cffff555510.0|r 为最大值。插件默认值会跟随当前游戏客户端的默认值。数值越高，在镜头被拉近前可容忍的遮挡越多。"
 L["COLLISION_HEADER"] = "镜头碰撞"
 L["COLLISION_DESC"] = "镜头碰撞的通用行为。这些设置是 |cffffd100全局|r 的，会在所有场景下生效，而不是按战斗情境区分。"
 L["COLLISION_SUMMARY_TEXT"] = "|cff66ccff降低镜头碰撞：|r %s\n|cff66ccff碰撞偏移：|r %s\n|cff66ccff遮挡时显示轮廓：|r %s\n|cff66ccff减少意外移动：|r %s\n|cff888888这些设置是全局的，在所有场景下生效。|r"

@@ -28,7 +28,7 @@ local Compat = ns.Compat or {}
 local CONVERSION_RATIO = Compat.CONVERSION_RATIO or 15
 
 local math_abs, math_min, math_max = math.abs, math.min, math.max
-local GetTime = GetTime
+local GetFramerate = GetFramerate
 local GetCameraZoom = GetCameraZoom
 
 local function DB()
@@ -68,16 +68,17 @@ local lastWatchedZoom = nil
 -- finish inside a single frame there is nothing to ease, so we hand the notch
 -- straight to Blizzard instead of paying for a LibCamera OnUpdate.
 local secondsPerFrame = 1 / 60
-local frameTimeAccum, frameTimeCount = 0, 0
 
-local function TrackFrameTime(elapsed)
-    if not elapsed or elapsed <= 0 then return end
-    frameTimeAccum = frameTimeAccum + elapsed
-    frameTimeCount = frameTimeCount + 1
-    if frameTimeCount >= 30 then
-        secondsPerFrame = frameTimeAccum / frameTimeCount
-        frameTimeAccum, frameTimeCount = 0, 0
-    end
+local function RefreshFrameTimeEstimate()
+    if type(GetFramerate) ~= "function" then return end
+    local ok, fps = pcall(GetFramerate)
+    fps = ok and tonumber(fps) or nil
+    if not fps or fps <= 0 then return end
+
+    -- Ignore pathological telemetry spikes while preserving genuinely low FPS;
+    -- this value is only used to decide whether a sub-frame easing is pointless.
+    fps = math_min(360, math_max(10, fps))
+    secondsPerFrame = 1 / fps
 end
 
 -- =====================================================================
@@ -154,6 +155,7 @@ function ReactiveZoom:ResetTarget()
     reactiveZoomTarget = nil
     passthroughPending, passthroughActive = false, false
     passthroughStartZoom, lastWatchedZoom = nil, nil
+    if watchdog then watchdog:Hide() end
 end
 
 -- The furthest the camera can currently go, in the same units GetCameraZoom
@@ -185,6 +187,7 @@ local function PassThrough(zoomIn, increments)
     passthroughPending = true
     passthroughActive = false
     passthroughStartZoom = GetCameraZoom and GetCameraZoom() or nil
+    if watchdog then watchdog:Show() end
 
     if zoomIn then
         if OriginalCameraZoomIn then OriginalCameraZoomIn(increments) end
@@ -195,6 +198,7 @@ end
 
 local function HandleWheel(zoomIn, increments)
     local db = DB()
+    RefreshFrameTimeEstimate()
     local currentZoom = GetCameraZoom()
     if type(currentZoom) ~= "number" then
         PassThrough(zoomIn, increments)
@@ -281,26 +285,23 @@ end
 -- Correction watchdog
 -- =====================================================================
 -- If anything moves the camera behind our back (a view change, an addon, the
--- cap shrinking under us), the stored target goes stale. While no easing is in
--- progress, keep it pinned to reality.
+-- cap shrinking under us), the stored target can go stale. Keep the watchdog
+-- alive only while a wheel/lib-camera movement is actually in flight.
 watchdog = CreateFrame("Frame")
 watchdog:Hide()
-watchdog:SetScript("OnUpdate", function(_, elapsed)
-    -- Always cheap: no API call, just arithmetic. The frame-time estimate has to
-    -- stay warm even while no zoom is in flight, because the very first notch
-    -- after a pause uses it to decide whether easing is worth it at all.
-    TrackFrameTime(elapsed)
-
-    -- Everything below costs an API call, so skip it unless there is a target
-    -- to look after. Previously this ran GetCameraZoom every frame for the whole
-    -- session, including while the feature was switched off.
-    if reactiveZoomTarget == nil then
-        passthroughPending, passthroughActive = false, false
+watchdog:SetScript("OnUpdate", function()
+    -- This frame exists only while a wheel/lib-camera movement is in flight.
+    -- Idling with Reactive Zoom enabled must cost zero per-frame work.
+    if reactiveZoomTarget == nil and not passthroughPending and not passthroughActive then
+        watchdog:Hide()
         return
     end
 
     local currentZoom = GetCameraZoom and GetCameraZoom()
-    if type(currentZoom) ~= "number" then return end
+    if type(currentZoom) ~= "number" then
+        ReactiveZoom:ResetTarget()
+        return
+    end
 
     if passthroughPending and passthroughStartZoom ~= currentZoom then
         passthroughPending = false
@@ -314,9 +315,11 @@ watchdog:SetScript("OnUpdate", function(_, elapsed)
     if passthroughPending or passthroughActive then return end
     if LibCamera and LibCamera.IsZooming and LibCamera:IsZooming() then return end
 
-    if reactiveZoomTarget ~= currentZoom then
-        reactiveZoomTarget = currentZoom
-    end
+    -- No animation owns the camera anymore. A future wheel notch starts from the
+    -- real camera position, so keeping an idle target/watchdog buys nothing.
+    reactiveZoomTarget = nil
+    lastWatchedZoom = nil
+    watchdog:Hide()
 end)
 
 -- =====================================================================
@@ -356,24 +359,12 @@ function ReactiveZoom:Install()
     end
 
     installed = true
-    if self:IsEnabled() then
-        watchdog:Show()
-    end
 end
 
 function ReactiveZoom:Refresh()
     self:ResetTarget()
     if self:IsEnabled() then
         self:Install()
-        -- Seed the target from where the camera actually is, so the first notch
-        -- after enabling accelerates from reality instead of from nothing.
-        local currentZoom = GetCameraZoom and GetCameraZoom()
-        if type(currentZoom) == "number" then
-            reactiveZoomTarget = currentZoom
-        end
-        watchdog:Show()
-    else
-        watchdog:Hide()
     end
 end
 

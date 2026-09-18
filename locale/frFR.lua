@@ -258,7 +258,7 @@ L["HOOK_SILHOUETTE_LABEL_OBSCURED"] = "Afficher la silhouette lorsqu'elle est ma
 
 -- *** Collision caméra ***
 L["INDIRECT_OFFSET"] = "Sensibilité de collision"
-L["INDIRECT_OFFSET_DESC"] = "Contrôle la sensibilité réduite de collision caméra de Blizzard. |cff66ccff0.0|r est le minimum, |cffff555510.0|r le maximum, et la valeur par défaut du jeu est |cffffd1001.5|r. Des valeurs plus élevées tolèrent davantage d'obstruction avant que la caméra ne se rapproche."
+L["INDIRECT_OFFSET_DESC"] = "Contrôle la sensibilité réduite de collision caméra de Blizzard. |cff66ccff0.0|r est le minimum et |cffff555510.0|r le maximum. La valeur par défaut de l'addon suit celle du client de jeu actuel. Des valeurs plus élevées tolèrent davantage d'obstruction avant que la caméra ne se rapproche."
 L["COLLISION_HEADER"] = "Collision de la caméra"
 L["COLLISION_DESC"] = "Comportement général de collision de la caméra. Ces réglages sont |cffffd100globaux|r et s'appliquent partout, pas seulement selon le contexte de combat."
 L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffCollision caméra réduite :|r %s\n|cff66ccffDécalage de collision :|r %s\n|cff66ccffAfficher la silhouette en cas d\'obstruction :|r %s\n|cff66ccffRéduire les mouvements inattendus :|r %s\n|cff888888Ces réglages sont globaux et s\'appliquent partout.|r"

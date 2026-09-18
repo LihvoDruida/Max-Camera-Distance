@@ -142,6 +142,10 @@ local defaultSoftTarget = SafeGetCVarDefault("SoftTargetIconGameObject")
 local defaultReduceMove = SafeGetCVarDefault("cameraReduceUnexpectedMovement")
 local defaultIndirect   = SafeGetCVarDefault("cameraIndirectVisibility")
 local defaultIndirectOffset = SafeGetCVarDefault("cameraIndirectOffset")
+-- Current 12.1 metadata uses 6.0. GetCVarDefault remains authoritative on every
+-- flavor; this number is only the fallback if the client cannot expose defaults
+-- during early loading.
+defaultIndirectOffset = Clamp(tonumber(defaultIndirectOffset) or 6.0, 0, 10)
 local defaultOccludedSilhouette = SafeGetCVarDefault("occludedSilhouettePlayer")
 
 -- WoW: Forever exposes the modern volumetric-fog CVars, but this feature is
@@ -170,6 +174,7 @@ Database.DEFAULTS = {
     -- Distances are stored in YARDS in the profile
     MAX_POSSIBLE_DISTANCE = MAX_YARDS,
     CONVERSION_RATIO = CONVERSION_RATIO,
+    CAMERA_INDIRECT_OFFSET_DEFAULT = defaultIndirectOffset,
 
     -- Comfortable "normal" zoom when Smart Zoom is ON
     BLIZZARD_DEFAULT_YARDS = BLIZZARD_DEFAULT_YARDS,
@@ -258,7 +263,7 @@ local PROFILE_DEFAULTS = {
     -- advanced (best-effort defaults from client when possible)
     reduceUnexpectedMovement = (defaultReduceMove == 1) or false,
     cameraIndirectVisibility = (defaultIndirect == nil) and true or (defaultIndirect == 1),
-    cameraIndirectOffset = Clamp(tonumber(defaultIndirectOffset) or 1.5, 0, 10),
+    cameraIndirectOffset = defaultIndirectOffset,
     occludedSilhouettePlayer = (defaultOccludedSilhouette == 1) or false,
 
     resampleAlwaysSharpen = (defaultSharpen == 1) or false,

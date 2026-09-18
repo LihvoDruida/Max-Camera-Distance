@@ -258,7 +258,7 @@ L["HOOK_SILHOUETTE_LABEL_OBSCURED"] = "Silhouette bei Verdeckung anzeigen"
 
 -- *** Camera Collision ***
 L["INDIRECT_OFFSET"] = "Kollisionsempfindlichkeit"
-L["INDIRECT_OFFSET_DESC"] = "Steuert Blizzards verringerte Empfindlichkeit der Kamerakollision. |cff66ccff0.0|r ist das Minimum, |cffff555510.0|r das Maximum und der Spielstandard ist |cffffd1001.5|r. Höhere Werte tolerieren mehr Hindernisse, bevor die Kamera heranzoomt."
+L["INDIRECT_OFFSET_DESC"] = "Steuert Blizzards verringerte Empfindlichkeit der Kamerakollision. |cff66ccff0.0|r ist das Minimum und |cffff555510.0|r das Maximum. Der Addon-Standard folgt dem Standard des aktuellen Spielclients. Höhere Werte tolerieren mehr Hindernisse, bevor die Kamera heranzoomt."
 L["COLLISION_HEADER"] = "Kamerakollision"
 L["COLLISION_DESC"] = "Allgemeines Verhalten der Kamerakollision. Diese Einstellungen sind |cffffd100global|r und gelten überall, nicht nur pro Kampfkontext."
 L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffReduzierte Kamerakollision:|r %s\n|cff66ccffKollisions-Offset:|r %s\n|cff66ccffSilhouette bei Verdeckung anzeigen:|r %s\n|cff66ccffUnerwartete Bewegungen reduzieren:|r %s\n|cff888888Diese Einstellungen sind global und gelten überall.|r"

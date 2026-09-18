@@ -206,9 +206,13 @@ updateFrame:Hide()
 -- expensive state checks (raid combat scan, mount/aura probes, context resolve)
 -- without making mount/combat reactions feel delayed.
 local RUNTIME_SIGNAL_CACHE_SECONDS = 0.05
-local GROUP_COMBAT_CACHE_SECONDS = 0.12
+local GROUP_COMBAT_CACHE_SECONDS = 0.25
 local CVAR_GUARD_REFRESH_SECONDS = 0.12
 local SHOULDER_UPDATE_INTERVAL = 0.033
+local RAID_UNITS, PARTY_UNITS = {}, {}
+for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
+for i = 1, 4 do PARTY_UNITS[i] = "party" .. i end
+
 local runtimeCache = {
     combatSignals = nil,
     combatSignalsExpiresAt = 0,
@@ -493,9 +497,17 @@ local function GetShapeshiftFormSpellID(formIndex)
     if not ok then return nil end
 
     for _, value in ipairs({ d, c, b, a }) do
-        local num = tonumber(value)
-        if num and num > 0 and type(value) ~= "boolean" then
-            return num
+        local plainValue
+        if Compat.Plain then
+            plainValue = Compat.Plain(value)
+        else
+            plainValue = value
+        end
+        if plainValue ~= nil then
+            local num = tonumber(plainValue)
+            if num and num > 0 and type(plainValue) ~= "boolean" then
+                return num
+            end
         end
     end
 
@@ -508,9 +520,20 @@ local function SafeIsInInstance()
     end
     local ok, inInstance, instanceType = pcall(IsInInstance)
     if ok then
-        return inInstance and true or false, instanceType
+        local plainInstanceType
+        if Compat.Plain then
+            plainInstanceType = Compat.Plain(instanceType)
+        else
+            plainInstanceType = instanceType
+        end
+        return IsTruthySafe(inInstance), plainInstanceType
     end
     return false, nil
+end
+
+local function GetIndirectOffsetDefault()
+    local defaults = ns.Database and ns.Database.DEFAULTS
+    return (defaults and tonumber(defaults.CAMERA_INDIRECT_OFFSET_DEFAULT)) or 6.0
 end
 
 
@@ -551,7 +574,7 @@ local function NormalizeManagedCVarValue(cvarName, value, db)
         end
         return math_floor((level or 2) + 0.5)
     elseif cvarName == "cameraIndirectOffset" then
-        return ClampNumber(value, 0, 10) or ((db and ClampNumber(db.cameraIndirectOffset, 0, 10)) or 1.5)
+        return ClampNumber(value, 0, 10) or ((db and ClampNumber(db.cameraIndirectOffset, 0, 10)) or GetIndirectOffsetDefault())
     elseif cvarName == "test_cameraOverShoulder" then
         return ClampNumber(value, -15, 15) or 0
     elseif cvarName == "cameraView" then
@@ -600,7 +623,7 @@ local function SanitizeRuntimeProfile(db)
     db.cameraPitchMoveSpeed = ClampNumber(db.cameraPitchMoveSpeed, 1, 360) or (ClampNumber(SafeGetCVar("cameraPitchMoveSpeed"), 1, 360) or 90)
     db.zoomTransitionTime = ClampNumber(db.zoomTransitionTime, 0, 2) or 0.5
     db.dismountDelay = ClampNumber(db.dismountDelay, 0, 10) or 0
-    db.cameraIndirectOffset = ClampNumber(db.cameraIndirectOffset, 0, 10) or 1.5
+    db.cameraIndirectOffset = ClampNumber(db.cameraIndirectOffset, 0, 10) or GetIndirectOffsetDefault()
 end
 
 
@@ -785,7 +808,7 @@ end
 -- 7) MOUNT / TRAVEL DETECT
 -- =====================================================================
 function Functions:IsSkyriding()
-    if IsMounted and IsMounted() and LibMountInfo and LibMountInfo.IsSkyriding then
+    if SafeBoolCall(IsMounted) and LibMountInfo and LibMountInfo.IsSkyriding then
         local ok, result = pcall(LibMountInfo.IsSkyriding, LibMountInfo)
         if ok then
             return result and true or false
@@ -824,7 +847,7 @@ function Functions:InvalidateMountCache()
 end
 
 function Functions:GetActiveMountID()
-    local mounted = IsMounted and IsMounted() or false
+    local mounted = SafeBoolCall(IsMounted)
     if not USES_MODERN_API or not mounted or not C_MountJournal or not C_MountJournal.GetMountIDs or not C_MountJournal.GetMountInfoByID then
         activeMountCache.mounted = mounted
         activeMountCache.mountID = nil
@@ -908,7 +931,7 @@ function Functions:IsFlyingMountActive()
 end
 
 function Functions:IsDragonRacingRaceActive()
-    if not (IsMounted and IsMounted()) then
+    if not SafeBoolCall(IsMounted) then
         return false
     end
 
@@ -936,11 +959,14 @@ function Functions:IsDragonRacingRaceActive()
         local inRace = false
 
         local function HasSafeDragonracingAuraSpellID(spellId)
-            if spellId == nil then
-                return false
+            -- Test secrecy before any comparison/table-key operation.
+            if issecretvalue then
+                local okSecret, isSecret = pcall(issecretvalue, spellId)
+                if not okSecret or isSecret then
+                    return false
+                end
             end
-
-            if issecretvalue and issecretvalue(spellId) then
+            if spellId == nil then
                 return false
             end
 
@@ -1004,10 +1030,10 @@ end
 function Functions:IsTravelFormOnlyActive()
     if LibMountInfo and LibMountInfo.IsMounted then
         local ok, mounted = pcall(LibMountInfo.IsMounted, LibMountInfo)
-        if ok and mounted then
+        if ok and IsTruthySafe(mounted) then
             return false
         end
-    elseif IsMounted and IsMounted() then
+    elseif SafeBoolCall(IsMounted) then
         return false
     end
 
@@ -1041,8 +1067,12 @@ function Functions:IsTravelFormOnlyActive()
     return false
 end
 
-function Functions:ShouldUseMountZoom(db)
-    if not IsInTravelForm() then
+function Functions:ShouldUseMountZoom(db, knownTravelActive)
+    local travelActive = knownTravelActive
+    if travelActive == nil then
+        travelActive = IsInTravelForm()
+    end
+    if not travelActive then
         return false
     end
 
@@ -1073,9 +1103,9 @@ end
 function IsInTravelForm()
     if LibMountInfo and LibMountInfo.IsMounted then
         local ok, mounted = pcall(LibMountInfo.IsMounted, LibMountInfo)
-        if ok and mounted then return true end
+        if ok and IsTruthySafe(mounted) then return true end
     else
-        if IsMounted and IsMounted() then return true end
+        if SafeBoolCall(IsMounted) then return true end
     end
 
     local formIndex = GetShapeshiftForm and GetShapeshiftForm() or nil
@@ -1431,15 +1461,16 @@ end
 -- bad state resolve turned into a wall of identical errors and every subsequent
 -- camera update in that frame was skipped. Now one failure is reported at most
 -- once every 10s and the other half of the pass still runs.
-local lastUpdateErrorAt = 0
+local lastUpdateErrorAt = {}
 
-local function RunGuarded(func, label)
-    local ok, err = pcall(func)
+local function RunGuarded(func, label, ...)
+    local ok, err = pcall(func, ...)
     if ok then return true end
 
     local now = (GetTime and GetTime()) or 0
-    if now == 0 or (now - lastUpdateErrorAt) > 10 then
-        lastUpdateErrorAt = now
+    local previous = lastUpdateErrorAt[label] or 0
+    if now == 0 or (now - previous) > 10 then
+        lastUpdateErrorAt[label] = now
         Functions:logMessage("error", label .. ": " .. tostring(err))
     end
     return false
@@ -1453,9 +1484,10 @@ updateFrame:SetScript("OnUpdate", function(self)
     updatePending = false
     self:Hide()
 
-    -- Always refresh ActionCam too, so shoulder mode can switch on combat enter/leave
-    RunGuarded(function() Functions:UpdateActionCam() end, "UpdateActionCam")
-    RunGuarded(function() Functions:UpdateSmartZoomState("auto_update") end, "UpdateSmartZoomState")
+    -- Always refresh ActionCam too, so shoulder mode can switch on combat enter/leave.
+    -- Pass methods directly instead of allocating two closures for every update.
+    RunGuarded(Functions.UpdateActionCam, "UpdateActionCam", Functions)
+    RunGuarded(Functions.UpdateSmartZoomState, "UpdateSmartZoomState", Functions, "auto_update")
 end)
 
 -- =====================================================================
@@ -1485,22 +1517,27 @@ function Functions:IsGroupInCombat()
 
     local result = false
 
-    -- One pcall around the whole scan instead of three per unit. A 40-man raid
-    -- used to cost up to 120 pcalls every time this cache expired.
-    -- Every one of these three calls is conditionally secret for group members
-    -- in instanced content. Previously a single secret return raised an error
-    -- that unwound the whole loop through the outer pcall, so one unreadable
-    -- unit made the entire raid read as "not in combat". Screening each result
-    -- keeps the scan going and simply ignores the units we cannot read.
-    local function ScanUnits(prefix, count)
+    -- Roster counts already define which raid/party unit tokens can exist, so
+    -- UnitExists() was pure duplicate work. Prebuilt unit-token arrays also avoid
+    -- allocating "raid"..i / "party"..i strings on every scan. Group-unit API
+    -- returns may be secret on modern clients, so each value still goes through
+    -- the secret-safe helper; an unreadable member is ignored instead of aborting
+    -- the whole scan.
+    local function ScanRaid(count)
         for i = 1, count do
-            local unit = prefix .. i
-            local exists = IsTruthySafe(SafeValueCall(UnitExists, unit))
-            if exists then
-                local isSelf = IsTruthySafe(SafeValueCall(UnitIsUnit, unit, "player"))
-                if not isSelf and IsTruthySafe(SafeValueCall(UnitAffectingCombat, unit)) then
-                    return true
-                end
+            local unit = RAID_UNITS[i]
+            local isSelf = IsTruthySafe(SafeValueCall(UnitIsUnit, unit, "player"))
+            if not isSelf and IsTruthySafe(SafeValueCall(UnitAffectingCombat, unit)) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function ScanParty(count)
+        for i = 1, count do
+            if IsTruthySafe(SafeValueCall(UnitAffectingCombat, PARTY_UNITS[i])) then
+                return true
             end
         end
         return false
@@ -1510,13 +1547,10 @@ function Functions:IsGroupInCombat()
         if SafeBoolCall(IsEncounterInProgress) then
             result = true
         else
-            -- Cap defensive scan size. GetNumGroupMembers can briefly be stale during roster changes.
-            local ok, scanned = pcall(ScanUnits, "raid", math.min(memberCount, 40))
-            result = ok and scanned or false
+            result = ScanRaid(math.min(memberCount, 40))
         end
     elseif inGroup then
-        local ok, scanned = pcall(ScanUnits, "party", math.min(memberCount, 4))
-        result = ok and scanned or false
+        result = ScanParty(math.min(memberCount, 4))
     end
 
     runtimeCache.groupCombatKey = key
@@ -1555,15 +1589,20 @@ end
 -- signal", and the player/group triggers still drive combat zoom there.
 local function ResolveThreatFlag()
     local status = SafeValueCall(UnitThreatSituation, "player")
-    local plain = tonumber(Compat.Plain and Compat.Plain(status) or status)
-    return (plain ~= nil and plain > 0) and true or false
+    local plainStatus
+    if Compat.Plain then
+        plainStatus = Compat.Plain(status)
+    else
+        plainStatus = status
+    end
+    if plainStatus == nil then return false end
+    local numericStatus = tonumber(plainStatus)
+    return (numericStatus ~= nil and numericStatus > 0) and true or false
 end
 
--- Signals split into two tiers.
---
--- The cheap tier is computed eagerly because the state machine always needs it.
--- The expensive tier - anything that touches the mount journal, aura scans or
--- shapeshift probes - is computed on FIRST ACCESS and then memoised.
+-- Signals are lazy except for the activity context, which is cheap and shared.
+-- Combat/threat and anything that touches the mount journal, aura scans or
+-- shapeshift probes is computed on FIRST ACCESS and then memoised.
 --
 -- This matters because the state machine is a priority ladder: AFK and combat
 -- both outrank mount, and each of their branches is guarded by its own db
@@ -1572,8 +1611,23 @@ end
 -- the player was in combat and the result was discarded, or when
 -- autoMountZoom was switched off entirely and it could never be read.
 local LAZY_SIGNALS = {
+    playerInCombat = function()
+        return SafeBoolCall(UnitAffectingCombat, "player")
+    end,
+    groupInCombat = function()
+        return Functions:IsGroupInCombat()
+    end,
+    hasThreat = function()
+        return ResolveThreatFlag()
+    end,
+    forceCombatZoom = function(db)
+        return (db and ShouldForceCombatZoom(db)) and true or false
+    end,
+    isMounted = function()
+        return IsInTravelForm() and true or false
+    end,
     mountZoomActive = function(db, s)
-        return s.isMounted and Functions:ShouldUseMountZoom(db) or false
+        return s.isMounted and Functions:ShouldUseMountZoom(db, true) or false
     end,
     isSkyriding = function(db, s)
         return s.isMounted and Functions:IsSkyriding() or false
@@ -1618,7 +1672,7 @@ local function ResolveActiveMount(self)
     if rawget(self, "__mountResolved") then return end
     rawset(self, "__mountResolved", true)
 
-    if not rawget(self, "isMounted") then
+    if not self.isMounted then
         rawset(self, "isFlyingMount", false)
         rawset(self, "mountTypeID", nil)
         rawset(self, "activeMountID", nil)
@@ -1643,12 +1697,9 @@ local function GetCombatSignals(db)
         __db = db,
         ResolveActiveMount = ResolveActiveMount,
 
-        -- Cheap tier: always needed by the state machine.
-        playerInCombat = SafeBoolCall(UnitAffectingCombat, "player"),
-        groupInCombat = Functions:IsGroupInCombat(),
-        hasThreat = ResolveThreatFlag(),
-        isMounted = IsInTravelForm(),
-        forceCombatZoom = (db and ShouldForceCombatZoom(db)) and true or false,
+        -- Only context is eager. Combat, threat and mount signals resolve on first
+        -- access, so mount-only/manual profiles do not pay for raid scans or
+        -- threat queries that cannot affect their camera state.
         rawContext = GetCombatContextRaw(db),
     }, signalsMeta)
 
@@ -1685,14 +1736,19 @@ end
 -- in order to populate it - which defeats the lazy tier above. The camera pass
 -- runs on every queued update; the full snapshot is only needed by /mcd status
 -- and the options panel, where an extra mount journal lookup costs nothing.
-local function ResolveZoomTarget(db)
+local function ResolveZoomTarget(db, includeDiagnostics)
     local defaults = ns.Database and ns.Database.DEFAULTS
     local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or 39
 
     local signals = GetCombatSignals(db)
     local rawContext = signals.rawContext
     local resolvedContext = rawContext
-    local combatActive, triggerConfig, activeTriggers = GetCombatActivation(db, signals)
+    local triggerConfig = GetCombatTriggerConfig(db)
+    local activeTriggers = { player = false, group = false, threat = false, worldBoss = false }
+    local combatActive = false
+    if includeDiagnostics or (db and db.autoCombatZoom) then
+        combatActive, triggerConfig, activeTriggers = GetCombatActivation(db, signals)
+    end
 
     local state = ZOOM_STATE_NORMAL
     if db and afkActive then
@@ -1758,7 +1814,7 @@ end
 local function BuildStatusSnapshot(db)
     local state, targetYards, resolvedContext, signals, _,
         triggerConfig, activeTriggers, rawContext,
-        targetDistanceKey, targetSourceType, targetPresetId = ResolveZoomTarget(db)
+        targetDistanceKey, targetSourceType, targetPresetId = ResolveZoomTarget(db, true)
 
     local pendingReturnActive = pendingReturnInfo ~= nil
     local pendingReturnContext = pendingReturnActive and pendingReturnInfo.context or nil
@@ -1795,7 +1851,7 @@ local function BuildStatusSnapshot(db)
         forceWorldBoss = signals.forceCombatZoom,
         reduceUnexpectedMovement = (db and db.reduceUnexpectedMovement) and true or false,
         indirectCollisionEnabled = (db and db.cameraIndirectVisibility) and true or false,
-        indirectCollisionOffset = (db and db.cameraIndirectOffset) or 1.5,
+        indirectCollisionOffset = (db and db.cameraIndirectOffset) or GetIndirectOffsetDefault(),
         occludedSilhouetteEnabled = (db and db.occludedSilhouettePlayer) and true or false,
         triggerConfig = triggerConfig,
         activeTriggers = activeTriggers,
@@ -1857,10 +1913,7 @@ local function NormalizeAfkDirection(value)
 end
 
 local function IsPlayerAFKSafe()
-    local ok, isAfk = pcall(function()
-        return tostring(UnitIsAFK("player")) == "true"
-    end)
-    return ok and isAfk or false
+    return SafeBoolCall(UnitIsAFK, "player")
 end
 
 local function IsProfessionActivityBlockingAfk()
@@ -2199,11 +2252,20 @@ function Functions:ApplyShoulderOffset(force)
 end
 
 local shoulderRefreshQueued = false
-local shoulderRefreshAgain = false
 
 function Functions:RequestShoulderRefresh()
+    -- When ActionCam shoulder tracking is not active there is nothing to write.
+    -- Keep only the compensation cache invalidation so the next activation uses
+    -- fresh model/mount data instead of scheduling timers for every aura/spell.
+    if not shoulderHandlerFrame:IsShown() then
+        if ShoulderCompensation and ShoulderCompensation.Invalidate then
+            ShoulderCompensation:Invalidate()
+        end
+        shoulderHandlerFrame.lastZoom = -1
+        return
+    end
+
     if shoulderRefreshQueued then
-        shoulderRefreshAgain = true
         return
     end
 
@@ -2218,41 +2280,35 @@ function Functions:RequestShoulderRefresh()
         RequestCVarGuardRefresh(isFinalPass == true)
     end
 
-    local function FinishSeries()
-        shoulderRefreshQueued = false
-        if shoulderRefreshAgain then
-            shoulderRefreshAgain = false
-            Functions:RequestShoulderRefresh()
-        end
-    end
+    -- One immediate pass makes model changes feel instant. One trailing pass
+    -- catches the final model after shapeshift/mount event bursts settle. The old
+    -- 0/.05/.18 three-pass recursion could remain alive indefinitely under
+    -- UNIT_AURA churn.
+    RefreshShoulderNow(false)
 
     if not (C_Timer and C_Timer.After) then
+        shoulderRefreshQueued = false
         RefreshShoulderNow(true)
-        FinishSeries()
         return
     end
 
-    local delays = { 0, 0.05, 0.18 }
-    local lastIndex = #delays
-    for index, delay in ipairs(delays) do
-        C_Timer.After(delay, function()
-            if not shoulderRefreshQueued then return end
-            RefreshShoulderNow(index == lastIndex)
-            if index == lastIndex then
-                FinishSeries()
-            end
-        end)
-    end
+    C_Timer.After(0.16, function()
+        if not shoulderRefreshQueued then return end
+        -- The trailing pass observes the latest state after the event burst, so
+        -- no recursive refresh series is necessary.
+        shoulderRefreshQueued = false
+        RefreshShoulderNow(true)
+    end)
 end
 
 shoulderHandlerFrame.lastZoom = -1
-shoulderHandlerFrame.lastTick = 0
-shoulderHandlerFrame:SetScript("OnUpdate", function(self)
-    local now = GetTime and GetTime() or 0
-    if now > 0 and (now - (self.lastTick or 0)) < SHOULDER_UPDATE_INTERVAL then
+shoulderHandlerFrame.elapsed = 0
+shoulderHandlerFrame:SetScript("OnUpdate", function(self, elapsed)
+    self.elapsed = (self.elapsed or 0) + (elapsed or 0)
+    if self.elapsed < SHOULDER_UPDATE_INTERVAL then
         return
     end
-    self.lastTick = now
+    self.elapsed = 0
     Functions:ApplyShoulderOffset(false)
 end)
 shoulderHandlerFrame:Hide()
@@ -2261,14 +2317,19 @@ function Functions:ShouldEnableShoulderNow()
     local db = DB()
     if not db then return false end
 
-    local signals = GetCombatSignals(db)
-    local inCombat = GetCombatActivation(db, signals)
+    local inCombatEnabled = db.actionCamShoulderInCombat and true or false
+    local outOfCombatEnabled = db.actionCamShoulderOutOfCombat and true or false
 
-    if inCombat then
-        return db.actionCamShoulderInCombat and true or false
+    if not inCombatEnabled and not outOfCombatEnabled then
+        return false
+    end
+    if inCombatEnabled and outOfCombatEnabled then
+        return true
     end
 
-    return db.actionCamShoulderOutOfCombat and true or false
+    local signals = GetCombatSignals(db)
+    local inCombat = GetCombatActivation(db, signals)
+    return inCombat and inCombatEnabled or outOfCombatEnabled
 end
 
 function Functions:UpdateActionCam()
@@ -2795,7 +2856,7 @@ function Functions:ApplyManagedCVars()
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
     UpdateCVar("cameraPitchMoveSpeed", db.cameraPitchMoveSpeed)
     UpdateCVar("cameraIndirectVisibility", db.cameraIndirectVisibility and 1 or 0)
-    UpdateCVar("cameraIndirectOffset", db.cameraIndirectOffset or 1.5)
+    UpdateCVar("cameraIndirectOffset", db.cameraIndirectOffset or GetIndirectOffsetDefault())
     UpdateCVar("occludedSilhouettePlayer", db.occludedSilhouettePlayer and 1 or 0)
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
     UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)

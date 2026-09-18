@@ -293,7 +293,8 @@ local function BuildCollisionSummaryText()
     end
 
     local enabledText = BoolText(db.cameraIndirectVisibility)
-    local offsetText = string.format("%.1f", db.cameraIndirectOffset or 1.5)
+    local indirectDefault = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.CAMERA_INDIRECT_OFFSET_DEFAULT) or 6.0
+    local offsetText = string.format("%.1f", db.cameraIndirectOffset or indirectDefault)
     local silhouetteText = BoolText(db.occludedSilhouettePlayer)
     local smartPivotText = BoolText(db.reduceUnexpectedMovement)
 
@@ -1309,7 +1310,7 @@ function Config:SetupOptions()
                     indirectOffset = {
                         type = "range",
                         name = L["INDIRECT_OFFSET"] or "Collision Sensitivity",
-                        desc = L["INDIRECT_OFFSET_DESC"] or "Controls Blizzard's reduced camera collision sensitivity. 0.0 is the minimum, 10.0 is the maximum, and the game's default is 1.5.",
+                        desc = L["INDIRECT_OFFSET_DESC"] or "Controls Blizzard's reduced camera collision sensitivity. 0.0 is the minimum and 10.0 is the maximum. The addon follows the current client default.",
                         hidden = function() return not HasCVar("cameraIndirectOffset") end,
                         disabled = function() return not GetOption("cameraIndirectVisibility") end,
                         min = 0,
