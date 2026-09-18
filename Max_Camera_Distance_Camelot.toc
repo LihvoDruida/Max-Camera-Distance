@@ -1,10 +1,10 @@
-## X-Flavor: cata
-## X-Expansion: Cataclysm Classic
-## Interface: 40402
+## X-Flavor: forever
+## X-Expansion: World of Warcraft: Forever
+## Interface: 16001
 
 ## Title: <|cffff7d0aCamera|r> |cff69ccf0Max Distance|r
-## Notes: Smart camera distance with safer cross-version compatibility guards.
-## Notes-zhCN: 智能镜头距离，具备更安全的跨版本兼容性保护措施。
+## Notes: Smart camera distance with dedicated WoW: Forever compatibility.
+## Notes-zhCN: 智能镜头距离，提供独立的《魔兽世界：永恒》兼容支持。
 ## IconTexture: Interface\AddOns\Max_Camera_Distance\assets\icon
 ## Version: v9.3
 ## Author: melles1991
@@ -17,4 +17,5 @@
 ## X-Website: https://legacy.curseforge.com/wow/addons/max-camera-distance
 ## X-Curse-Project-ID: 911525
 
+Forever.lua
 manifest.xml

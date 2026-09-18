@@ -19,7 +19,7 @@ local L = setmetatable({}, {
     end,
 })
 
-local IS_RETAIL = Compat.IS_RETAIL and true or false
+local USES_MODERN_API = Compat.USES_MODERN_API and true or false
 
 -- Cached globals
 local UnitExists = UnitExists
@@ -498,7 +498,7 @@ eventHandlers.ENCOUNTER_END = ForceSmartUpdate
 eventHandlers.ZONE_CHANGED_NEW_AREA = ForceSmartUpdate
 eventHandlers.PLAYER_DIFFICULTY_CHANGED = ForceSmartUpdate
 
-if IS_RETAIL then
+if USES_MODERN_API then
     eventHandlers.TRAIT_CONFIG_UPDATED = RequestSmartUpdate
 end
 

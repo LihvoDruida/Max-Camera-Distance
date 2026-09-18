@@ -51,6 +51,7 @@ end
 
 local Compat = ns.Compat or {}
 local IS_RETAIL = Compat.IS_RETAIL and true or false
+local USES_MODERN_API = Compat.USES_MODERN_API and true or false
 local HasCVar = Compat.HasCVar or function() return false end
 local SupportsFSRSharpen = Compat.SupportsFSRSharpen or function() return false end
 local SupportsSoftTargetIcons = Compat.SupportsSoftTargetIcons or function() return false end
@@ -673,7 +674,7 @@ function Config:SetupOptions()
 
     local defaults = ns.Database.DEFAULTS
 
-    local maxDistance = defaults.MAX_POSSIBLE_DISTANCE or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local maxDistance = defaults.MAX_POSSIBLE_DISTANCE or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
     local hasQuestWatch = (C_QuestLog and C_QuestLog.GetNumQuestWatches) and true or false
 
     local options = {
@@ -1168,12 +1169,15 @@ function Config:SetupOptions()
                         name = L["MOUNT_ZOOM_MODE_NAME"] or "Mount Zoom Mode",
                         desc = L["MOUNT_ZOOM_MODE_DESC"] or "Choose whether mount zoom should apply to all mounts and travel forms, only to flying mounts, only to Skyriding, or only to travel forms.",
                         values = function()
-                            return {
+                            local values = {
                                 all = L["MOUNT_ZOOM_MODE_ALL"] or "All mounts and travel forms",
                                 flying = L["MOUNT_ZOOM_MODE_FLYING"] or "Flying mounts only",
-                                skyriding = L["MOUNT_ZOOM_MODE_SKYRIDING"] or "Skyriding only",
                                 forms = L["MOUNT_ZOOM_MODE_FORMS"] or "Travel forms only",
                             }
+                            if IS_RETAIL then
+                                values.skyriding = L["MOUNT_ZOOM_MODE_SKYRIDING"] or "Skyriding only"
+                            end
+                            return values
                         end,
                         get = function() return GetOption("mountZoomMode") or "all" end,
                         set = function(_, val) SetOption("mountZoomMode", val) end,
@@ -1189,6 +1193,7 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("dragonRacingRaceFirstPerson", val) end,
                         order = 61.6,
                         disabled = function() return not GetOption("autoMountZoom") end,
+                        hidden = function() return not IS_RETAIL end,
                         width = "full",
                     },
                     mountZoomFactor = {
@@ -1756,7 +1761,7 @@ local blizzardSettingsHookInstalled = false
 local function InstallBlizzardSettingsHook()
     if blizzardSettingsHookInstalled then return true end
 
-    if not (IS_RETAIL
+    if not (USES_MODERN_API
         and SettingsPanel and SettingsPanel.Container and SettingsPanel.Container.SettingsList
         and SettingsPanel.Container.SettingsList.ScrollBox
         and hooksecurefunc) then
@@ -1797,7 +1802,7 @@ local function InstallBlizzardSettingsHook()
 end
 
 -- Try immediately, then retry on the events that can create SettingsPanel.
-if not InstallBlizzardSettingsHook() and IS_RETAIL then
+if not InstallBlizzardSettingsHook() and USES_MODERN_API then
     local hookFrame = CreateFrame("Frame")
     hookFrame:RegisterEvent("PLAYER_LOGIN")
     hookFrame:RegisterEvent("ADDON_LOADED")

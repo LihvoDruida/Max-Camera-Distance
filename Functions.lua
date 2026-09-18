@@ -83,8 +83,8 @@ local IsInGroup            = IsInGroup
 local GetNumGroupMembers   = GetNumGroupMembers
 local GetNumSubgroupMembers= GetNumSubgroupMembers
 
-local IS_RETAIL = Compat.IS_RETAIL and true or false
-local CONVERSION_RATIO = Compat.CONVERSION_RATIO or (IS_RETAIL and 15 or 12.5)
+local USES_MODERN_API = Compat.USES_MODERN_API and true or false
+local CONVERSION_RATIO = Compat.CONVERSION_RATIO or (USES_MODERN_API and 15 or 12.5)
 
 local CVAR_ALIASES = {
     cameraReduceUnexpectedMovement = { "cameraReduceUnexpectedMovement", "CameraReduceUnexpectedMovement" },
@@ -510,7 +510,7 @@ end
 local function NormalizeManagedCVarValue(cvarName, value, db)
     cvarName = CanonicalCVarName(cvarName)
     local defaults = ns.Database and ns.Database.DEFAULTS
-    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
     local maxFactor = maxYards / CONVERSION_RATIO
 
     if cvarName == "cameraDistanceMoveSpeed" then
@@ -558,7 +558,7 @@ local function SanitizeRuntimeProfile(db)
     if not db then return end
 
     local defaults = ns.Database and ns.Database.DEFAULTS
-    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
     local defaultNormal = (defaults and defaults.BLIZZARD_DEFAULT_YARDS) or 20
 
     db.maxZoomFactor = ClampNumber(db.maxZoomFactor, 1, maxYards) or maxYards
@@ -623,7 +623,7 @@ local function GetPresetDistanceValue(presetId, db, distanceKey)
     end
 
     local defaults = ns.Database and ns.Database.DEFAULTS
-    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
     local defaultNormal = (defaults and defaults.BLIZZARD_DEFAULT_YARDS) or 20
 
     if presetId == "client_default" then
@@ -777,7 +777,7 @@ function Functions:IsSkyriding()
         end
     end
 
-    if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+    if USES_MODERN_API and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         if HasPlayerAura(404464) then return true end
         if HasPlayerAura(404468) then return false end
     end
@@ -810,7 +810,7 @@ end
 
 function Functions:GetActiveMountID()
     local mounted = IsMounted and IsMounted() or false
-    if not IS_RETAIL or not mounted or not C_MountJournal or not C_MountJournal.GetMountIDs or not C_MountJournal.GetMountInfoByID then
+    if not USES_MODERN_API or not mounted or not C_MountJournal or not C_MountJournal.GetMountIDs or not C_MountJournal.GetMountInfoByID then
         activeMountCache.mounted = mounted
         activeMountCache.mountID = nil
         activeMountCache.mountTypeID = nil
@@ -897,7 +897,7 @@ function Functions:IsDragonRacingRaceActive()
         return false
     end
 
-    if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+    if USES_MODERN_API and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for spellID in pairs(DRAGONRACING_RACE_AURAS) do
             if HasPlayerAura(spellID) then
                 return true
@@ -975,7 +975,7 @@ function Functions:IsFlyingTravelContext()
         end
     end
 
-    if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+    if USES_MODERN_API and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for spellID in pairs(FLYING_TRAVEL_BUFF_IDS) do
             if HasPlayerAura(spellID) then
                 return true
@@ -1004,7 +1004,7 @@ function Functions:IsTravelFormOnlyActive()
         end
     end
 
-    if IS_RETAIL and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+    if USES_MODERN_API and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for spellID in pairs(TRAVEL_BUFF_IDS) do
             if HasPlayerAura(spellID) then
                 return true
@@ -1069,7 +1069,7 @@ function IsInTravelForm()
         if spellID and TRAVEL_FORM_IDS[spellID] then return true end
     end
 
-    if IS_RETAIL then
+    if USES_MODERN_API then
         if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
             for spellID in pairs(TRAVEL_BUFF_IDS) do
                 if HasPlayerAura(spellID) then return true end
@@ -1282,7 +1282,7 @@ end
 
 local function NormalizeTargetYards(targetYards)
     local defaults = ns.Database and ns.Database.DEFAULTS
-    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
     return ClampNumber(targetYards, 1, maxYards) or maxYards
 end
 
@@ -1370,7 +1370,7 @@ function Functions:ApplyManualCameraCapOnly(reason)
     local db = DB()
     if not db then return nil end
     SanitizeRuntimeProfile(db)
-    local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+    local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
     local manualTargetYards = (GetDistanceValue(db, "maxZoomFactor")) or db.maxZoomFactor or maxYards
     return ApplyManualCameraCapOnly(manualTargetYards, reason or "manual")
 end
@@ -1849,7 +1849,7 @@ local function IsPlayerAFKSafe()
 end
 
 local function IsProfessionActivityBlockingAfk()
-    if not IS_RETAIL then
+    if not USES_MODERN_API then
         return false
     end
 
@@ -1885,7 +1885,7 @@ local function ApplyAfkZoom(db)
     if not db or db.afkZoomOut == false then return end
 
     local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE)
-        or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+        or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
     local transition = math.max(0.2, math.min(4, tonumber(db.zoomTransitionTime) or 0.5))
 
     ApplyZoomCap(maxYards)
@@ -2682,7 +2682,9 @@ function Functions:PrintRuntimeStatus()
     self:SendMessage(" - client: " .. tostring(Compat.CLIENT_TAG or "Unknown")
         .. " version=" .. tostring(Compat.VERSION ~= "" and Compat.VERSION or "unknown")
         .. " build=" .. tostring(Compat.BUILD_NUMBER or "unknown")
-        .. " interface=" .. tostring(Compat.INTERFACE or "unknown"))
+        .. " interface=" .. tostring(Compat.INTERFACE or "unknown")
+        .. " modernAPI=" .. FormatBool(Compat.USES_MODERN_API)
+        .. " forever=" .. FormatBool(Compat.IS_FOREVER))
     self:SendMessage(" - zoom: " .. tostring((GetCameraZoom and GetCameraZoom()) or "unknown"))
     self:SendMessage(" - state: " .. tostring(snapshot and snapshot.state or "unknown") .. " previous=" .. tostring(snapshot and snapshot.previousState or (controllerSnapshot and controllerSnapshot.previousState) or "none"))
     self:SendMessage(" - target yards: " .. tostring(snapshot and snapshot.targetYards or "unknown"))
@@ -2740,7 +2742,7 @@ function Functions:AdjustCamera(forceNow)
         end
     else
         -- Manual-only mode
-        local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+        local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
         local manualTargetYards = (GetDistanceValue(db, "maxZoomFactor")) or db.maxZoomFactor or maxYards
 
         stateToken = stateToken + 1
@@ -2832,7 +2834,7 @@ function Functions:OnCVarUpdate(_, cvarName, value)
         end
 
         local defaults = ns.Database and ns.Database.DEFAULTS
-        local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50))
+        local maxYards = (defaults and defaults.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
         yards = ClampNumber(yards, 1, maxYards)
 
         -- Only mirror the CVar back into the profile while the slider is actually

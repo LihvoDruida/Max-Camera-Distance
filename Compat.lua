@@ -29,26 +29,43 @@ Compat.PROJECT_ID = WOW_PROJECT_ID or 0
 
 local WOW_PROJECT_MAINLINE_VALUE = WOW_PROJECT_MAINLINE or 1
 
--- Retail interface versions have been >= 100000 since Dragonflight. The old
--- >= 120000 fallback would have misclassified an 11.x client if WOW_PROJECT_ID
--- were ever unavailable.
-Compat.IS_RETAIL = (Compat.PROJECT_ID == WOW_PROJECT_MAINLINE_VALUE) or (Compat.INTERFACE >= 100000)
-Compat.IS_MOP_CLASSIC = (Compat.INTERFACE >= 50000 and Compat.INTERFACE < 60000)
-Compat.IS_CATA_CLASSIC = (Compat.INTERFACE >= 40000 and Compat.INTERFACE < 50000)
-Compat.IS_WRATH_CLASSIC = (Compat.INTERFACE >= 30000 and Compat.INTERFACE < 40000)
-Compat.IS_TBC_ANNIVERSARY = (Compat.INTERFACE >= 20000 and Compat.INTERFACE < 30000)
-Compat.IS_CLASSIC_ERA = (Compat.INTERFACE >= 10000 and Compat.INTERFACE < 20000)
-Compat.IS_CLASSIC = not Compat.IS_RETAIL
+-- WoW: Forever (codename Camelot) is a separate product/flavor, but its
+-- interface/runtime is forked from the modern client and currently reports the
+-- mainline project ID. A WOW_PROJECT_ID check therefore cannot distinguish it
+-- from Retail. The authoritative signal is the dedicated Camelot TOC, which
+-- loads Forever.lua before this file. The build/interface fallback only keeps
+-- source copies functional when the marker file is accidentally omitted.
+local clientFlavor = ns.ClientFlavor or {}
+local versionLooksForever = Compat.VERSION:match('^1%.60%.') ~= nil
+local interfaceLooksForever = Compat.INTERFACE >= 16000 and Compat.INTERFACE < 17000
+Compat.IS_FOREVER = (clientFlavor.FOREVER == true) or (versionLooksForever and interfaceLooksForever)
+Compat.FOREVER_MARKER_SOURCE = clientFlavor.SOURCE
 
--- Midnight (12.0) introduced Secret Values; 12.1 tightened them considerably,
--- most importantly by making every index/slot/instanceID aura lookup raise a
--- Lua error while auras are secret. Feature detection is still preferred over
--- version gates below, but these flags let modules pick the cheaper path.
+-- Keep product identity and API-family identity separate. Forever is NOT Retail
+-- and NOT Classic Era, but it does use the modern UI/API/CVar family. This split
+-- prevents Classic-only gameplay features from being mixed with modern API
+-- compatibility shims.
+Compat.IS_RETAIL = (not Compat.IS_FOREVER) and ((Compat.PROJECT_ID == WOW_PROJECT_MAINLINE_VALUE) or (Compat.INTERFACE >= 100000))
+Compat.USES_MODERN_API = Compat.IS_RETAIL or Compat.IS_FOREVER
+Compat.IS_MOP_CLASSIC = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 50000 and Compat.INTERFACE < 60000)
+Compat.IS_CATA_CLASSIC = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 40000 and Compat.INTERFACE < 50000)
+Compat.IS_WRATH_CLASSIC = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 30000 and Compat.INTERFACE < 40000)
+Compat.IS_TBC_ANNIVERSARY = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 20000 and Compat.INTERFACE < 30000)
+Compat.IS_CLASSIC_ERA = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 10000 and Compat.INTERFACE < 20000)
+Compat.IS_CLASSIC = Compat.IS_MOP_CLASSIC or Compat.IS_CATA_CLASSIC or Compat.IS_WRATH_CLASSIC
+    or Compat.IS_TBC_ANNIVERSARY or Compat.IS_CLASSIC_ERA
+Compat.IS_CLASSIC_FAMILY = Compat.IS_CLASSIC or Compat.IS_FOREVER
+
+-- Midnight (12.0) introduced Secret Values; 12.1 tightened them considerably.
+-- Forever may expose some of the same modern helpers because it shares the
+-- modern runtime, so secret handling itself remains feature-detected below.
 Compat.IS_MIDNIGHT = Compat.IS_RETAIL and Compat.INTERFACE >= 120000
 Compat.IS_12_1_OR_LATER = Compat.IS_RETAIL and Compat.INTERFACE >= 120100
 Compat.HAS_SECRET_VALUES = type(_G.issecretvalue) == 'function'
 
-if Compat.IS_RETAIL then
+if Compat.IS_FOREVER then
+    Compat.CLIENT_TAG = 'Forever'
+elseif Compat.IS_RETAIL then
     Compat.CLIENT_TAG = 'Retail'
 elseif Compat.IS_MOP_CLASSIC then
     Compat.CLIENT_TAG = 'Mists Classic'
@@ -64,8 +81,10 @@ else
     Compat.CLIENT_TAG = Compat.IS_CLASSIC and 'Classic' or 'Unknown'
 end
 
-Compat.MAX_CAMERA_YARDS = Compat.IS_RETAIL and 39 or 50
-Compat.CONVERSION_RATIO = Compat.IS_RETAIL and 15 or 12.5
+-- Forever's 1.60.x client uses the modern camera/CVar family, so it follows the
+-- modern camera units/cap rather than Classic Era's 12.5/50-yard model.
+Compat.MAX_CAMERA_YARDS = Compat.USES_MODERN_API and 39 or 50
+Compat.CONVERSION_RATIO = Compat.USES_MODERN_API and 15 or 12.5
 
 -- ---------------------------------------------------------------------
 -- Secret value helpers (Midnight 12.0+, tightened in 12.1)
@@ -265,11 +284,11 @@ function Compat.HasCVar(name)
 end
 
 function Compat.SupportsFSRSharpen()
-    return Compat.IS_RETAIL and Compat.HasCVar('resampleAlwaysSharpen')
+    return Compat.USES_MODERN_API and Compat.HasCVar('resampleAlwaysSharpen')
 end
 
 function Compat.SupportsSoftTargetIcons()
-    return Compat.IS_RETAIL and Compat.HasCVar('SoftTargetIconGameObject')
+    return Compat.USES_MODERN_API and Compat.HasCVar('SoftTargetIconGameObject')
 end
 
 function Compat.SupportsActionCam()

@@ -21,9 +21,11 @@ ResolveAceDB()
 local Compat = ns.Compat or {}
 
 local IS_RETAIL = Compat.IS_RETAIL and true or false
+local IS_FOREVER = Compat.IS_FOREVER and true or false
 local IS_CLASSIC = Compat.IS_CLASSIC and true or false
-local MAX_YARDS = Compat.MAX_CAMERA_YARDS or (IS_RETAIL and 39 or 50)
-local CONVERSION_RATIO = Compat.CONVERSION_RATIO or (IS_RETAIL and 15 or 12.5)
+local USES_MODERN_API = Compat.USES_MODERN_API and true or false
+local MAX_YARDS = Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50)
+local CONVERSION_RATIO = Compat.CONVERSION_RATIO or (USES_MODERN_API and 15 or 12.5)
 
 -- ============================================================================
 -- FAST LOCALS
@@ -124,7 +126,7 @@ end
 -- so it is a valid SavedVariables default.
 local defaultFactor = SafeGetCVarDefault("cameraDistanceMaxZoomFactor")
 if not defaultFactor then
-    defaultFactor = IS_RETAIL and 1.9 or 4.0
+    defaultFactor = USES_MODERN_API and 1.9 or 4.0
 end
 
 local BLIZZARD_DEFAULT_YARDS = Clamp(defaultFactor * CONVERSION_RATIO, 1, MAX_YARDS)
@@ -155,7 +157,9 @@ Database.DEFAULTS = {
 
     -- Useful flags
     IS_RETAIL = IS_RETAIL,
+    IS_FOREVER = IS_FOREVER,
     IS_CLASSIC = IS_CLASSIC,
+    USES_MODERN_API = USES_MODERN_API,
 }
 
 Database.DEFAULT_DEBUG_LEVEL = {
@@ -462,12 +466,19 @@ function Database:ApplyMigrations(profile)
     }
     if type(profile.mountZoomMode) ~= "string" or not VALID_MOUNT_ZOOM_MODES[profile.mountZoomMode] then
         profile.mountZoomMode = PROFILE_DEFAULTS.mountZoomMode
+    elseif not IS_RETAIL and profile.mountZoomMode == "skyriding" then
+        -- A profile copied from Retail should not leave mount zoom permanently
+        -- disabled on Forever/Classic through an unavailable Skyriding-only mode.
+        profile.mountZoomMode = PROFILE_DEFAULTS.mountZoomMode
     end
 
     -- Normalize booleans in case SavedVariables contain stale numeric/string values.
     profile.autoCombatZoom = NormalizeBoolean(profile.autoCombatZoom, PROFILE_DEFAULTS.autoCombatZoom)
     profile.autoMountZoom = NormalizeBoolean(profile.autoMountZoom, PROFILE_DEFAULTS.autoMountZoom)
     profile.dragonRacingRaceFirstPerson = NormalizeBoolean(profile.dragonRacingRaceFirstPerson, PROFILE_DEFAULTS.dragonRacingRaceFirstPerson)
+    if not IS_RETAIL then
+        profile.dragonRacingRaceFirstPerson = false
+    end
     profile.combatZoomOnPlayer = NormalizeBoolean(profile.combatZoomOnPlayer, PROFILE_DEFAULTS.combatZoomOnPlayer)
     profile.combatZoomOnGroup = NormalizeBoolean(profile.combatZoomOnGroup, PROFILE_DEFAULTS.combatZoomOnGroup)
     profile.combatZoomOnThreat = NormalizeBoolean(profile.combatZoomOnThreat, PROFILE_DEFAULTS.combatZoomOnThreat)
