@@ -131,6 +131,19 @@ local function SetOption(key, value)
     local db = GetDB()
     if not db then return end
 
+    -- Enabling the Forever raw-ground override must not visibly change the
+    -- world. Seed the profile from the LIVE client values first, then begin
+    -- managing them. This preserves hardware/graphics-preset derived values
+    -- instead of replacing them with built-in CVar defaults on first use.
+    if IS_FOREVER and key == "foreverGroundEffectsOverride" and value and not db.foreverGroundEffectsOverride then
+        local getNumber = Compat.SafeGetCVarNumber
+        if getNumber then
+            db.groundEffectDensity = getNumber("groundEffectDensity") or db.groundEffectDensity
+            db.groundEffectDist = getNumber("groundEffectDist") or db.groundEffectDist
+            db.groundEffectFade = getNumber("groundEffectFade") or db.groundEffectFade
+        end
+    end
+
     db[key] = value
 
     if key == "enableDebugLogging" or key == "debugLevel" then
@@ -154,7 +167,9 @@ local function SetOption(key, value)
         if ns.Functions and ns.Functions.RefreshAfkMode then
             ns.Functions:RefreshAfkMode(true)
         end
-    elseif IS_FOREVER and (key == "volumeFog" or key == "volumeFogInterior" or key == "volumeFogLevel") then
+    elseif IS_FOREVER and (key == "volumeFog" or key == "volumeFogInterior" or key == "volumeFogLevel"
+        or key == "foreverGroundEffectsOverride" or key == "groundEffectDensity"
+        or key == "groundEffectDist" or key == "groundEffectFade") then
         -- Graphics-only Forever settings should not force a camera state
         -- recomputation just to write one CVar.
         if ns.Functions and ns.Functions.ApplyManagedCVars then
@@ -182,6 +197,18 @@ local function GetForeverFogDefault(key, fallback)
 end
 
 local function ForeverFogOptionVisible(cvarName)
+    return IS_FOREVER and HasCVar(cvarName)
+end
+
+local function GetForeverEnvironmentDefault(key, fallback)
+    local defaults = ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.FOREVER_ENVIRONMENT
+    if defaults and defaults[key] ~= nil then
+        return defaults[key]
+    end
+    return fallback
+end
+
+local function ForeverEnvironmentOptionVisible(cvarName)
     return IS_FOREVER and HasCVar(cvarName)
 end
 
@@ -1443,6 +1470,74 @@ function Config:SetupOptions()
                         order = 23,
                         width = "full",
                         hidden = function() return not ForeverFogOptionVisible("volumeFogLevel") end,
+                    },
+                    foreverEnvironmentHeader = {
+                        type = "header",
+                        name = L["FOREVER_ENVIRONMENT_HEADER"] or "WoW: Forever — Advanced Environment",
+                        order = 24,
+                        hidden = function() return not IS_FOREVER end,
+                    },
+                    foreverEnvironmentDesc = {
+                        type = "description",
+                        name = L["FOREVER_ENVIRONMENT_DESC"] or "Raw Forever ground-effect controls beyond the normal graphics sliders. Blizzard's Ground Clutter slider can overwrite these raw CVars; external changes are mirrored back into this profile instead of being fought by the addon.",
+                        order = 24.1,
+                        width = "full",
+                        hidden = function() return not IS_FOREVER end,
+                    },
+                    foreverGroundEffectsOverride = {
+                        type = "toggle",
+                        name = L["FOREVER_GROUND_EFFECT_OVERRIDE"] or "Manage Advanced Ground Effects",
+                        desc = L["FOREVER_GROUND_EFFECT_OVERRIDE_DESC"] or "Off by default. When enabled, the addon first captures the client's current raw ground-effect values so enabling it does not change your graphics, then manages the three controls below.",
+                        order = 24.2,
+                        width = "full",
+                        get = function() return GetOption("foreverGroundEffectsOverride") and true or false end,
+                        set = function(_, val) SetOption("foreverGroundEffectsOverride", val and true or false) end,
+                        hidden = function() return not IS_FOREVER end,
+                    },
+                    groundEffectDensity = {
+                        type = "range",
+                        name = L["FOREVER_GROUND_EFFECT_DENSITY"] or "Ground Effect Density",
+                        desc = function()
+                            local default = tonumber(GetForeverEnvironmentDefault("groundEffectDensity", 16)) or 16
+                            return string.format(L["FOREVER_GROUND_EFFECT_DENSITY_DESC"] or "Raw groundEffectDensity CVar. Range: 16-256. Game default: %d.", default)
+                        end,
+                        min = 16, max = 256, step = 1, bigStep = 8,
+                        get = function() return tonumber(GetOption("groundEffectDensity")) or tonumber(GetForeverEnvironmentDefault("groundEffectDensity", 16)) or 16 end,
+                        set = function(_, val) SetOption("groundEffectDensity", math.floor((tonumber(val) or 16) + 0.5)) end,
+                        order = 25,
+                        width = "full",
+                        hidden = function() return not ForeverEnvironmentOptionVisible("groundEffectDensity") end,
+                        disabled = function() return not GetOption("foreverGroundEffectsOverride") end,
+                    },
+                    groundEffectDist = {
+                        type = "range",
+                        name = L["FOREVER_GROUND_EFFECT_DIST"] or "Ground Effect Distance",
+                        desc = function()
+                            local default = tonumber(GetForeverEnvironmentDefault("groundEffectDist", 70)) or 70
+                            return string.format(L["FOREVER_GROUND_EFFECT_DIST_DESC"] or "Raw groundEffectDist CVar. Range: 32-600. Values above the normal Ground Clutter preset extend flora/ground-object draw distance. Game default: %d.", default)
+                        end,
+                        min = 32, max = 600, step = 1, bigStep = 16,
+                        get = function() return tonumber(GetOption("groundEffectDist")) or tonumber(GetForeverEnvironmentDefault("groundEffectDist", 70)) or 70 end,
+                        set = function(_, val) SetOption("groundEffectDist", math.floor((tonumber(val) or 70) + 0.5)) end,
+                        order = 26,
+                        width = "full",
+                        hidden = function() return not ForeverEnvironmentOptionVisible("groundEffectDist") end,
+                        disabled = function() return not GetOption("foreverGroundEffectsOverride") end,
+                    },
+                    groundEffectFade = {
+                        type = "range",
+                        name = L["FOREVER_GROUND_EFFECT_FADE"] or "Ground Effect Fade Distance",
+                        desc = function()
+                            local default = tonumber(GetForeverEnvironmentDefault("groundEffectFade", 70)) or 70
+                            return string.format(L["FOREVER_GROUND_EFFECT_FADE_DESC"] or "Raw groundEffectFade CVar. Practical range exposed here: 0-600. Matching this to groundEffectDist reduces early flora fading. Game default: %d.", default)
+                        end,
+                        min = 0, max = 600, step = 1, bigStep = 16,
+                        get = function() return tonumber(GetOption("groundEffectFade")) or tonumber(GetForeverEnvironmentDefault("groundEffectFade", 70)) or 70 end,
+                        set = function(_, val) SetOption("groundEffectFade", math.floor((tonumber(val) or 70) + 0.5)) end,
+                        order = 27,
+                        width = "full",
+                        hidden = function() return not ForeverEnvironmentOptionVisible("groundEffectFade") end,
+                        disabled = function() return not GetOption("foreverGroundEffectsOverride") end,
                     },
                     actionCamHeader = {
                         type = "header",

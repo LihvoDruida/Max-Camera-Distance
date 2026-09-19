@@ -1,5 +1,23 @@
 # Max Camera Distance — Changelog
 
+## v10.2 — Forever advanced ground effects
+
+- Added Forever-only raw controls for `groundEffectDensity`, `groundEffectDist`, and `groundEffectFade` under Extra Features.
+- Added an opt-in Advanced Ground Effects override (off by default); first enable captures current live CVar values before taking ownership, preventing first-use graphics jumps or hardware-preset regressions.
+- Read each setting's built-in default from the Forever client and use documented modern-client values only as early-load fallbacks.
+- Exposed density 16-256, distance 32-600, and fade 0-600 with integer-only UI controls and runtime clamps.
+- Added CVAR_UPDATE mirroring so Blizzard graphics changes update the profile instead of causing the addon to fight the client.
+- Kept `graphicsGroundClutter`, `graphicsEnvironmentDetail`, and `graphicsViewDistance` out of the addon because they are standard graphics UI preset CVars; modern clients document those sliders as 0-9 rather than the obsolete value 10.
+- Added the new Forever environment CVars to `/mcd status`, managed-CVar normalization, and runtime diagnostics.
+
+## v10.1 — TOC generator/CI synchronization
+
+- Updated the Mainline TOC source-of-truth to include Retail PTR 12.1.5 (`Interface 120105`) alongside 12.0.7 and 12.1.0.
+- Added World of Warcraft: Forever / Camelot (`Interface 16001`) to `tools/generate_tocs.py` so CI owns and verifies the Forever TOC instead of treating it as an unmanaged special case.
+- Added Camelot-specific metadata/file injection so `Forever.lua` remains loaded only by `Max_Camera_Distance_Camelot.toc`.
+- Made every generated TOC inherit the release version and shared metadata from `Max_Camera_Distance.toc`, preventing per-flavour version drift.
+- Bumped the addon version beyond the existing `v10.0` repository tag so the next release does not collide with an already published tag.
+
 ## v9.5 — Runtime/API audit and performance hardening
 
 - Fixed 12.1 Secret Value handling so potentially-secret results are screened with `issecretvalue()` before any nil comparison, boolean evaluation, numeric conversion or table-key use.

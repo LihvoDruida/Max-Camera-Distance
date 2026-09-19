@@ -308,6 +308,9 @@ if Compat.IS_FOREVER then
     watchedCVars.volumeFog = true
     watchedCVars.volumeFogInterior = true
     watchedCVars.volumeFogLevel = true
+    watchedCVars.groundEffectDensity = true
+    watchedCVars.groundEffectDist = true
+    watchedCVars.groundEffectFade = true
 end
 
 local watchedCVarsLower = {}

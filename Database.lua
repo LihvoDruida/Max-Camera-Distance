@@ -157,14 +157,28 @@ local defaultOccludedSilhouette = SafeGetCVarDefault("occludedSilhouettePlayer")
 local defaultVolumeFog = nil
 local defaultVolumeFogInterior = nil
 local defaultVolumeFogLevel = nil
+local defaultGroundEffectDensity = nil
+local defaultGroundEffectDist = nil
+local defaultGroundEffectFade = nil
 if IS_FOREVER then
     defaultVolumeFog = SafeGetCVarDefault("volumeFog")
     defaultVolumeFogInterior = SafeGetCVarDefault("volumeFogInterior")
     defaultVolumeFogLevel = SafeGetCVarDefault("volumeFogLevel")
+    defaultGroundEffectDensity = SafeGetCVarDefault("groundEffectDensity")
+    defaultGroundEffectDist = SafeGetCVarDefault("groundEffectDist")
+    defaultGroundEffectFade = SafeGetCVarDefault("groundEffectFade")
 
     if defaultVolumeFog == nil then defaultVolumeFog = 1 end
     if defaultVolumeFogInterior == nil then defaultVolumeFogInterior = 1 end
     defaultVolumeFogLevel = Clamp(tonumber(defaultVolumeFogLevel) or 2, 0, 3)
+
+    -- These are raw engine CVars rather than the 0-9 graphics preset sliders.
+    -- Runtime defaults remain authoritative because Forever is still evolving;
+    -- fallbacks match current modern-client metadata only when the API cannot
+    -- expose a built-in default during early loading.
+    defaultGroundEffectDensity = Clamp(tonumber(defaultGroundEffectDensity) or 16, 16, 256)
+    defaultGroundEffectDist = Clamp(tonumber(defaultGroundEffectDist) or 70, 32, 600)
+    defaultGroundEffectFade = Clamp(tonumber(defaultGroundEffectFade) or 70, 0, 600)
 end
 
 -- ============================================================================
@@ -198,6 +212,11 @@ if IS_FOREVER then
         volumeFog = (tonumber(defaultVolumeFog) or 0) == 1,
         volumeFogInterior = (tonumber(defaultVolumeFogInterior) or 0) == 1,
         volumeFogLevel = defaultVolumeFogLevel,
+    }
+    Database.DEFAULTS.FOREVER_ENVIRONMENT = {
+        groundEffectDensity = defaultGroundEffectDensity,
+        groundEffectDist = defaultGroundEffectDist,
+        groundEffectFade = defaultGroundEffectFade,
     }
 end
 
@@ -303,6 +322,10 @@ if IS_FOREVER then
     PROFILE_DEFAULTS.volumeFog = (tonumber(defaultVolumeFog) or 0) == 1
     PROFILE_DEFAULTS.volumeFogInterior = (tonumber(defaultVolumeFogInterior) or 0) == 1
     PROFILE_DEFAULTS.volumeFogLevel = defaultVolumeFogLevel
+    PROFILE_DEFAULTS.foreverGroundEffectsOverride = false
+    PROFILE_DEFAULTS.groundEffectDensity = defaultGroundEffectDensity
+    PROFILE_DEFAULTS.groundEffectDist = defaultGroundEffectDist
+    PROFILE_DEFAULTS.groundEffectFade = defaultGroundEffectFade
 end
 
 -- Per-activity combat keys. Generated rather than written out so that the set of
@@ -534,6 +557,10 @@ function Database:ApplyMigrations(profile)
         profile.volumeFogInterior = NormalizeBoolean(profile.volumeFogInterior, PROFILE_DEFAULTS.volumeFogInterior)
         profile.volumeFogLevel = Clamp(tonumber(profile.volumeFogLevel) or PROFILE_DEFAULTS.volumeFogLevel, 0, 3)
         profile.volumeFogLevel = math.floor(profile.volumeFogLevel + 0.5)
+        profile.foreverGroundEffectsOverride = NormalizeBoolean(profile.foreverGroundEffectsOverride, PROFILE_DEFAULTS.foreverGroundEffectsOverride)
+        profile.groundEffectDensity = math.floor(Clamp(tonumber(profile.groundEffectDensity) or PROFILE_DEFAULTS.groundEffectDensity, 16, 256) + 0.5)
+        profile.groundEffectDist = math.floor(Clamp(tonumber(profile.groundEffectDist) or PROFILE_DEFAULTS.groundEffectDist, 32, 600) + 0.5)
+        profile.groundEffectFade = math.floor(Clamp(tonumber(profile.groundEffectFade) or PROFILE_DEFAULTS.groundEffectFade, 0, 600) + 0.5)
     end
     profile.actionCamShoulderInCombat = NormalizeBoolean(profile.actionCamShoulderInCombat, PROFILE_DEFAULTS.actionCamShoulderInCombat)
     profile.actionCamShoulderOutOfCombat = NormalizeBoolean(profile.actionCamShoulderOutOfCombat, PROFILE_DEFAULTS.actionCamShoulderOutOfCombat)

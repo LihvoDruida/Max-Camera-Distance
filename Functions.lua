@@ -123,6 +123,9 @@ if IS_FOREVER then
     MANAGED_CVAR_NAMES[#MANAGED_CVAR_NAMES + 1] = "volumeFog"
     MANAGED_CVAR_NAMES[#MANAGED_CVAR_NAMES + 1] = "volumeFogInterior"
     MANAGED_CVAR_NAMES[#MANAGED_CVAR_NAMES + 1] = "volumeFogLevel"
+    MANAGED_CVAR_NAMES[#MANAGED_CVAR_NAMES + 1] = "groundEffectDensity"
+    MANAGED_CVAR_NAMES[#MANAGED_CVAR_NAMES + 1] = "groundEffectDist"
+    MANAGED_CVAR_NAMES[#MANAGED_CVAR_NAMES + 1] = "groundEffectFade"
 end
 
 local CVAR_CANONICAL = {}
@@ -573,6 +576,18 @@ local function NormalizeManagedCVarValue(cvarName, value, db)
             level = ClampNumber(db.volumeFogLevel, 0, 3)
         end
         return math_floor((level or 2) + 0.5)
+    elseif cvarName == "groundEffectDensity" then
+        local density = ClampNumber(value, 16, 256)
+        if density == nil and db then density = ClampNumber(db.groundEffectDensity, 16, 256) end
+        return math_floor((density or 16) + 0.5)
+    elseif cvarName == "groundEffectDist" then
+        local distance = ClampNumber(value, 32, 600)
+        if distance == nil and db then distance = ClampNumber(db.groundEffectDist, 32, 600) end
+        return math_floor((distance or 70) + 0.5)
+    elseif cvarName == "groundEffectFade" then
+        local fade = ClampNumber(value, 0, 600)
+        if fade == nil and db then fade = ClampNumber(db.groundEffectFade, 0, 600) end
+        return math_floor((fade or 70) + 0.5)
     elseif cvarName == "cameraIndirectOffset" then
         return ClampNumber(value, 0, 10) or ((db and ClampNumber(db.cameraIndirectOffset, 0, 10)) or GetIndirectOffsetDefault())
     elseif cvarName == "test_cameraOverShoulder" then
@@ -624,6 +639,15 @@ local function SanitizeRuntimeProfile(db)
     db.zoomTransitionTime = ClampNumber(db.zoomTransitionTime, 0, 2) or 0.5
     db.dismountDelay = ClampNumber(db.dismountDelay, 0, 10) or 0
     db.cameraIndirectOffset = ClampNumber(db.cameraIndirectOffset, 0, 10) or GetIndirectOffsetDefault()
+    if IS_FOREVER then
+        local envDefaults = defaults and defaults.FOREVER_ENVIRONMENT
+        local densityDefault = envDefaults and tonumber(envDefaults.groundEffectDensity) or 16
+        local distDefault = envDefaults and tonumber(envDefaults.groundEffectDist) or 70
+        local fadeDefault = envDefaults and tonumber(envDefaults.groundEffectFade) or 70
+        db.groundEffectDensity = math_floor((ClampNumber(db.groundEffectDensity, 16, 256) or densityDefault) + 0.5)
+        db.groundEffectDist = math_floor((ClampNumber(db.groundEffectDist, 32, 600) or distDefault) + 0.5)
+        db.groundEffectFade = math_floor((ClampNumber(db.groundEffectFade, 0, 600) or fadeDefault) + 0.5)
+    end
 end
 
 
@@ -2773,6 +2797,7 @@ function Functions:PrintRuntimeStatus()
     self:SendMessage(" - CVars: keepCentered=" .. FormatCVar("CameraKeepCharacterCentered") .. ", reduceUnexpectedMovement=" .. FormatCVar("cameraReduceUnexpectedMovement") .. ", shoulder=" .. FormatCVar("test_cameraOverShoulder") .. ", dynamicPitch=" .. FormatCVar("test_cameraDynamicPitch"))
     if IS_FOREVER then
         self:SendMessage(" - Forever fog: volumeFog=" .. FormatCVar("volumeFog") .. ", interior=" .. FormatCVar("volumeFogInterior") .. ", level=" .. FormatCVar("volumeFogLevel"))
+        self:SendMessage(" - Forever ground effects: managed=" .. FormatBool(db and db.foreverGroundEffectsOverride) .. ", density=" .. FormatCVar("groundEffectDensity") .. ", distance=" .. FormatCVar("groundEffectDist") .. ", fade=" .. FormatCVar("groundEffectFade"))
     end
 
     -- Adaptive return: without these numbers there is no way to tell whether
@@ -2865,6 +2890,11 @@ function Functions:ApplyManagedCVars()
         UpdateCVar("volumeFog", db.volumeFog and 1 or 0)
         UpdateCVar("volumeFogInterior", db.volumeFogInterior and 1 or 0)
         UpdateCVar("volumeFogLevel", db.volumeFogLevel)
+        if db.foreverGroundEffectsOverride then
+            UpdateCVar("groundEffectDensity", db.groundEffectDensity)
+            UpdateCVar("groundEffectDist", db.groundEffectDist)
+            UpdateCVar("groundEffectFade", db.groundEffectFade)
+        end
     end
 
     RequestCVarGuardRefresh(false)
@@ -3016,7 +3046,16 @@ function Functions:OnCVarUpdate(_, cvarName, value)
         db.volumeFogInterior = (numValue == 1)
         NotifyConfigChanged()
     elseif IS_FOREVER and cvarName == "volumeFogLevel" then
-        db.volumeFogLevel = math_floor(ClampNumber(numValue, 0, 3) + 0.5)
+        db.volumeFogLevel = math_floor((ClampNumber(numValue, 0, 3) or db.volumeFogLevel or 2) + 0.5)
+        NotifyConfigChanged()
+    elseif IS_FOREVER and cvarName == "groundEffectDensity" then
+        db.groundEffectDensity = math_floor((ClampNumber(numValue, 16, 256) or 16) + 0.5)
+        NotifyConfigChanged()
+    elseif IS_FOREVER and cvarName == "groundEffectDist" then
+        db.groundEffectDist = math_floor((ClampNumber(numValue, 32, 600) or 70) + 0.5)
+        NotifyConfigChanged()
+    elseif IS_FOREVER and cvarName == "groundEffectFade" then
+        db.groundEffectFade = math_floor((ClampNumber(numValue, 0, 600) or 70) + 0.5)
         NotifyConfigChanged()
     elseif cvarName == "test_cameraDynamicPitch" or cvarName == "test_cameraOverShoulder" then
         Functions:UpdateActionCam()
