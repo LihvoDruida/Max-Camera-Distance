@@ -1,5 +1,13 @@
 # Max Camera Distance — Changelog
 
+## v10.3 — Forever ground-effect default reset controls
+
+- Added a per-setting **Reset** button beside `groundEffectDensity`, `groundEffectDist`, and `groundEffectFade` in the Forever Advanced Environment panel.
+- Reset buttons read the Forever client's built-in CVar default through the CVar API and immediately synchronize both the live CVar and the addon profile.
+- Disabling **Manage Advanced Ground Effects** now restores all three raw ground-effect CVars to their game defaults before releasing addon ownership.
+- Kept the reset controls disabled while Advanced Ground Effects management is off, matching the sliders' ownership state.
+- Updated all bundled locales and bumped the addon version to v10.3.
+
 ## v10.2 — Forever advanced ground effects
 
 - Added Forever-only raw controls for `groundEffectDensity`, `groundEffectDist`, and `groundEffectFade` under Extra Features.

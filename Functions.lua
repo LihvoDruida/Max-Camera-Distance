@@ -2865,6 +2865,60 @@ function Functions:AdjustCamera(forceNow)
     Functions:ApplyManagedCVars()
 end
 
+local FOREVER_GROUND_EFFECT_SPECS = {
+    groundEffectDensity = { min = 16, max = 256, fallback = 16 },
+    groundEffectDist = { min = 32, max = 600, fallback = 70 },
+    groundEffectFade = { min = 0, max = 600, fallback = 70 },
+}
+
+local function GetForeverGroundEffectDefault(cvarName)
+    local spec = FOREVER_GROUND_EFFECT_SPECS[cvarName]
+    if not spec then return nil end
+
+    local value = Compat.SafeGetCVarNumberDefault and Compat.SafeGetCVarNumberDefault(cvarName) or nil
+    if value == nil then
+        local defaults = ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.FOREVER_ENVIRONMENT
+        value = defaults and tonumber(defaults[cvarName]) or nil
+    end
+
+    value = ClampNumber(value, spec.min, spec.max) or spec.fallback
+    return math_floor(value + 0.5)
+end
+
+function Functions:ResetForeverGroundEffectCVar(cvarName, suppressNotify)
+    if not IS_FOREVER then return false end
+    if not FOREVER_GROUND_EFFECT_SPECS[cvarName] then return false end
+    if Compat.HasCVar and not Compat.HasCVar(cvarName) then return true end
+
+    local db = DB()
+    if not db then return false end
+
+    local defaultValue = GetForeverGroundEffectDefault(cvarName)
+    if defaultValue == nil then return false end
+
+    -- Keep the profile and the live CVar in lockstep. The reset uses the
+    -- client's own built-in default, not the current graphics preset value.
+    db[cvarName] = defaultValue
+    UpdateCVar(cvarName, defaultValue)
+    if not suppressNotify then
+        NotifyConfigChanged()
+    end
+    return true, defaultValue
+end
+
+function Functions:ResetForeverGroundEffectsToDefaults()
+    if not IS_FOREVER then return false end
+
+    local ok = true
+    for _, cvarName in ipairs({ "groundEffectDensity", "groundEffectDist", "groundEffectFade" }) do
+        if not self:ResetForeverGroundEffectCVar(cvarName, true) then
+            ok = false
+        end
+    end
+    NotifyConfigChanged()
+    return ok
+end
+
 -- Applies every CVar the addon owns that is NOT part of the zoom state machine.
 -- Kept separate from AdjustCamera so it can also run on paths where Smart Zoom
 -- bails out early (Smart Zoom disabled, logging in dead/as a ghost, ...).

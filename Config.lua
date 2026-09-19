@@ -142,6 +142,13 @@ local function SetOption(key, value)
             db.groundEffectDist = getNumber("groundEffectDist") or db.groundEffectDist
             db.groundEffectFade = getNumber("groundEffectFade") or db.groundEffectFade
         end
+    elseif IS_FOREVER and key == "foreverGroundEffectsOverride" and not value and db.foreverGroundEffectsOverride then
+        -- Disabling management is an explicit opt-out. Restore all three raw
+        -- CVars to the Forever client's built-in defaults BEFORE dropping
+        -- ownership so custom values are never left behind after the toggle is off.
+        if ns.Functions and ns.Functions.ResetForeverGroundEffectsToDefaults then
+            ns.Functions:ResetForeverGroundEffectsToDefaults()
+        end
     end
 
     db[key] = value
@@ -210,6 +217,13 @@ end
 
 local function ForeverEnvironmentOptionVisible(cvarName)
     return IS_FOREVER and HasCVar(cvarName)
+end
+
+local function ResetForeverGroundEffectOption(cvarName)
+    if not IS_FOREVER then return end
+    if ns.Functions and ns.Functions.ResetForeverGroundEffectCVar then
+        ns.Functions:ResetForeverGroundEffectCVar(cvarName)
+    end
 end
 
 function Config:NotifyChange()
@@ -1487,7 +1501,7 @@ function Config:SetupOptions()
                     foreverGroundEffectsOverride = {
                         type = "toggle",
                         name = L["FOREVER_GROUND_EFFECT_OVERRIDE"] or "Manage Advanced Ground Effects",
-                        desc = L["FOREVER_GROUND_EFFECT_OVERRIDE_DESC"] or "Off by default. When enabled, the addon first captures the client's current raw ground-effect values so enabling it does not change your graphics, then manages the three controls below.",
+                        desc = L["FOREVER_GROUND_EFFECT_OVERRIDE_DESC"] or "Off by default. When enabled, the addon first captures the client's current raw ground-effect values so enabling it does not change your graphics, then manages the three controls below. Disabling management restores all three CVars to the Forever client defaults.",
                         order = 24.2,
                         width = "full",
                         get = function() return GetOption("foreverGroundEffectsOverride") and true or false end,
@@ -1505,7 +1519,17 @@ function Config:SetupOptions()
                         get = function() return tonumber(GetOption("groundEffectDensity")) or tonumber(GetForeverEnvironmentDefault("groundEffectDensity", 16)) or 16 end,
                         set = function(_, val) SetOption("groundEffectDensity", math.floor((tonumber(val) or 16) + 0.5)) end,
                         order = 25,
-                        width = "full",
+                        width = 2.2,
+                        hidden = function() return not ForeverEnvironmentOptionVisible("groundEffectDensity") end,
+                        disabled = function() return not GetOption("foreverGroundEffectsOverride") end,
+                    },
+                    groundEffectDensityReset = {
+                        type = "execute",
+                        name = L["FOREVER_RESET_DEFAULT"] or "Reset",
+                        desc = L["FOREVER_RESET_DEFAULT_DESC"] or "Restore this setting to the Forever client's built-in default.",
+                        order = 25.1,
+                        width = 0.8,
+                        func = function() ResetForeverGroundEffectOption("groundEffectDensity") end,
                         hidden = function() return not ForeverEnvironmentOptionVisible("groundEffectDensity") end,
                         disabled = function() return not GetOption("foreverGroundEffectsOverride") end,
                     },
@@ -1520,7 +1544,17 @@ function Config:SetupOptions()
                         get = function() return tonumber(GetOption("groundEffectDist")) or tonumber(GetForeverEnvironmentDefault("groundEffectDist", 70)) or 70 end,
                         set = function(_, val) SetOption("groundEffectDist", math.floor((tonumber(val) or 70) + 0.5)) end,
                         order = 26,
-                        width = "full",
+                        width = 2.2,
+                        hidden = function() return not ForeverEnvironmentOptionVisible("groundEffectDist") end,
+                        disabled = function() return not GetOption("foreverGroundEffectsOverride") end,
+                    },
+                    groundEffectDistReset = {
+                        type = "execute",
+                        name = L["FOREVER_RESET_DEFAULT"] or "Reset",
+                        desc = L["FOREVER_RESET_DEFAULT_DESC"] or "Restore this setting to the Forever client's built-in default.",
+                        order = 26.1,
+                        width = 0.8,
+                        func = function() ResetForeverGroundEffectOption("groundEffectDist") end,
                         hidden = function() return not ForeverEnvironmentOptionVisible("groundEffectDist") end,
                         disabled = function() return not GetOption("foreverGroundEffectsOverride") end,
                     },
@@ -1535,7 +1569,17 @@ function Config:SetupOptions()
                         get = function() return tonumber(GetOption("groundEffectFade")) or tonumber(GetForeverEnvironmentDefault("groundEffectFade", 70)) or 70 end,
                         set = function(_, val) SetOption("groundEffectFade", math.floor((tonumber(val) or 70) + 0.5)) end,
                         order = 27,
-                        width = "full",
+                        width = 2.2,
+                        hidden = function() return not ForeverEnvironmentOptionVisible("groundEffectFade") end,
+                        disabled = function() return not GetOption("foreverGroundEffectsOverride") end,
+                    },
+                    groundEffectFadeReset = {
+                        type = "execute",
+                        name = L["FOREVER_RESET_DEFAULT"] or "Reset",
+                        desc = L["FOREVER_RESET_DEFAULT_DESC"] or "Restore this setting to the Forever client's built-in default.",
+                        order = 27.1,
+                        width = 0.8,
+                        func = function() ResetForeverGroundEffectOption("groundEffectFade") end,
                         hidden = function() return not ForeverEnvironmentOptionVisible("groundEffectFade") end,
                         disabled = function() return not GetOption("foreverGroundEffectsOverride") end,
                     },
