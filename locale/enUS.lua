@@ -507,6 +507,15 @@ L["GAMEPAD_ACTIONCAM_DESC"] = "The over-shoulder camera itself is configured und
 L["GAMEPAD_PANEL_HEADER"] = "This Panel"
 L["GAMEPAD_AUTO_OPEN_NAME"] = "Open This Panel When a Gamepad Is Enabled"
 L["GAMEPAD_AUTO_OPEN_DESC"] = "Shows this panel the first time a gamepad becomes active on this character, so the camera settings that apply to it are not buried. It never opens during combat, and never opens twice unless you switch it back on here."
+L["GAMEPAD_SPEED_IN_GAME_UI"] = "|cff88ff88Camera speed is already available in the game's own Gamepad settings, so it is not duplicated here.|r"
+L["GAMEPAD_ADVANCED_HEADER"] = "Not in the Game's Settings"
+L["GAMEPAD_ADVANCED_DESC"] = "Camera CVars that exist in the API but have no control in the game's Gamepad panel. If Blizzard adds one, it disappears from here automatically."
+L["GAMEPAD_ADVANCED_OVERRIDE_NAME"] = "Manage These Settings"
+L["GAMEPAD_ADVANCED_OVERRIDE_DESC"] = "Off by default. Enabling it first captures the client's current values, so turning it on does not change anything by itself. Turning it off restores the client defaults."
+L["GAMEPAD_PUSH_CAMERA_NAME"] = "Cursor Edge Camera Push"
+L["GAMEPAD_PUSH_CAMERA_DESC"] = "GamePadCursorPushCamera: how fast the camera turns when the gamepad cursor reaches the edge of the window. 0 disables the push entirely."
+L["GAMEPAD_TANK_TURN_NAME"] = "Tank-Turn Speed"
+L["GAMEPAD_TANK_TURN_DESC"] = "GamePadTankTurnSpeed: when non-zero, the character turns in place like a tank instead of strafing. 0 keeps the default movement."
 
 if AceTable then
     for key, value in pairs(L) do

@@ -2242,6 +2242,29 @@ safeExitFrame:SetScript("OnKeyDown", function(_, key)
         Functions:ManualExitAfkMode()
     end
 end)
+
+-- The AFK safe exit was keyboard-only, which is a trap on a gamepad: the UI is
+-- hidden, the frame above swallows keyboard input, and a player on a controller
+-- may have no ESC to press at all. Gamepad buttons arrive through a separate
+-- input path (Frame:EnableGamePadButton + OnGamePadButtonDown), so they have to
+-- be wired up explicitly.
+--
+-- ANY button exits, not just the one mapped to Esc. AFK mode is a screensaver;
+-- if the player touched the controller they are back, and guessing at
+-- GamePadEmulateEsc would leave anyone with a custom mapping stuck.
+if safeExitFrame.EnableGamePadButton then
+    pcall(safeExitFrame.EnableGamePadButton, safeExitFrame, true)
+end
+if safeExitFrame.SetPropagateGamePadInput then
+    -- Deliberately propagating rather than swallowing. This frame sits at
+    -- TOOLTIP strata over the whole WorldFrame, so blocking gamepad input here
+    -- would make the controller feel dead for the frame or two before the UI
+    -- comes back.
+    pcall(safeExitFrame.SetPropagateGamePadInput, safeExitFrame, true)
+end
+safeExitFrame:SetScript("OnGamePadButtonDown", function()
+    Functions:ManualExitAfkMode()
+end)
 if UISpecialFrames and safeExitFrame.GetName then
     tinsert(UISpecialFrames, safeExitFrame:GetName())
 end
@@ -3357,7 +3380,11 @@ function Functions:PrintGamePadStatus()
         .. " faceMovement=" .. Show(info.faceMovement)
         .. "  (0=none, 1=left, 2=right)")
     self:SendMessage(" - gamepad camera speed: yaw=" .. Show(info.yawSpeed) .. " (default " .. Show(info.yawDefault) .. ")"
-        .. ", pitch=" .. Show(info.pitchSpeed) .. " (default " .. Show(info.pitchDefault) .. ")")
+        .. ", pitch=" .. Show(info.pitchSpeed) .. " (default " .. Show(info.pitchDefault) .. ")"
+        .. ", ownedByGameUI=" .. FormatBool(info.speedOwnedByGame))
+    self:SendMessage(" - gamepad UI toggle: cvar=" .. Show(info.uiCVar)
+        .. " value=" .. Show(info.uiCVarValue)
+        .. " discovered=" .. (info.uiCVarIsFallback and "no (fell back to GamePadEnable)" or "yes"))
 
     if info.problems and #info.problems > 0 then
         for _, id in ipairs(info.problems) do
@@ -3369,6 +3396,28 @@ function Functions:PrintGamePadStatus()
                 self:SendMessage(" - |cffffcc00gamepad: the camera and cursor share a physical stick.|r")
             end
         end
+    end
+end
+
+-- The Gamepad (Alpha) panel is undocumented, so rather than shipping a guessed
+-- list this prints what the client itself reports, together with whether
+-- Blizzard's Settings panel already owns each CVar.
+function Functions:PrintGamePadCVarInventory()
+    local gamePad = ns.GamePad
+    if not (gamePad and gamePad.GetClientCVarInventory) then return end
+
+    local inventory = gamePad:GetClientCVarInventory()
+    if #inventory == 0 then
+        self:SendMessage(" - gamepad CVars: none reported by this client")
+        return
+    end
+
+    self:SendMessage(" - gamepad CVars (" .. #inventory .. "), [game] = already in Blizzard's settings panel:")
+    for _, entry in ipairs(inventory) do
+        self:SendMessage(string.format("    %s = %s %s",
+            entry.name,
+            tostring(entry.value ~= nil and entry.value or "?"),
+            entry.exposed and "|cff88ff88[game]|r" or "|cffffcc00[addon-only]|r"))
     end
 end
 
@@ -3388,7 +3437,7 @@ function Functions:SlashCmdHandler(msg)
     local db = ns.Database.db.profile
 
     if command == "" or command == "help" then
-        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | gamepad | deps | fastzoom | slowzoom | reset | debug on | debug off")
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | gamepad [cvars] | deps | fastzoom | slowzoom | reset | debug on | debug off")
 
     elseif command == "config" then
         if ns.Config and ns.Config.Open then
@@ -3426,6 +3475,11 @@ function Functions:SlashCmdHandler(msg)
         end
         Functions:SendMessage("GamePad status:")
         Functions:PrintGamePadStatus()
+        if arg == "cvars" then
+            Functions:PrintGamePadCVarInventory()
+        else
+            Functions:SendMessage(" - use |cffffff00/mcd gamepad cvars|r to list every gamepad CVar this client has.")
+        end
 
     elseif command == "fastzoom" then
         db.moveViewDistance = 50

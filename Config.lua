@@ -150,6 +150,30 @@ local function DescribeGamePadSpeed(axis, baseText)
         baseline)
 end
 
+-- Anything the game's own Gamepad panel already owns is hidden here rather than
+-- duplicated: two controls for one CVar is a trap, not a convenience.
+local function GamePadCanManage(cvarName)
+    return (ns.GamePad and ns.GamePad.CanManage and ns.GamePad:CanManage(cvarName)) and true or false
+end
+
+local function GamePadOwnedByGame(cvarName)
+    return (ns.GamePad and ns.GamePad.IsExposedInGameUI and ns.GamePad:IsExposedInGameUI(cvarName)) and true or false
+end
+
+local function GamePadCanManageSpeed()
+    return (ns.GamePad and ns.GamePad.CanManageCameraSpeed and ns.GamePad:CanManageCameraSpeed()) and true or false
+end
+
+local function GamePadAdvancedVisible()
+    if not (ns.GamePad and ns.GamePad.ADVANCED_CONTROLS) then return false end
+    for _, control in ipairs(ns.GamePad.ADVANCED_CONTROLS) do
+        if GamePadCanManage(control.cvar) then
+            return true
+        end
+    end
+    return false
+end
+
 local function DescribeGamePadStickProblems()
     if not (ns.GamePad and ns.GamePad.IsActive and ns.GamePad:IsActive()) then
         return nil
@@ -232,7 +256,9 @@ local function SetOption(key, value)
             ns.Functions:ApplyManagedCVars()
         end
     elseif key == "gamePadManageCameraSpeed" or key == "gamePadCameraYawMultiplier"
-        or key == "gamePadCameraPitchMultiplier" or key == "gamePadRelaxFaceMovement" then
+        or key == "gamePadCameraPitchMultiplier" or key == "gamePadRelaxFaceMovement"
+        or key == "gamePadAdvancedOverride" or key == "gamePadCursorPushCamera"
+        or key == "gamePadTankTurnSpeed" or key == "gamePadAutoOpenConfig" then
         -- Gamepad CVars are not part of the zoom state machine, so writing one
         -- must not drag a full camera recomputation along with it.
         if ns.GamePad and ns.GamePad.OnOptionChanged then
@@ -1871,7 +1897,14 @@ function Config:SetupOptions()
                         name = L["GAMEPAD_SPEED_HEADER"] or "Camera Speed",
                         order = 10,
                     },
+                    gamePadSpeedOwnedByGame = {
+                        type = "description",
+                        name = L["GAMEPAD_SPEED_IN_GAME_UI"] or "|cff88ff88Camera speed is already available in the game's own Gamepad settings, so it is not duplicated here.|r",
+                        order = 10.5,
+                        hidden = function() return GamePadCanManageSpeed() end,
+                    },
                     gamePadManageCameraSpeed = {
+                        hidden = function() return not GamePadCanManageSpeed() end,
                         type = "toggle",
                         name = L["GAMEPAD_MANAGE_SPEED_NAME"] or "Manage Gamepad Camera Speed",
                         desc = L["GAMEPAD_MANAGE_SPEED_DESC"] or "Lets this addon set GamePadCameraYawSpeed and GamePadCameraPitchSpeed. Off by default so the addon never retunes your controller behind your back.",
@@ -1881,6 +1914,7 @@ function Config:SetupOptions()
                         width = 2,
                     },
                     gamePadYawMultiplier = {
+                        hidden = function() return not GamePadCanManageSpeed() end,
                         type = "range",
                         name = L["GAMEPAD_YAW_MULTIPLIER_NAME"] or "Gamepad Horizontal Speed",
                         desc = function()
@@ -1894,6 +1928,7 @@ function Config:SetupOptions()
                         disabled = function() return not GetOption("gamePadManageCameraSpeed") end,
                     },
                     gamePadPitchMultiplier = {
+                        hidden = function() return not GamePadCanManageSpeed() end,
                         type = "range",
                         name = L["GAMEPAD_PITCH_MULTIPLIER_NAME"] or "Gamepad Vertical Speed",
                         desc = function()
@@ -1924,7 +1959,51 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("gamePadRelaxFaceMovement", val and true or false) end,
                         order = 22,
                         width = 2,
-                        hidden = function() return not HasCVar("GamePadFaceMovement") end,
+                        hidden = function() return not GamePadCanManage("GamePadFaceMovement") end,
+                    },
+                    gamePadAdvancedHeader = {
+                        type = "header",
+                        name = L["GAMEPAD_ADVANCED_HEADER"] or "Not in the Game's Settings",
+                        order = 25,
+                        hidden = function() return not GamePadAdvancedVisible() end,
+                    },
+                    gamePadAdvancedDesc = {
+                        type = "description",
+                        name = L["GAMEPAD_ADVANCED_DESC"] or "Camera CVars that exist in the API but have no control in the game's Gamepad panel. If Blizzard adds one, it disappears from here automatically.",
+                        order = 25.1,
+                        hidden = function() return not GamePadAdvancedVisible() end,
+                    },
+                    gamePadAdvancedOverride = {
+                        type = "toggle",
+                        name = L["GAMEPAD_ADVANCED_OVERRIDE_NAME"] or "Manage These Settings",
+                        desc = L["GAMEPAD_ADVANCED_OVERRIDE_DESC"] or "Off by default. Enabling it first captures the client's current values, so turning it on does not change anything by itself. Turning it off restores the client defaults.",
+                        get = function() return GetOption("gamePadAdvancedOverride") and true or false end,
+                        set = function(_, val) SetOption("gamePadAdvancedOverride", val and true or false) end,
+                        order = 25.2,
+                        width = 2,
+                        hidden = function() return not GamePadAdvancedVisible() end,
+                    },
+                    gamePadCursorPushCamera = {
+                        type = "range",
+                        name = L["GAMEPAD_PUSH_CAMERA_NAME"] or "Cursor Edge Camera Push",
+                        desc = L["GAMEPAD_PUSH_CAMERA_DESC"] or "GamePadCursorPushCamera: how fast the camera turns when the gamepad cursor reaches the edge of the window. 0 disables the push entirely.",
+                        min = 0, max = 5, step = 0.05, bigStep = 0.25,
+                        get = function() return tonumber(GetOption("gamePadCursorPushCamera")) or 1 end,
+                        set = function(_, val) SetOption("gamePadCursorPushCamera", tonumber(val) or 1) end,
+                        order = 25.3,
+                        hidden = function() return not GamePadCanManage("GamePadCursorPushCamera") end,
+                        disabled = function() return not GetOption("gamePadAdvancedOverride") end,
+                    },
+                    gamePadTankTurnSpeed = {
+                        type = "range",
+                        name = L["GAMEPAD_TANK_TURN_NAME"] or "Tank-Turn Speed",
+                        desc = L["GAMEPAD_TANK_TURN_DESC"] or "GamePadTankTurnSpeed: when non-zero, the character turns in place like a tank instead of strafing. 0 keeps the default movement.",
+                        min = 0, max = 360, step = 1, bigStep = 10,
+                        get = function() return tonumber(GetOption("gamePadTankTurnSpeed")) or 0 end,
+                        set = function(_, val) SetOption("gamePadTankTurnSpeed", tonumber(val) or 0) end,
+                        order = 25.4,
+                        hidden = function() return not GamePadCanManage("GamePadTankTurnSpeed") end,
+                        disabled = function() return not GetOption("gamePadAdvancedOverride") end,
                     },
                     gamePadPanelHeader = {
                         type = "header",

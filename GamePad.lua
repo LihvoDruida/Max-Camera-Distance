@@ -11,6 +11,8 @@ local pcall = pcall
 local tonumber = tonumber
 local tostring = tostring
 local math_abs = math.abs
+local select = select
+local table = table
 
 local C_GamePad = _G.C_GamePad
 local GetTime = GetTime
@@ -52,13 +54,36 @@ local CVAR = {
     CURSOR_STICK  = "GamePadCursorStick",
     FACE_MOVEMENT = "GamePadFaceMovement",
     TANK_TURN     = "GamePadTankTurnSpeed",
+    PUSH_CAMERA   = "GamePadCursorPushCamera",
 }
 GamePad.CVAR = CVAR
+
+-- Forever's Gameplay > Gamepad (Alpha) panel is gated behind its own toggle
+-- ("Enable Gamepad UI (Alpha)"), and that toggle - not merely a connected
+-- controller - is what the player means by "I am playing on a gamepad".
+--
+-- The CVar behind it is NOT documented anywhere public: the panel is alpha and
+-- post-dates every CVar list we can check against. Hardcoding a guess would
+-- fail silently, so the name is DISCOVERED at runtime from the candidates below
+-- and, failing those, by scanning the client's own CVar table. GamePadEnable is
+-- the last resort, which is also the correct answer on a client that has the
+-- old gamepad support but no Gamepad UI.
+local UI_CVAR_CANDIDATES = {
+    "GamePadUIEnable",
+    "gamePadUIEnable",
+    "GamePadEnableUI",
+    "GamePadUI",
+    "gamePadUI",
+    "GamePadUIAlpha",
+    "GamePadShowUI",
+}
 
 -- Everything this module reads or writes, so Core can put them on the
 -- CVAR_UPDATE watch list from one place.
 GamePad.WATCHED_CVARS = {
     CVAR.ENABLE,
+    CVAR.TANK_TURN,
+    CVAR.PUSH_CAMERA,
     CVAR.YAW_SPEED,
     CVAR.PITCH_SPEED,
     CVAR.CAMERA_STICK,
@@ -166,8 +191,112 @@ local function LogMessage(level, text)
 end
 
 -- =====================================================================
+-- WHAT THE GAME ALREADY EXPOSES
+-- =====================================================================
+-- Blizzard registers every CVar that appears in the Settings panel through
+-- Settings.RegisterCVarSetting, keyed by the CVar name. So Settings.GetSetting
+-- is an authoritative, self-updating answer to "does the game already have a
+-- control for this?" - which is exactly the rule this addon follows: anything
+-- the Gamepad (Alpha) panel owns is left alone and hidden here, and only the
+-- CVars that exist in the API WITHOUT a control of their own are exposed.
+--
+-- It also means the addon corrects itself as the alpha evolves: the moment
+-- Blizzard adds a slider for one of these, the addon's duplicate disappears.
+local exposureCache = {}
+
+function GamePad:IsExposedInGameUI(cvarName)
+    if type(cvarName) ~= "string" then return false end
+
+    local cached = exposureCache[cvarName]
+    if cached ~= nil then
+        return cached
+    end
+
+    local Settings = _G.Settings
+    if not (Settings and Settings.GetSetting) then
+        -- No Settings API (Classic-era builds). Nothing is "already exposed",
+        -- which keeps the addon's own controls available there.
+        return false
+    end
+
+    local ok, setting = pcall(Settings.GetSetting, cvarName)
+    local exposed = ok and setting ~= nil
+
+    -- Only cache a positive result. A negative one may simply mean Blizzard's
+    -- settings tables have not been built yet this session.
+    if exposed then
+        exposureCache[cvarName] = true
+    end
+    return exposed
+end
+
+function GamePad:InvalidateExposureCache()
+    for key in pairs(exposureCache) do
+        exposureCache[key] = nil
+    end
+end
+
+-- True when the addon should manage a CVar itself: it has to exist, and the
+-- game must not already own a control for it.
+function GamePad:CanManage(cvarName)
+    return HasCVar(cvarName) and not self:IsExposedInGameUI(cvarName)
+end
+
+-- =====================================================================
 -- SUPPORT / ACTIVE DETECTION
 -- =====================================================================
+local resolvedUICVar = nil
+local resolvedUICVarIsFallback = false
+
+local function ResolveUICVar()
+    if resolvedUICVar then
+        return resolvedUICVar, resolvedUICVarIsFallback
+    end
+
+    -- Wait for the CVar table before concluding anything, or an early probe
+    -- would pin the fallback for the whole session.
+    if Compat.AreCVarsLoaded and not Compat.AreCVarsLoaded() then
+        return nil, false
+    end
+
+    for _, name in ipairs(UI_CVAR_CANDIDATES) do
+        if HasCVar(name) then
+            resolvedUICVar = name
+            resolvedUICVarIsFallback = false
+            return resolvedUICVar, false
+        end
+    end
+
+    -- Nothing from the candidate list. Ask the client what it actually has:
+    -- any gamepad CVar whose name also mentions the UI is the one we want, and
+    -- this keeps working if Blizzard renames the toggle before launch.
+    local C_Console = _G.C_Console
+    if C_Console and C_Console.GetAllCommands then
+        local ok, commands = pcall(C_Console.GetAllCommands)
+        if ok and type(commands) == "table" then
+            for _, command in ipairs(commands) do
+                local name = type(command) == "table" and command.command or nil
+                if type(name) == "string" then
+                    local lowered = name:lower()
+                    if lowered:find("gamepad", 1, true) and lowered:find("ui", 1, true) then
+                        resolvedUICVar = name
+                        resolvedUICVarIsFallback = false
+                        return resolvedUICVar, false
+                    end
+                end
+            end
+        end
+    end
+
+    resolvedUICVar = CVAR.ENABLE
+    resolvedUICVarIsFallback = true
+    return resolvedUICVar, true
+end
+
+function GamePad:GetUICVarName()
+    return ResolveUICVar()
+end
+
 function GamePad:IsSupported()
     if not IS_FOREVER then
         return false
@@ -179,8 +308,27 @@ function GamePad:IsSupported()
 end
 
 local function ResolveActive()
-    -- C_GamePad.IsEnabled is the authoritative runtime answer where it exists;
-    -- the CVar only records the setting and can be 1 with nothing plugged in.
+    -- THE gate, and it is deliberately the first thing checked: the addon's
+    -- gamepad mode follows "Enable Gamepad UI (Alpha)" in Gameplay > Gamepad,
+    -- not merely a controller being plugged in. With it off, every gamepad
+    -- option here stays inert and the client keeps its own default values.
+    local uiCVar, isFallback = ResolveUICVar()
+    if uiCVar then
+        local enabled = GetNumber(uiCVar)
+        if enabled == nil or enabled == 0 then
+            return false
+        end
+        -- Where the toggle is a CVar of its own, it is the whole answer: the
+        -- player has explicitly opted into the gamepad experience.
+        if not isFallback then
+            return true
+        end
+    end
+
+    -- Fallback path only (no dedicated Gamepad UI CVar on this client, so the
+    -- check above tested GamePadEnable). C_GamePad.IsEnabled is the
+    -- authoritative runtime answer where it exists; the CVar only records the
+    -- setting and can be 1 with nothing plugged in.
     if C_GamePad and C_GamePad.IsEnabled then
         local ok, enabled = pcall(C_GamePad.IsEnabled)
         if ok then
@@ -191,14 +339,9 @@ local function ResolveActive()
         end
     end
 
-    local enableCVar = GetNumber(CVAR.ENABLE)
-    if enableCVar == nil or enableCVar == 0 then
-        return false
-    end
-
-    -- No IsEnabled on this client: require a device to actually be present
-    -- before declaring the gamepad active, so a leftover GamePadEnable 1 does
-    -- not make the addon manage gamepad CVars for a keyboard/mouse player.
+    -- No IsEnabled either: require a device to actually be present before
+    -- declaring the gamepad active, so a leftover GamePadEnable 1 does not make
+    -- the addon manage gamepad CVars for a keyboard/mouse player.
     if C_GamePad and C_GamePad.GetActiveDeviceID then
         local ok, deviceID = pcall(C_GamePad.GetActiveDeviceID)
         if ok then
@@ -275,20 +418,28 @@ function GamePad:GetResolvedSpeed(axis)
     return baseline * multiplier
 end
 
+-- True when the addon should offer its own camera speed controls at all.
+-- Once the Gamepad (Alpha) panel grows its own Camera sliders for these, the
+-- addon steps aside rather than fighting them.
+function GamePad:CanManageCameraSpeed()
+    return self:CanManage(CVAR.YAW_SPEED) or self:CanManage(CVAR.PITCH_SPEED)
+end
+
 function GamePad:ApplyCameraSpeeds(force)
     local db = DB()
     if not db then return end
     if not db.gamePadManageCameraSpeed then return end
     if not self:IsActive() then return end
+    if not self:CanManageCameraSpeed() then return end
 
-    local yaw = self:GetResolvedSpeed("yaw")
+    local yaw = self:CanManage(CVAR.YAW_SPEED) and self:GetResolvedSpeed("yaw") or nil
     if yaw ~= nil and (force or state.lastAppliedYaw == nil or math_abs(state.lastAppliedYaw - yaw) > 0.0005) then
         if SetCVarManaged(CVAR.YAW_SPEED, yaw) then
             state.lastAppliedYaw = yaw
         end
     end
 
-    local pitch = self:GetResolvedSpeed("pitch")
+    local pitch = self:CanManage(CVAR.PITCH_SPEED) and self:GetResolvedSpeed("pitch") or nil
     if pitch ~= nil and (force or state.lastAppliedPitch == nil or math_abs(state.lastAppliedPitch - pitch) > 0.0005) then
         if SetCVarManaged(CVAR.PITCH_SPEED, pitch) then
             state.lastAppliedPitch = pitch
@@ -307,6 +458,93 @@ function GamePad:RestoreCameraSpeeds()
 
     state.lastAppliedYaw = nil
     state.lastAppliedPitch = nil
+end
+
+-- =====================================================================
+-- API-ONLY CAMERA CONTROLS
+-- =====================================================================
+-- These gamepad CVars exist in the API but have no control of their own in the
+-- Gamepad (Alpha) panel, which is precisely the gap this addon is for. Each one
+-- is still checked against Settings.GetSetting at runtime, so if the alpha
+-- grows a slider for any of them the addon's copy disappears by itself.
+--
+-- Only camera-relevant CVars are listed. Cursor speed, button emulation and
+-- stick assignment are input concerns and belong to the game's own panel.
+GamePad.ADVANCED_CONTROLS = {
+    {
+        key = "gamePadCursorPushCamera",
+        cvar = CVAR.PUSH_CAMERA,
+        min = 0, max = 5, step = 0.05,
+        fallbackDefault = 1,
+    },
+    {
+        key = "gamePadTankTurnSpeed",
+        cvar = CVAR.TANK_TURN,
+        min = 0, max = 360, step = 1,
+        fallbackDefault = 0,
+    },
+}
+
+function GamePad:GetAdvancedControl(key)
+    for _, control in ipairs(GamePad.ADVANCED_CONTROLS) do
+        if control.key == key then
+            return control
+        end
+    end
+    return nil
+end
+
+function GamePad:GetAdvancedDefault(key)
+    local control = self:GetAdvancedControl(key)
+    if not control then return nil end
+    local value = GetClientDefault(control.cvar)
+    if value == nil then return control.fallbackDefault end
+    return value
+end
+
+-- Seeds the profile from the live CVars so that switching management ON does
+-- not itself change how the controller feels. Mirrors the Forever ground-effect
+-- override elsewhere in this addon.
+function GamePad:CaptureAdvancedValues()
+    local db = DB()
+    if not db then return end
+
+    for _, control in ipairs(GamePad.ADVANCED_CONTROLS) do
+        local live = GetNumber(control.cvar)
+        if live ~= nil then
+            db[control.key] = live
+        end
+    end
+end
+
+function GamePad:ApplyAdvancedControls(force)
+    local db = DB()
+    if not db then return end
+    if not db.gamePadAdvancedOverride then return end
+    if not self:IsActive() then return end
+
+    for _, control in ipairs(GamePad.ADVANCED_CONTROLS) do
+        if self:CanManage(control.cvar) then
+            local value = tonumber(db[control.key])
+            if value ~= nil then
+                if value < control.min then value = control.min end
+                if value > control.max then value = control.max end
+                local current = GetNumber(control.cvar)
+                if force or current == nil or math_abs(current - value) > 0.0005 then
+                    SetCVarManaged(control.cvar, value)
+                end
+            end
+        end
+    end
+end
+
+function GamePad:RestoreAdvancedControls()
+    for _, control in ipairs(GamePad.ADVANCED_CONTROLS) do
+        local default = GetClientDefault(control.cvar)
+        if default ~= nil and HasCVar(control.cvar) then
+            SetCVarManaged(control.cvar, default)
+        end
+    end
 end
 
 -- =====================================================================
@@ -334,7 +572,9 @@ end
 local savedFaceMovement = nil
 
 function GamePad:RefreshFaceMovement()
-    if not HasCVar(CVAR.FACE_MOVEMENT) then return end
+    -- If the Gamepad panel gains its own face-movement control, the player's
+    -- choice there wins and the addon stops touching it.
+    if not self:CanManage(CVAR.FACE_MOVEMENT) then return end
 
     if self:ShouldRelaxFaceMovement() then
         local current = GetNumber(CVAR.FACE_MOVEMENT)
@@ -423,8 +663,57 @@ function GamePad:GetDiagnostics()
         relaxFaceMovement = (db and db.gamePadRelaxFaceMovement) and true or false,
         autoOpenPanel = (db and db.gamePadAutoOpenConfig ~= false) and true or false,
         panelShown = (db and db.gamePadPanelShown) and true or false,
+        uiCVar = select(1, ResolveUICVar()),
+        uiCVarIsFallback = select(2, ResolveUICVar()) and true or false,
+        uiCVarValue = (function()
+            local name = ResolveUICVar()
+            return name and GetNumber(name) or nil
+        end)(),
+        managingAdvanced = (db and db.gamePadAdvancedOverride) and true or false,
+        speedOwnedByGame = self:IsExposedInGameUI(CVAR.YAW_SPEED) or self:IsExposedInGameUI(CVAR.PITCH_SPEED),
         problems = self:GetStickProblems(),
     }
+end
+
+-- Every gamepad CVar this client actually has, with whether the game's own
+-- Settings panel already owns it. This is a reporting aid: the Gamepad (Alpha)
+-- panel is undocumented, so /mcd gamepad can show exactly what is there rather
+-- than relying on a list written from guesswork.
+function GamePad:GetClientCVarInventory()
+    local found = {}
+
+    local C_Console = _G.C_Console
+    if C_Console and C_Console.GetAllCommands then
+        local ok, commands = pcall(C_Console.GetAllCommands)
+        if ok and type(commands) == "table" then
+            for _, command in ipairs(commands) do
+                local name = type(command) == "table" and command.command or nil
+                if type(name) == "string" and name:lower():find("gamepad", 1, true) then
+                    found[#found + 1] = {
+                        name = name,
+                        value = GetNumber(name),
+                        exposed = self:IsExposedInGameUI(name),
+                    }
+                end
+            end
+        end
+    end
+
+    if #found == 0 then
+        -- No console enumeration on this client: fall back to the names we know.
+        for _, name in pairs(CVAR) do
+            if HasCVar(name) then
+                found[#found + 1] = {
+                    name = name,
+                    value = GetNumber(name),
+                    exposed = self:IsExposedInGameUI(name),
+                }
+            end
+        end
+    end
+
+    table.sort(found, function(a, b) return a.name < b.name end)
+    return found
 end
 
 -- =====================================================================
@@ -500,6 +789,10 @@ function GamePad:Refresh(force)
         self:ApplyCameraSpeeds(force)
     end
 
+    if db.gamePadAdvancedOverride then
+        self:ApplyAdvancedControls(force)
+    end
+
     self:RefreshFaceMovement()
 
     -- The shoulder offset and the motion-sickness CVars are owned by
@@ -519,8 +812,12 @@ function GamePad:OnCVarUpdate(cvarName)
     if type(cvarName) ~= "string" then return end
 
     local lowered = cvarName:lower()
-    if lowered == CVAR.ENABLE:lower() then
+    local uiCVar = ResolveUICVar()
+    if lowered == CVAR.ENABLE:lower() or (uiCVar and lowered == uiCVar:lower()) then
         self:Invalidate()
+        -- Blizzard's settings tables are rebuilt when the Gamepad UI turns on,
+        -- so anything we concluded about what the game exposes is now stale.
+        self:InvalidateExposureCache()
         self:Refresh(true)
         return
     end
@@ -574,6 +871,22 @@ function GamePad:OnOptionChanged(key, value)
 
     if key == "gamePadRelaxFaceMovement" then
         self:RefreshFaceMovement()
+        return
+    end
+
+    if key == "gamePadAdvancedOverride" then
+        if value then
+            -- Capture first, then manage: enabling must not change anything.
+            self:CaptureAdvancedValues()
+            self:ApplyAdvancedControls(true)
+        else
+            self:RestoreAdvancedControls()
+        end
+        return
+    end
+
+    if self:GetAdvancedControl(key) then
+        self:ApplyAdvancedControls(true)
         return
     end
 

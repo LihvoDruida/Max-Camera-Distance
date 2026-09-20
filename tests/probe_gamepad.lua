@@ -114,14 +114,26 @@ local cvars = stub.InstallCVars({
     resampleAlwaysSharpen = 0,
     SoftTargetIconGameObject = 0,
 
-    GamePadEnable = 0,
+    -- Forever's "Enable Gamepad UI (Alpha)" toggle. A controller is connected
+    -- (GamePadEnable = 1) but the player has not opted into the gamepad UI, so
+    -- the addon must stay completely inert.
+    GamePadUIEnable = 0,
+    GamePadEnable = 1,
     GamePadCameraYawSpeed = 180,
     GamePadCameraPitchSpeed = 90,
     GamePadCameraStick = 2,
     GamePadMoveStick = 1,
     GamePadCursorStick = 0,
     GamePadFaceMovement = 1,
+    GamePadCursorPushCamera = 1,
+    GamePadTankTurnSpeed = 0,
 })
+cvars:SetDefault("GamePadCursorPushCamera", 1)
+cvars:SetDefault("GamePadTankTurnSpeed", 0)
+
+-- No Settings API yet: nothing is "already in the game's panel", so the addon
+-- offers its own controls. A later phase installs one and checks it steps aside.
+_G.Settings = nil
 cvars:SetDefault("GamePadCameraYawSpeed", 180)
 cvars:SetDefault("GamePadCameraPitchSpeed", 90)
 cvars:SetDefault("cameraYawMoveSpeed", 180)
@@ -299,14 +311,18 @@ db.actionCamShoulderOutOfCombat = true
 Functions:UpdateActionCam()
 
 -- ------------------------------------------------- phase 5: gamepad plumbing
-check("phase 5: the gamepad module reports support from the CVar alone",
+check("phase 5: the gamepad module reports support on Forever",
     GamePad:IsSupported() == true)
-check("phase 5: an off GamePadEnable means no active gamepad",
-    GamePad:IsActive() == false)
+check("phase 5: the Gamepad UI toggle CVar is discovered, not guessed at",
+    GamePad:GetUICVarName() == "GamePadUIEnable",
+    tostring(GamePad:GetUICVarName()))
+check("phase 5: a connected controller with the UI toggle OFF is not active",
+    GamePad:IsActive() == false,
+    "GamePadEnable=" .. tostring(cvars:Number("GamePadEnable")))
 
-cvars:Set("GamePadEnable", 1)
+cvars:Set("GamePadUIEnable", 1)
 GamePad:Invalidate()
-check("phase 5: turning GamePadEnable on is detected",
+check("phase 5: enabling the Gamepad UI toggle activates the addon's gamepad mode",
     GamePad:IsActive() == true)
 
 -- Opted out by default: nothing is written until the player asks for it.
@@ -399,17 +415,17 @@ check("phase 9: an already-active gamepad does not open the panel",
     "opened=" .. opened)
 
 -- Off and on again: that is the transition the player just made.
-cvars:Set("GamePadEnable", 0)
+cvars:Set("GamePadUIEnable", 0)
 GamePad:Refresh(true)
-cvars:Set("GamePadEnable", 1)
+cvars:Set("GamePadUIEnable", 1)
 GamePad:Refresh(true)
 check("phase 9: enabling the gamepad opens the panel once",
     opened == 1,
     "opened=" .. opened)
 
-cvars:Set("GamePadEnable", 0)
+cvars:Set("GamePadUIEnable", 0)
 GamePad:Refresh(true)
-cvars:Set("GamePadEnable", 1)
+cvars:Set("GamePadUIEnable", 1)
 GamePad:Refresh(true)
 check("phase 9: it does not open again on the next toggle",
     opened == 1,
@@ -418,9 +434,9 @@ check("phase 9: it does not open again on the next toggle",
 -- Combat must never be interrupted by a settings window.
 db.gamePadPanelShown = false
 inCombat = true
-cvars:Set("GamePadEnable", 0)
+cvars:Set("GamePadUIEnable", 0)
 GamePad:Refresh(true)
-cvars:Set("GamePadEnable", 1)
+cvars:Set("GamePadUIEnable", 1)
 GamePad:Refresh(true)
 check("phase 9: the panel never opens in combat",
     opened == 1,
@@ -437,15 +453,94 @@ check("phase 9: re-enabling the option re-arms the one-time panel",
 -- And the opt-out is honoured.
 db.gamePadAutoOpenConfig = false
 db.gamePadPanelShown = false
-cvars:Set("GamePadEnable", 0)
+cvars:Set("GamePadUIEnable", 0)
 GamePad:Refresh(true)
-cvars:Set("GamePadEnable", 1)
+cvars:Set("GamePadUIEnable", 1)
 GamePad:Refresh(true)
 check("phase 9: the opt-out is respected",
     opened == 1,
     "opened=" .. opened)
 
 ns.Config.OpenGamePadPanel = originalOpen
+
+-- ------------- phase 10: the addon never duplicates the game's own settings
+-- Simulate Blizzard registering a camera speed slider in the Gamepad panel.
+-- Settings.RegisterCVarSetting keys registered settings by CVar name, so
+-- Settings.GetSetting is an authoritative "does the game already own this?".
+_G.Settings = {
+    GetSetting = function(variable)
+        if variable == "GamePadCameraYawSpeed" or variable == "GamePadCameraPitchSpeed" then
+            return { variable = variable }
+        end
+        return nil
+    end,
+}
+GamePad:InvalidateExposureCache()
+
+check("phase 10: a CVar with a Settings entry counts as owned by the game",
+    GamePad:IsExposedInGameUI("GamePadCameraYawSpeed") == true)
+check("phase 10: a CVar without one stays available to the addon",
+    GamePad:IsExposedInGameUI("GamePadCursorPushCamera") == false)
+check("phase 10: the addon stops offering camera speed once the game owns it",
+    GamePad:CanManageCameraSpeed() == false)
+
+cvars:Set("GamePadCameraYawSpeed", 180)
+cvars:Set("GamePadCameraPitchSpeed", 90)
+db.gamePadManageCameraSpeed = true
+db.gamePadCameraYawMultiplier = 2.0
+cvars:ResetCounters()
+GamePad:ApplyCameraSpeeds(true)
+check("phase 10: and writes nothing to CVars the game's panel controls",
+    cvars:Number("GamePadCameraYawSpeed") == 180 and cvars.writes == 0,
+    "yaw=" .. tostring(cvars:Number("GamePadCameraYawSpeed")) .. " writes=" .. cvars.writes)
+
+-- ------------------------- phase 11: API-only controls are still the addon's
+check("phase 11: an API-only CVar is manageable",
+    GamePad:CanManage("GamePadCursorPushCamera") == true)
+
+db.gamePadAdvancedOverride = false
+cvars:Set("GamePadCursorPushCamera", 1)
+cvars:ResetCounters()
+GamePad:ApplyAdvancedControls(true)
+check("phase 11: nothing is written while the override is off",
+    cvars.writes == 0,
+    "writes=" .. cvars.writes)
+
+-- Enabling must capture the live values first, so it changes nothing by itself.
+cvars:Set("GamePadCursorPushCamera", 2.5)
+GamePad:OnOptionChanged("gamePadAdvancedOverride", true)
+db.gamePadAdvancedOverride = true
+check("phase 11: enabling the override captures the client's current value",
+    near(tonumber(db.gamePadCursorPushCamera), 2.5)
+        and near(cvars:Number("GamePadCursorPushCamera"), 2.5),
+    tostring(db.gamePadCursorPushCamera) .. "/" .. tostring(cvars:Number("GamePadCursorPushCamera")))
+
+db.gamePadCursorPushCamera = 0
+GamePad:ApplyAdvancedControls(true)
+check("phase 11: a changed value reaches the CVar",
+    near(cvars:Number("GamePadCursorPushCamera"), 0),
+    tostring(cvars:Number("GamePadCursorPushCamera")))
+
+GamePad:RestoreAdvancedControls()
+check("phase 11: turning the override off restores the client default",
+    near(cvars:Number("GamePadCursorPushCamera"), 1),
+    tostring(cvars:Number("GamePadCursorPushCamera")))
+
+-- ------------------ phase 12: the UI toggle really is the master switch
+cvars:Set("GamePadUIEnable", 0)
+GamePad:Invalidate()
+check("phase 12: turning the Gamepad UI off deactivates the addon's gamepad mode",
+    GamePad:IsActive() == false)
+
+db.gamePadAdvancedOverride = true
+db.gamePadCursorPushCamera = 4
+db.gamePadManageCameraSpeed = true
+cvars:ResetCounters()
+GamePad:ApplyAdvancedControls(true)
+GamePad:ApplyCameraSpeeds(true)
+check("phase 12: no gamepad CVar is written while the UI toggle is off",
+    cvars.writes == 0,
+    "writes=" .. cvars.writes .. " " .. table.concat(cvars.writeLog, ","))
 
 print(failures == 0 and "PROBE PASSED" or ("PROBE FAILED (" .. failures .. ")"))
 os.exit(failures == 0 and 0 or 1)

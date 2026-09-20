@@ -37,9 +37,13 @@ Turn your screen into a screensaver when you step away:
 * **Settings Protection:** Prevents the Settings Panel from becoming transparent during AFK.
 
 ### 🎮 Gamepad Support *(WoW: Forever only)*
-Native controller support is handled separately from the mouse camera, because the game keeps them on different CVars. It is scoped to Forever on purpose — the CVars exist elsewhere, but the behaviour has only been verified against that client:
+Activates only when **Gameplay → Gamepad (Alpha) → Enable Gamepad UI** is switched on. A connected controller alone changes nothing; with the toggle off the client keeps all of its own defaults.
+
+The addon deliberately **does not duplicate anything the game's own Gamepad panel already controls** — it checks Blizzard's settings registry at runtime, so duplicates disappear by themselves as the alpha grows. What it adds is the gap: camera CVars that exist in the API but have no control in that panel.
 * **Guided Setup:** The first time a gamepad becomes active, the addon opens its settings on a dedicated **Gamepad** tab, so the controller-specific camera options are not left to be discovered. Never in combat, once per character, and switchable off.
-* **Gamepad Camera Speed:** `GamePadCameraYawSpeed` / `GamePadCameraPitchSpeed` are managed as a multiplier of the client's own default. The addon's mouse-camera sliders have never affected these — that is why they seemed to do nothing with a controller. Off by default.
+* **Gamepad Camera Speed:** `GamePadCameraYawSpeed` / `GamePadCameraPitchSpeed` as a multiplier of the client's own default — *shown only while the game itself has no slider for them*. The addon's mouse-camera sliders have never affected these, which is why they seemed to do nothing with a controller.
+* **API-only Camera CVars:** `GamePadCursorPushCamera` and `GamePadTankTurnSpeed`, which have no control in the game's panel.
+* **AFK Safe Exit on Controller:** any gamepad button exits the cinematic AFK mode, not just keyboard ESC.
 * **ActionCam Compatibility:** `CameraKeepCharacterCentered` overrides ActionCam outright, and enabling the gamepad is a common way to end up with it switched on. The addon now tracks its own intent rather than reading the shoulder CVar back, so the shoulder camera can no longer get permanently stuck off.
 * **Face-Movement Conflict:** `GamePadFaceMovement` fights the over-shoulder offset. It can optionally be suspended while the shoulder camera is active and is restored afterwards. Off by default.
 * **Stick Diagnostics:** Warns when no stick is assigned to the camera, or when the camera shares a physical stick with movement or the cursor.

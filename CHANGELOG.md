@@ -2,6 +2,14 @@
 
 ## v10.4 — Gamepad support, configurable shoulder offset, ActionCam deadlock fix
 
+### Gamepad scope and rules
+
+- Gamepad handling activates **only when Forever's "Enable Gamepad UI (Alpha)" is on** (Gameplay → Gamepad). A connected controller alone is not enough; with the toggle off every gamepad option stays inert and the client keeps its own defaults. The CVar behind that toggle is undocumented (the panel is alpha), so it is **discovered at runtime** — a candidate-name probe, then a scan of `C_Console.GetAllCommands()` for a gamepad CVar that also mentions the UI, with `GamePadEnable` only as a last resort. `/mcd gamepad` reports which name was resolved and whether it fell back.
+- **The addon never duplicates a control the game already has.** Blizzard registers panel settings through `Settings.RegisterCVarSetting`, keyed by CVar name, so `Settings.GetSetting(cvar)` is an authoritative "does the game own this?". Any CVar that answers yes is hidden here and left alone. The rule is evaluated at runtime, so the moment the alpha grows its own camera-speed sliders the addon's duplicates disappear by themselves.
+- What the addon exposes instead is the gap: camera CVars that exist in the API but have **no control in the Gamepad panel** — `GamePadCursorPushCamera` (camera turn rate when the cursor hits the window edge) and `GamePadTankTurnSpeed`. Off by default, and enabling management captures the live values first so it changes nothing by itself.
+- **AFK safe exit now works on a controller.** The anti-trap exit was keyboard-only: the UI is hidden, the exit frame swallows keyboard input, and a gamepad player may have no ESC at all. Gamepad buttons arrive on a separate input path, so `EnableGamePadButton` + `OnGamePadButtonDown` are wired up explicitly. Any button exits, and gamepad input is propagated rather than swallowed.
+- `/mcd gamepad cvars` lists every gamepad CVar the client reports, each marked `[game]` or `[addon-only]`.
+
 ### Fixed
 
 - **ActionCam could permanently stop working once `CameraKeepCharacterCentered` was switched on.** `CVarGuard` decided whether to block that CVar by reading `test_cameraOverShoulder` back. Keep-centered overrides ActionCam outright (it was added in 9.0.1 for exactly that), and since 11.0.2 `cameraReduceUnexpectedMovement` affects the shoulder CVar as well — so once either was enabled the shoulder value read back as `0`, the guard concluded the shoulder camera was inactive, stopped blocking keep-centered, restored it, and the shoulder camera could never return. The guard now follows the addon's published *intent* (`CVarGuard:SetActionCamIntent`), which does not take part in that feedback loop. This is the most likely cause of "the camera inputs just don't work once I turn the gamepad on".
@@ -26,7 +34,7 @@
 
 ### Tests
 
-- New `tests/probe_gamepad.lua` (36 assertions), running as a Forever client via `Forever.lua`, covering the offset, the fade window, write suppression, the keep-centered deadlock, gamepad speed mirroring, face-movement restore and stick misconfiguration. Verified against negative controls: reverting either the intent fix or the write-suppression fix makes it fail.
+- New `tests/probe_gamepad.lua` (48 assertions), running as a Forever client via `Forever.lua`, covering the offset, the fade window, write suppression, the keep-centered deadlock, gamepad speed mirroring, face-movement restore and stick misconfiguration. Verified against negative controls: reverting either the intent fix or the write-suppression fix makes it fail.
 - `tests/probe_lateace3.lua` runs as Retail and now doubles as the negative control for the Forever scope: no support, no profile keys, hidden options tab.
 - `tests/wow_stub.lua` gained real shown/hidden frame state and a case-insensitive CVar store with read/write counting.
 

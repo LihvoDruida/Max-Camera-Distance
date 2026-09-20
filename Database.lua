@@ -345,6 +345,14 @@ if IS_FOREVER then
     PROFILE_DEFAULTS.gamePadAutoOpenConfig = true
     PROFILE_DEFAULTS.gamePadPanelShown = false
 
+    -- API-only camera CVars: they exist in the client but the Gamepad (Alpha)
+    -- panel has no control for them. Seeded from the client's own defaults at
+    -- first use rather than from constants, so enabling management never
+    -- changes how the controller feels.
+    PROFILE_DEFAULTS.gamePadAdvancedOverride = false
+    PROFILE_DEFAULTS.gamePadCursorPushCamera = SafeGetCVarDefault("GamePadCursorPushCamera") or 1
+    PROFILE_DEFAULTS.gamePadTankTurnSpeed = SafeGetCVarDefault("GamePadTankTurnSpeed") or 0
+
     PROFILE_DEFAULTS.volumeFog = (tonumber(defaultVolumeFog) or 0) == 1
     PROFILE_DEFAULTS.volumeFogInterior = (tonumber(defaultVolumeFogInterior) or 0) == 1
     PROFILE_DEFAULTS.volumeFogLevel = defaultVolumeFogLevel
@@ -547,6 +555,9 @@ function Database:ApplyMigrations(profile)
         profile.gamePadPanelShown = NormalizeBoolean(profile.gamePadPanelShown, PROFILE_DEFAULTS.gamePadPanelShown)
         profile.gamePadCameraYawMultiplier = Clamp(tonumber(profile.gamePadCameraYawMultiplier) or 1.0, 0.1, 4)
         profile.gamePadCameraPitchMultiplier = Clamp(tonumber(profile.gamePadCameraPitchMultiplier) or 1.0, 0.1, 4)
+        profile.gamePadAdvancedOverride = NormalizeBoolean(profile.gamePadAdvancedOverride, PROFILE_DEFAULTS.gamePadAdvancedOverride)
+        profile.gamePadCursorPushCamera = Clamp(tonumber(profile.gamePadCursorPushCamera) or PROFILE_DEFAULTS.gamePadCursorPushCamera, 0, 5)
+        profile.gamePadTankTurnSpeed = Clamp(tonumber(profile.gamePadTankTurnSpeed) or PROFILE_DEFAULTS.gamePadTankTurnSpeed, 0, 360)
     else
         -- A profile copied over from a Forever character must not leave dead
         -- gamepad keys behind on a client that cannot act on them.
@@ -556,6 +567,9 @@ function Database:ApplyMigrations(profile)
         profile.gamePadPanelShown = nil
         profile.gamePadCameraYawMultiplier = nil
         profile.gamePadCameraPitchMultiplier = nil
+        profile.gamePadAdvancedOverride = nil
+        profile.gamePadCursorPushCamera = nil
+        profile.gamePadTankTurnSpeed = nil
     end
 
     local VALID_PRESETS = {
