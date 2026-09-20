@@ -1,5 +1,15 @@
 # Max Camera Distance — Changelog
 
+## v10.10 — Forever CVar range validation fixes
+
+- Fixed repeated Forever console validation spam caused by zero-length smooth zoom transitions writing `cameraZoomSpeed = 0`.
+- `LibCamera:SetZoomUsingCVar()` now skips no-op transitions and clamps non-zero temporary zoom speeds to the client-validated `0.002778..50` range.
+- Updated Forever gamepad camera speed controls to the live Camelot `1..4` validation range.
+- Legacy profiles containing yaw/pitch multipliers below `1` are normalized safely instead of generating rejected CVar writes.
+- Effective Forever gamepad yaw/pitch values are clamped again at the final write boundary so future client-default changes cannot escape the valid CVar range.
+- Added regression coverage for legacy low gamepad speed values and no-op LibCamera zoom writes.
+- Console-log audit also confirmed that current `test_cameraOverShoulder` / `test_cameraDynamicPitch` writes are accepted by Forever; the remaining CharacterCustomize, GroupFinder, HandyNotes and EverythingQuests errors originate outside Max Camera Distance.
+
 ## v10.9 — ActionCam ownership, clean restore, and controller bindings
 
 ### ActionCam ownership / Forever reliability

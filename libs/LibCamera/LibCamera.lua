@@ -361,7 +361,20 @@ function LibCamera:SetZoomUsingCVar(endValue, duration, callback)
 
     local beginValue = GetCameraZoom();
     local change = endValue - beginValue;
-    local speed = math.abs(math.min(50, math.abs((change/duration))));
+
+    -- Forever validates camera zoom speed against a strictly-positive range
+    -- (the live client reports 0.002778..50). A no-op transition used to
+    -- calculate speed=0 and still write it, flooding Blizzard_Console with
+    -- "Value out of range" messages. If the camera is already at the target,
+    -- there is nothing to animate or temporarily override.
+    if (math.abs(change) <= 0.0005) then
+        if (callback) then callback(false); end
+        return;
+    end
+
+    local MIN_ZOOM_SPEED = 0.002778;
+    local requestedSpeed = math.abs(change / duration);
+    local speed = math.max(MIN_ZOOM_SPEED, math.min(50, requestedSpeed));
 
     local startTime = GetTime();
     local endTime = startTime + duration;
@@ -369,6 +382,7 @@ function LibCamera:SetZoomUsingCVar(endValue, duration, callback)
     oldSpeed = getZoomSpeed();
 
     -- set the zoom cvar to what will get us to the endValue in the duration
+    -- while staying inside the client-validated range.
     safeSetCVar("cameraZoomSpeed", speed);
 
     local triggeredZoom = false;

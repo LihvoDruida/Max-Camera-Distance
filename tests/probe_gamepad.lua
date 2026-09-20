@@ -551,14 +551,14 @@ check("phase 5: gamepad speeds are left alone while the option is off",
 
 db.gamePadManageCameraSpeed = true
 db.gamePadCameraYawMultiplier = 1.5
-db.gamePadCameraPitchMultiplier = 0.5
+db.gamePadCameraPitchMultiplier = 1.0
 GamePad:ApplyCameraSpeeds(true)
 
 check("phase 5: the yaw multiplier scales the client's own default",
     near(cvars:Number("GamePadCameraYawSpeed"), 1.5),
     tostring(cvars:Number("GamePadCameraYawSpeed")))
 check("phase 5: the pitch multiplier scales the client's own default",
-    near(cvars:Number("GamePadCameraPitchSpeed"), 0.5),
+    near(cvars:Number("GamePadCameraPitchSpeed"), 1.0),
     tostring(cvars:Number("GamePadCameraPitchSpeed")))
 check("phase 5: the mouse camera CVars are untouched by gamepad settings",
     cvars:Number("cameraYawMoveSpeed") == 180 and cvars:Number("cameraPitchMoveSpeed") == 90,
@@ -568,6 +568,17 @@ GamePad:RestoreCameraSpeeds()
 check("phase 5: switching the option off hands the CVars back to the client",
     near(cvars:Number("GamePadCameraYawSpeed"), 1) and near(cvars:Number("GamePadCameraPitchSpeed"), 1),
     tostring(cvars:Number("GamePadCameraYawSpeed")) .. "/" .. tostring(cvars:Number("GamePadCameraPitchSpeed")))
+
+-- Live Forever validates both camera-speed CVars to 1..4. Old profiles from
+-- builds that exposed 0.1x may still carry values below 1; resolution must
+-- clamp them before they ever reach SetCVar.
+db.gamePadCameraYawMultiplier = 0.1
+db.gamePadCameraPitchMultiplier = 0.25
+check("phase 5: legacy sub-1 gamepad multipliers clamp to the Forever minimum",
+    near(GamePad:GetResolvedSpeed("yaw"), 1) and near(GamePad:GetResolvedSpeed("pitch"), 1),
+    tostring(GamePad:GetResolvedSpeed("yaw")) .. "/" .. tostring(GamePad:GetResolvedSpeed("pitch")))
+db.gamePadCameraYawMultiplier = 1.0
+db.gamePadCameraPitchMultiplier = 1.0
 
 -- --------------------------------- phase 6: face-movement is opt-in and safe
 db.gamePadRelaxFaceMovement = false
@@ -742,12 +753,12 @@ cvars:Set("GamePadCameraYawSpeed", 2.0)
 cvars:Set("GamePadCameraPitchSpeed", 1.0)
 db.gamePadManageCameraSpeed = true
 db.gamePadCameraYawMultiplier = 2.0
-db.gamePadCameraPitchMultiplier = 0.5
+db.gamePadCameraPitchMultiplier = 1.0
 cvars:ResetCounters()
 GamePad:ApplyCameraSpeeds(true)
 check("phase 10: the addon writes only the unowned camera axis",
     near(cvars:Number("GamePadCameraYawSpeed"), 2.0)
-        and near(cvars:Number("GamePadCameraPitchSpeed"), 0.5)
+        and near(cvars:Number("GamePadCameraPitchSpeed"), 1.0)
         and cvars.writes == 1,
     "yaw=" .. tostring(cvars:Number("GamePadCameraYawSpeed"))
         .. " pitch=" .. tostring(cvars:Number("GamePadCameraPitchSpeed"))

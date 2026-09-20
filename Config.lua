@@ -2168,7 +2168,7 @@ function Config:SetupOptions()
                             return DescribeGamePadSpeed("yaw",
                                 L["GAMEPAD_YAW_MULTIPLIER_DESC"] or "Multiplier applied to the client's own default gamepad yaw speed.")
                         end,
-                        min = 0.1, max = 4, step = 0.05, bigStep = 0.25,
+                        min = 1, max = 4, step = 0.05, bigStep = 0.25,
                         get = function() return tonumber(GetOption("gamePadCameraYawMultiplier")) or 1.0 end,
                         set = function(_, val) SetOption("gamePadCameraYawMultiplier", tonumber(val) or 1.0) end,
                         order = 22,
@@ -2182,7 +2182,7 @@ function Config:SetupOptions()
                             return DescribeGamePadSpeed("pitch",
                                 L["GAMEPAD_PITCH_MULTIPLIER_DESC"] or "Multiplier applied to the client's own default gamepad pitch speed.")
                         end,
-                        min = 0.1, max = 4, step = 0.05, bigStep = 0.25,
+                        min = 1, max = 4, step = 0.05, bigStep = 0.25,
                         get = function() return tonumber(GetOption("gamePadCameraPitchMultiplier")) or 1.0 end,
                         set = function(_, val) SetOption("gamePadCameraPitchMultiplier", tonumber(val) or 1.0) end,
                         order = 23,

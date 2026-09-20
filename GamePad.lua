@@ -513,8 +513,14 @@ end
 -- default of 1 for both yaw and pitch, but the client default API remains
 -- authoritative; the documented values are only fallbacks. The UI stores
 -- multipliers so future client retuning still behaves predictably.
-local MIN_MULTIPLIER = 0.1
+-- Forever 1.60.1 validates both GamePadCameraYawSpeed and
+-- GamePadCameraPitchSpeed to 1..4. Keep the profile as a multiplier because
+-- that remains future-proof if Blizzard retunes the built-in default, but
+-- never resolve to a raw CVar value outside the live Camelot range.
+local MIN_MULTIPLIER = 1.0
 local MAX_MULTIPLIER = 4.0
+local MIN_GAMEPAD_CAMERA_SPEED = 1.0
+local MAX_GAMEPAD_CAMERA_SPEED = 4.0
 
 local function ClampMultiplier(value, fallback)
     local num = tonumber(value)
@@ -543,7 +549,12 @@ function GamePad:GetResolvedSpeed(axis)
         multiplier = ClampMultiplier(db.gamePadCameraYawMultiplier, 1)
     end
 
-    return baseline * multiplier
+    local resolved = baseline * multiplier
+    if IS_FOREVER then
+        if resolved < MIN_GAMEPAD_CAMERA_SPEED then resolved = MIN_GAMEPAD_CAMERA_SPEED end
+        if resolved > MAX_GAMEPAD_CAMERA_SPEED then resolved = MAX_GAMEPAD_CAMERA_SPEED end
+    end
+    return resolved
 end
 
 -- True when the addon should offer its own camera speed controls at all.
