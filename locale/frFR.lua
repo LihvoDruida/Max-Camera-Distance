@@ -429,3 +429,15 @@ L["FOREVER_GROUND_EFFECT_DIST"] = "Distance des effets au sol"
 L["FOREVER_GROUND_EFFECT_DIST_DESC"] = "CVar groundEffectDist direct. Plage : 32-600. Les valeurs supérieures au préréglage normal augmentent la distance d'affichage de la flore et des détails au sol. Valeur par défaut du jeu : %d."
 L["FOREVER_GROUND_EFFECT_FADE"] = "Distance de fondu des effets au sol"
 L["FOREVER_GROUND_EFFECT_FADE_DESC"] = "CVar groundEffectFade direct. Plage pratique exposée ici : 0-600. Une valeur proche de groundEffectDist réduit la disparition prématurée de la flore. Valeur par défaut du jeu : %d."
+
+L["GAMEPAD_ACTIONCAM_DESC"] = "Action Camera is configured first in the Forever Gamepad panel; compatibility options follow it."
+L["GAMEPAD_ACTIONCAM_INACTIVE"] = "|cffffcc00Action Camera est en pause tant que Enable Gamepad UI (Alpha) n’est pas activé dans le client Forever.|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_CENTERED"] = "|cffff5555Action Camera est bloquée par CameraKeepCharacterCentered. MCD le désactive avant la caméra épaule/Dynamic Pitch puis restaure votre valeur d’origine.|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_REDUCE"] = "|cffff5555La caméra épaule est bloquée par CameraReduceUnexpectedMovement. MCD le désactive avant d’appliquer le décalage puis restaure votre valeur d’origine.|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_GENERIC"] = "|cffff5555La compatibilité Action Camera n’est pas prête (%s). Épaule/pitch restent à zéro jusqu’à la levée du blocage.|r"
+
+L["GAMEPAD_ADVANCED_OVERRIDE_DESC"] = "API-only values start from the client's built-in defaults. Enabling management applies those defaults; disabling it restores them."
+
+L["GAMEPAD_ACTIONCAM_COMPAT_HEADER"] = "Gamepad Compatibility"
+
+L["GAMEPAD_ACTIONCAM_COMPAT_DESC"] = "Applied only while Action Camera requests the over-shoulder camera."

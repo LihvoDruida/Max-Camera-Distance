@@ -58,6 +58,15 @@ local CVAR = {
     FACE_MAX_ANGLE_COMBAT = "GamePadFaceMovementMaxAngleCombat",
     TANK_TURN     = "GamePadTankTurnSpeed",
     PUSH_CAMERA   = "GamePadCursorPushCamera",
+
+    -- ActionCam-adjacent gamepad CVars. These remain diagnostic unless the
+    -- addon has an explicit, documented control for them: they alter camera /
+    -- character policy rather than merely camera speed.
+    TURN_WITH_CAMERA = "GamePadTurnWithCamera",
+    LOOK_MAX_PITCH = "GamePadCameraLookMaxPitch",
+    LOOK_MAX_YAW = "GamePadCameraLookMaxYaw",
+    FOLLOW_ADJUST_DELAY = "CameraFollowGamepadAdjustDelay",
+    FOLLOW_ADJUST_EASE_IN = "CameraFollowGamepadAdjustEaseIn",
 }
 GamePad.CVAR = CVAR
 
@@ -95,6 +104,11 @@ GamePad.WATCHED_CVARS = {
     CVAR.FACE_MOVEMENT,
     CVAR.FACE_MAX_ANGLE,
     CVAR.FACE_MAX_ANGLE_COMBAT,
+    CVAR.TURN_WITH_CAMERA,
+    CVAR.LOOK_MAX_PITCH,
+    CVAR.LOOK_MAX_YAW,
+    CVAR.FOLLOW_ADJUST_DELAY,
+    CVAR.FOLLOW_ADJUST_EASE_IN,
 }
 
 GamePad.EVENTS = {
@@ -126,6 +140,8 @@ local state = {
     lastAppliedPitch = nil,
     warnedCameraStick = false,
     warnedStickCollision = false,
+    pendingMasterEnabled = nil,
+    actionCamBlockerReason = nil,
 }
 
 -- =====================================================================
@@ -165,6 +181,11 @@ local FALLBACK_DEFAULTS = {
     [CVAR.TANK_TURN] = 0,
     [CVAR.FACE_MAX_ANGLE] = 0,
     [CVAR.FACE_MAX_ANGLE_COMBAT] = 180,
+    [CVAR.TURN_WITH_CAMERA] = 1,
+    [CVAR.LOOK_MAX_PITCH] = 0,
+    [CVAR.LOOK_MAX_YAW] = 0,
+    [CVAR.FOLLOW_ADJUST_DELAY] = 1,
+    [CVAR.FOLLOW_ADJUST_EASE_IN] = 1,
 }
 
 local function GetClientDefault(name)
@@ -207,6 +228,19 @@ end
 local function LogMessage(level, text)
     if ns.Functions and ns.Functions.logMessage then
         ns.Functions:logMessage(level, text)
+    end
+end
+
+-- Forever sequencing rule: Action Camera is the base camera layer. Gamepad
+-- compatibility is applied only after ActionCam has published its shoulder /
+-- pitch intent to CVarGuard. This prevents a gamepad transition from briefly
+-- restoring Keep Character Centered before the shoulder intent is known.
+local function SyncActionCamFirst()
+    if ns.Functions and ns.Functions.UpdateActionCam then
+        local ok, err = pcall(ns.Functions.UpdateActionCam, ns.Functions)
+        if not ok then
+            LogMessage("error", "ActionCam pre-sync failed before gamepad update: " .. tostring(err))
+        end
     end
 end
 
@@ -368,6 +402,7 @@ function GamePad:OnVariablesLoaded()
     self:InvalidateExposureCache()
     if Compat.InvalidateCVarCaches then Compat.InvalidateCVarCaches() end
     self:Invalidate()
+    SyncActionCamFirst()
     self:Refresh(true)
 end
 
@@ -392,6 +427,14 @@ local function ResolveActive()
     -- the product-level master switch has actually been identified.
     if not cvarEnumerationReady then
         return false
+    end
+
+    -- CVAR_UPDATE can be delivered before the client commits the new CVar
+    -- value. Use the event payload during that tiny window so turning the Alpha
+    -- Gamepad UI off immediately tears down ActionCam/gamepad overrides instead
+    -- of reading one stale frame of "enabled".
+    if state.pendingMasterEnabled ~= nil then
+        return state.pendingMasterEnabled and true or false
     end
 
     -- THE gate, and it is deliberately the first thing checked: the addon's
@@ -606,17 +649,20 @@ function GamePad:GetAdvancedDefault(key)
     return value
 end
 
--- Seeds the profile from the live CVars so that switching management ON does
--- not itself change how the controller feels. Mirrors the Forever ground-effect
--- override elsewhere in this addon.
-function GamePad:CaptureAdvancedValues()
+-- Seeds every addon-owned gamepad control from the CLIENT BUILT-IN DEFAULT.
+-- This is intentionally different from the ground-effect override: the user
+-- requested the Gamepad panel to start from defaults, not from whatever live
+-- value may have been left behind by a previous experiment or console command.
+-- Existing explicit profile edits are preserved until the management toggle is
+-- switched on; enabling management establishes a clean default baseline first.
+function GamePad:SeedAdvancedDefaults()
     local db = DB()
     if not db then return end
 
     for _, control in ipairs(GamePad.ADVANCED_CONTROLS) do
-        local live = GetNumber(control.cvar)
-        if live ~= nil then
-            db[control.key] = live
+        local value = self:GetAdvancedDefault(control.key)
+        if value ~= nil then
+            db[control.key] = value
         end
     end
 end
@@ -660,11 +706,11 @@ end
 -- =====================================================================
 -- ACTIONCAM COMPATIBILITY
 -- =====================================================================
--- GamePadFaceMovement turns the character to face the movement direction. With
--- an over-the-shoulder offset applied that produces a permanent fight between
--- the engine's auto-facing and the offset, which reads to the player as "the
--- shoulder camera does nothing / snaps back". It is a real control-scheme
--- choice though, so it is only ever touched when the player opts in.
+-- GamePad face-movement controls decide when movement direction rotates the
+-- character relative to the camera. That can make an over-the-shoulder layout
+-- feel as if it is snapping or steering differently from mouse/keyboard, but it
+-- is a control-scheme preference rather than an ActionCam requirement. The
+-- addon therefore changes it only when the player explicitly opts in.
 function GamePad:ShouldRelaxFaceMovement()
     local db = DB()
     if not db then return false end
@@ -808,6 +854,49 @@ function GamePad:WarnAboutStickProblemsOnce()
     end
 end
 
+function GamePad:SetActionCamBlockerReason(reason)
+    state.actionCamBlockerReason = reason
+end
+
+function GamePad:GetActionCamDiagnostics()
+    local guard = ns.CVarGuard
+    local shoulderIntent, pitchIntent = false, false
+    if guard and guard.GetActionCamIntent then
+        local ok, shoulder, pitch = pcall(guard.GetActionCamIntent, guard)
+        if ok then
+            shoulderIntent = shoulder and true or false
+            pitchIntent = pitch and true or false
+        end
+    end
+
+    local ready, reason = true, nil
+    if guard and guard.IsActionCamReady then
+        local ok, value, why = pcall(guard.IsActionCamReady, guard, shoulderIntent, pitchIntent)
+        if ok then
+            ready = value and true or false
+            reason = why
+        end
+    end
+
+    return {
+        runtimeAllowed = self:IsActive(),
+        shoulderIntent = shoulderIntent,
+        pitchIntent = pitchIntent,
+        ready = ready,
+        blockerReason = reason or state.actionCamBlockerReason,
+        keepCentered = GetNumber("CameraKeepCharacterCentered"),
+        reduceUnexpectedMovement = GetNumber("cameraReduceUnexpectedMovement")
+            or GetNumber("CameraReduceUnexpectedMovement"),
+        shoulder = GetNumber("test_cameraOverShoulder"),
+        dynamicPitch = GetNumber("test_cameraDynamicPitch"),
+        turnWithCamera = GetNumber(CVAR.TURN_WITH_CAMERA),
+        lookMaxPitch = GetNumber(CVAR.LOOK_MAX_PITCH),
+        lookMaxYaw = GetNumber(CVAR.LOOK_MAX_YAW),
+        followAdjustDelay = GetNumber(CVAR.FOLLOW_ADJUST_DELAY),
+        followAdjustEaseIn = GetNumber(CVAR.FOLLOW_ADJUST_EASE_IN),
+    }
+end
+
 function GamePad:GetDiagnostics()
     local db = DB()
     local uiCVar, uiCVarIsFallback = ResolveUICVar()
@@ -838,6 +927,7 @@ function GamePad:GetDiagnostics()
         uiCVarValue = uiCVarValue,
         managingAdvanced = (db and db.gamePadAdvancedOverride) and true or false,
         speedOwnedByGame = self:IsExposedInGameUI(CVAR.YAW_SPEED) or self:IsExposedInGameUI(CVAR.PITCH_SPEED),
+        actionCam = self:GetActionCamDiagnostics(),
         problems = self:GetStickProblems(),
     }
 end
@@ -960,6 +1050,7 @@ function GamePad:OnGamePadEvent(event, ...)
         end
     end
 
+    SyncActionCamFirst()
     self:Refresh(true)
 end
 
@@ -1017,14 +1108,52 @@ function GamePad:Refresh(force)
 end
 
 -- CVAR_UPDATE dispatch. Only reacts to the CVars this module owns.
-function GamePad:OnCVarUpdate(cvarName)
+function GamePad:OnCVarUpdate(cvarName, eventValue)
     if type(cvarName) ~= "string" then return false end
 
     local lowered = cvarName:lower()
     local uiCVar = ResolveUICVar()
-    if lowered == CVAR.ENABLE:lower() or (uiCVar and lowered == uiCVar:lower()) then
+    local isMasterCVar = uiCVar and lowered == uiCVar:lower()
+
+    if isMasterCVar then
+        local numeric = tonumber(eventValue)
+        if numeric ~= nil then
+            state.pendingMasterEnabled = numeric ~= 0
+        elseif eventValue == true or eventValue == "true" then
+            state.pendingMasterEnabled = true
+        elseif eventValue == false or eventValue == "false" then
+            state.pendingMasterEnabled = false
+        end
+
         self:Invalidate()
         self:InvalidateExposureCache()
+
+        -- ActionCam is the first layer on Forever, so it must observe the
+        -- master toggle's event value before gamepad-specific restoration.
+        SyncActionCamFirst()
+        self:Refresh(true)
+
+        -- The event payload is only a synchronous pre-commit override. Clear it
+        -- before returning so a dropped timer can never leave the module stuck
+        -- in a synthetic state. The zero-delay pass below observes the actual
+        -- committed CVar on clients that dispatch CVAR_UPDATE early.
+        state.pendingMasterEnabled = nil
+        self:Invalidate()
+
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0, function()
+                GamePad:Invalidate()
+                SyncActionCamFirst()
+                GamePad:Refresh(true)
+            end)
+        end
+        return true
+    end
+
+    -- GamePadEnable still matters for input availability, but when Forever has
+    -- a dedicated Alpha UI master it is not allowed to replace that gate.
+    if lowered == CVAR.ENABLE:lower() then
+        self:Invalidate()
         self:Refresh(true)
         return true
     end
@@ -1059,7 +1188,12 @@ function GamePad:OnCVarUpdate(cvarName)
         return true
     end
 
-    if lowered == CVAR.TANK_TURN:lower() or lowered == CVAR.PUSH_CAMERA:lower() then
+    if lowered == CVAR.TANK_TURN:lower() or lowered == CVAR.PUSH_CAMERA:lower()
+        or lowered == CVAR.TURN_WITH_CAMERA:lower()
+        or lowered == CVAR.LOOK_MAX_PITCH:lower()
+        or lowered == CVAR.LOOK_MAX_YAW:lower()
+        or lowered == CVAR.FOLLOW_ADJUST_DELAY:lower()
+        or lowered == CVAR.FOLLOW_ADJUST_EASE_IN:lower() then
         return true
     end
 
@@ -1089,8 +1223,10 @@ function GamePad:OnOptionChanged(key, value)
 
     if key == "gamePadAdvancedOverride" then
         if value then
-            -- Capture first, then manage: enabling must not change anything.
-            self:CaptureAdvancedValues()
+            -- The Gamepad page is default-first by design. Never inherit an
+            -- arbitrary live value here: seed from the client's built-in
+            -- defaults, then apply only the CVars Blizzard does not own.
+            self:SeedAdvancedDefaults()
             self:ApplyAdvancedControls(true)
         else
             self:RestoreAdvancedControls()

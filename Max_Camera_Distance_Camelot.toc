@@ -6,7 +6,7 @@
 ## Notes: Smart camera distance with dedicated WoW: Forever compatibility.
 ## Notes-zhCN: 智能镜头距离，提供独立的《魔兽世界：永恒》兼容支持。
 ## IconTexture: Interface\AddOns\Max_Camera_Distance\assets\icon
-## Version: v10.5
+## Version: v10.8
 ## Author: melles1991
 ## DefaultState: Enabled
 ## OptionalDeps: Ace3, LibMountInfo, LibDataBroker-1.1, LibDBIcon-1.0

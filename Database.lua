@@ -346,9 +346,9 @@ if IS_FOREVER then
     PROFILE_DEFAULTS.gamePadPanelShown = false
 
     -- API-only camera CVars: they exist in the client but the Gamepad (Alpha)
-    -- panel has no control for them. Seeded from the client's own defaults at
-    -- first use rather than from constants, so enabling management never
-    -- changes how the controller feels.
+    -- panel has no control for them. They start from the client's built-in
+    -- defaults (with documented fallbacks) so the Gamepad panel is predictable
+    -- and never inherits an arbitrary live console override as its baseline.
     PROFILE_DEFAULTS.gamePadAdvancedOverride = false
     PROFILE_DEFAULTS.gamePadCursorPushCamera = SafeGetCVarDefault("GamePadCursorPushCamera") or 1
     PROFILE_DEFAULTS.gamePadTankTurnSpeed = SafeGetCVarDefault("GamePadTankTurnSpeed") or 0
@@ -531,10 +531,10 @@ function Database:ApplyMigrations(profile)
     profile.cameraYawMoveSpeed = Clamp(tonumber(profile.cameraYawMoveSpeed) or defaultYaw, 1, 360)
     profile.cameraPitchMoveSpeed = Clamp(tonumber(profile.cameraPitchMoveSpeed) or defaultPitch, 1, 360)
 
-    -- Shoulder shaping. test_cameraOverShoulder itself accepts a far wider
-    -- range, but past a few units the camera leaves the character entirely, so
-    -- the stored value is kept inside a range that still produces a usable view.
-    profile.actionCamShoulderOffset = Clamp(tonumber(profile.actionCamShoulderOffset) or 1.0, -5, 5)
+    -- Keep the profile aligned with the full documented test_cameraOverShoulder
+    -- range used by current camera addons. Extreme values are intentionally
+    -- available to the player instead of being silently truncated on reload.
+    profile.actionCamShoulderOffset = Clamp(tonumber(profile.actionCamShoulderOffset) or 1.0, -15, 15)
     profile.actionCamShoulderSmartFade = NormalizeBoolean(profile.actionCamShoulderSmartFade, PROFILE_DEFAULTS.actionCamShoulderSmartFade)
     profile.actionCamShoulderModelCompensation = NormalizeBoolean(profile.actionCamShoulderModelCompensation, PROFILE_DEFAULTS.actionCamShoulderModelCompensation)
     profile.actionCamShoulderFadeEnd = Clamp(tonumber(profile.actionCamShoulderFadeEnd) or 2.0, 0, 25)

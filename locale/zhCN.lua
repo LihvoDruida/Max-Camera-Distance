@@ -475,3 +475,15 @@ L["FOREVER_GROUND_EFFECT_DIST"] = "地面效果距离"
 L["FOREVER_GROUND_EFFECT_DIST_DESC"] = "直接控制 groundEffectDist。范围：32-600。高于普通地面杂物预设的值可提高植被和地面物件的绘制距离。游戏默认值：%d。"
 L["FOREVER_GROUND_EFFECT_FADE"] = "地面效果淡出距离"
 L["FOREVER_GROUND_EFFECT_FADE_DESC"] = "直接控制 groundEffectFade。此处提供的实用范围：0-600。与 groundEffectDist 使用接近的值可减少植被过早淡出。游戏默认值：%d。"
+
+L["GAMEPAD_ACTIONCAM_DESC"] = "Action Camera is configured first in the Forever Gamepad panel; compatibility options follow it."
+L["GAMEPAD_ACTIONCAM_INACTIVE"] = "|cffffcc00在 Forever 客户端启用 Enable Gamepad UI (Alpha) 之前，Action Camera 将保持暂停。|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_CENTERED"] = "|cffff5555CameraKeepCharacterCentered 正在阻止 Action Camera。MCD 会在应用肩部镜头/动态俯仰前临时关闭它，并在不再需要 Action Camera 时恢复原值。|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_REDUCE"] = "|cffff5555CameraReduceUnexpectedMovement 正在阻止肩部镜头。MCD 会在应用肩部偏移前临时关闭它，并在之后恢复原值。|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_GENERIC"] = "|cffff5555Action Camera 兼容层尚未就绪（%s）。在阻塞项解除前，肩部镜头/俯仰会保持为 0。|r"
+
+L["GAMEPAD_ADVANCED_OVERRIDE_DESC"] = "API-only values start from the client's built-in defaults. Enabling management applies those defaults; disabling it restores them."
+
+L["GAMEPAD_ACTIONCAM_COMPAT_HEADER"] = "Gamepad Compatibility"
+
+L["GAMEPAD_ACTIONCAM_COMPAT_DESC"] = "Applied only while Action Camera requests the over-shoulder camera."

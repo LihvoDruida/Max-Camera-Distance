@@ -182,7 +182,7 @@ end
 -- only answers "what did the addon read and write, and how often".
 function stub.InstallCVars(initial)
     local values = {}
-    local store = { values = values, writes = 0, writeLog = {}, reads = 0, readsByName = {} }
+    local store = { values = values, writes = 0, writeLog = {}, reads = 0, readsByName = {}, beforeWrite = nil }
 
     local function key(name) return tostring(name):lower() end
 
@@ -219,6 +219,12 @@ function stub.InstallCVars(initial)
         -- no-op here rather than silently creating it, which is what makes
         -- HasCVar-gated code paths testable.
         if values[k] == nil then return false end
+        -- Some clients (observed on Forever 1.60.1) can emit CVAR_UPDATE while
+        -- SetCVar is still on the stack and before GetCVar sees the new value.
+        -- Tests can opt into that exact ordering through this hook.
+        if store.beforeWrite then
+            store.beforeWrite(name, value)
+        end
         values[k] = tostring(value)
         store.writes = store.writes + 1
         store.writeLog[#store.writeLog + 1] = k .. "=" .. tostring(value)
@@ -245,6 +251,10 @@ function stub.InstallCVars(initial)
     store.defaults = {}
     function store:SetDefault(name, value)
         self.defaults[key(name)] = tostring(value)
+    end
+
+    function store:SetBeforeWriteHook(callback)
+        self.beforeWrite = callback
     end
 
     return store

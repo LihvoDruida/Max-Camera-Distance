@@ -37,16 +37,25 @@ Turn your screen into a screensaver when you step away:
 * **Settings Protection:** Prevents the Settings Panel from becoming transparent during AFK.
 
 ### 🎮 Gamepad Support *(WoW: Forever only)*
-Activates only when **Gameplay → Gamepad (Alpha) → Enable Gamepad UI** is switched on. A connected controller alone changes nothing; with the toggle off the client keeps all of its own defaults.
+Activates only when **Gameplay → Gamepad (Alpha) → Enable Gamepad UI** is switched on. A connected controller alone changes nothing; with the toggle off the addon returns its gamepad-owned CVars to client defaults and stays inert.
 
-The addon deliberately **does not duplicate anything the game's own Gamepad panel already controls** — it checks Blizzard's settings registry at runtime, so duplicates disappear by themselves as the alpha grows. What it adds is the gap: camera CVars that exist in the API but have no control in that panel.
-* **Guided Setup:** The first time a gamepad becomes active, the addon opens its settings on a dedicated **Gamepad** tab, so the controller-specific camera options are not left to be discovered. It never auto-opens in combat or while dead/ghost, runs once per character, and can be switched off.
-* **Gamepad Camera Speed:** `GamePadCameraYawSpeed` / `GamePadCameraPitchSpeed` as a multiplier of the client's own default — *shown only while the game itself has no slider for them*. The addon's mouse-camera sliders have never affected these, which is why they seemed to do nothing with a controller.
-* **API-only Camera CVars:** `GamePadCursorPushCamera` and `GamePadTankTurnSpeed`, which have no control in the game's panel.
-* **AFK Safe Exit on Controller:** any gamepad button exits the cinematic AFK mode, not just keyboard ESC.
-* **ActionCam Compatibility:** `CameraKeepCharacterCentered` overrides ActionCam outright, and enabling the gamepad is a common way to end up with it switched on. The addon now tracks its own intent rather than reading the shoulder CVar back, so the shoulder camera can no longer get permanently stuck off.
-* **Face-Movement Conflict:** Uses the modern `GamePadFaceMovementMaxAngle` / `GamePadFaceMovementMaxAngleCombat` controls when available, with `GamePadFaceMovement` only as a legacy fallback. The addon can temporarily relax face-movement while the shoulder camera is active and restores the client values afterwards. Off by default.
-* **Stick Diagnostics:** Warns when no stick is assigned to the camera, or when the camera shares a physical stick with movement or the cursor.
+The Forever Gamepad tab is now ordered as a camera pipeline rather than a collection of unrelated switches:
+1. **Action Camera first** — shoulder offset, dynamic pitch, smart fade and model compensation use the same shared ActionCam engine/CVarGuard as the rest of the addon. On Forever these controls live here instead of being duplicated under Additional Features.
+2. **Gamepad compatibility second** — optional face-movement conflict handling is evaluated only after ActionCam has published its intended shoulder/pitch state.
+3. **Controller camera speed and API-only controls last** — the addon only offers a CVar when it exists on the client and Blizzard has not already registered its own Settings control for it.
+
+Gamepad values are **default-first**: fresh profiles use the client's built-in CVar defaults, yaw/pitch start at **1.0×**, and enabling the API-only override seeds its controls from `GetCVarDefault` before applying anything. A stray `/console` experiment is never adopted as the addon's default baseline.
+
+* **No duplicate Blizzard controls:** ownership is checked at runtime through the Settings registry. If Blizzard adds its own control for a CVar in a later Forever build, Max Camera Distance hides its copy and stops writing/restoring that CVar.
+* **Guided Setup:** the dedicated **Gamepad** tab can open once when Forever's Gamepad UI becomes active. It never auto-opens in combat or while dead/ghost and can be disabled/re-armed.
+* **Gamepad Camera Speed:** `GamePadCameraYawSpeed` / `GamePadCameraPitchSpeed` are stored as multipliers of the client's built-in defaults and are shown only while Blizzard does not expose its own controls.
+* **API-only Camera CVars:** currently curated to `GamePadCursorPushCamera` and `GamePadTankTurnSpeed`; both start from client defaults and are hidden automatically if the game takes ownership later.
+* **AFK Safe Exit on Controller:** any gamepad button exits cinematic AFK mode, not just keyboard ESC.
+* **ActionCam Compatibility:** the addon tracks ActionCam *intent* rather than reading the overridden shoulder CVar back. On Forever it clears `CameraKeepCharacterCentered` first and, for shoulder offset, `CameraReduceUnexpectedMovement` second; only after both blockers are confirmed clear does it apply Dynamic Pitch / `test_cameraOverShoulder`. The original motion-sickness values are restored when ActionCam no longer needs the exception.
+* **Full shoulder range:** Forever and the shared ActionCam engine expose the current `test_cameraOverShoulder` range from **-15 to +15**, with negative values moving the view to the opposite shoulder.
+* **Controller-policy diagnostics:** `/mcd gamepad` reports `GamePadTurnWithCamera`, camera-look limits and gamepad follow timing so controller-specific snapping/follow behaviour can be diagnosed without automatically overriding player preferences.
+* **Face-Movement Conflict:** prefers `GamePadFaceMovementMaxAngle` / `GamePadFaceMovementMaxAngleCombat` when available, with the legacy binary CVar only as a capability-detected fallback.
+* **Stick Diagnostics:** warns when no stick is assigned to camera input, or when camera input collides with movement/cursor assignment.
 
 ### ⚙️ System Integration & Optimization
 * **Event-Driven Core:** Uses throttling, debouncing, short-lived state caches and lazy status checks so camera work runs only when relevant instead of polling every subsystem continuously.
@@ -70,7 +79,7 @@ The addon deliberately **does not duplicate anything the game's own Gamepad pane
 
 Supported client families use separate manifests and capability checks:
 * **Retail:** Midnight 12.x, including current live/PTR interface generations supported by the TOC.
-* **World of Warcraft: Forever:** dedicated Camelot/Forever flavor (`16001`) with Forever-only gamepad, fog and advanced ground-effect controls.
+* **World of Warcraft: Forever:** dedicated Camelot/Forever flavor (`16001`) with Forever-only ordered ActionCam/gamepad settings, fog and advanced ground-effect controls. Forever remains a separate product identity while individual modern APIs are capability-detected.
 * **Classic:** Classic Era / Anniversary, Burning Crusade Anniversary, Mists of Pandaria Classic, and the additional Classic manifests shipped with the addon.
 
 Features that do not exist on a client are hidden or disabled through capability checks rather than assumed to be available.

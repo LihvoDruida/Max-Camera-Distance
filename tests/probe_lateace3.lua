@@ -33,11 +33,27 @@ _G.UnitRace = function() return "Pandaren", "Pandaren", 24 end
 _G.UnitFactionGroup = function() return "Horde", "Horde" end
 _G.GetLocale = function() return "enUS" end
 _G.GetTime = function() return 0 end
-_G.GetCVar = function() return nil end
-_G.GetCVarDefault = function() return nil end
-_G.SetCVar = function() return true end
-_G.GetCVarBool = function() return false end
-_G.C_CVar = { GetCVar = function() end, GetCVarDefault = function() end, SetCVar = function() end }
+local cvars = {
+    test_cameraOverShoulder = "0",
+    test_cameraDynamicPitch = "0",
+    CameraKeepCharacterCentered = "1",
+    cameraReduceUnexpectedMovement = "0",
+}
+local cvarDefaults = {
+    test_cameraOverShoulder = "0",
+    test_cameraDynamicPitch = "0",
+    CameraKeepCharacterCentered = "1",
+    cameraReduceUnexpectedMovement = "0",
+}
+_G.GetCVar = function(name) return cvars[name] end
+_G.GetCVarDefault = function(name) return cvarDefaults[name] end
+_G.SetCVar = function(name, value) if cvars[name] ~= nil then cvars[name] = tostring(value) end return true end
+_G.GetCVarBool = function(name) return tonumber(cvars[name] or 0) == 1 end
+_G.C_CVar = {
+    GetCVar = function(name) return cvars[name] end,
+    GetCVarDefault = function(name) return cvarDefaults[name] end,
+    SetCVar = function(name, value) return _G.SetCVar(name, value) end,
+}
 _G.hooksecurefunc = function() end
 _G.CopyTable = nil
 _G.C_Timer = { After = function(_, fn) end, NewTicker = function() return { Cancel = function() end } end }
@@ -169,6 +185,30 @@ check("phase 5: the gamepad options group exists in the table",
 check("phase 5: the gamepad options tab is hidden off Forever",
     gamePadGroup ~= nil and type(gamePadGroup.hidden) == "function" and gamePadGroup.hidden() == true,
     gamePadGroup and tostring(gamePadGroup.hidden) or "no group")
+
+local extraFeatures = registered and registered.args and registered.args.extraFeatures
+local retailActionCam = extraFeatures and extraFeatures.args and extraFeatures.args.actionCamHeader
+check("phase 5: ActionCam stays in Additional Features on Retail",
+    retailActionCam ~= nil and type(retailActionCam.hidden) == "function" and retailActionCam.hidden() == false,
+    retailActionCam and tostring(retailActionCam.hidden and retailActionCam.hidden()) or "no ActionCam")
+local retailShoulder = extraFeatures and extraFeatures.args and extraFeatures.args.shoulderOffset
+ns.Database.db.profile.actionCamShoulderInCombat = true
+check("phase 5: Retail shoulder slider is not gated by Forever Gamepad UI",
+    retailShoulder ~= nil
+        and retailShoulder.min == -15 and retailShoulder.max == 15
+        and type(retailShoulder.disabled) == "function" and retailShoulder.disabled() == false,
+    retailShoulder and (tostring(retailShoulder.min) .. "/" .. tostring(retailShoulder.max)) or "missing")
+
+local retailPreSyncCalls = 0
+local originalRetailUpdateActionCam = ns.Functions.UpdateActionCam
+ns.Functions.UpdateActionCam = function(self, ...)
+    retailPreSyncCalls = retailPreSyncCalls + 1
+    return originalRetailUpdateActionCam(self, ...)
+end
+stub.Fire("PLAYER_ENTERING_WORLD", true, false)
+ns.Functions.UpdateActionCam = originalRetailUpdateActionCam
+check("phase 5: Forever ActionCam pre-sync does not alter Retail world-entry ordering",
+    retailPreSyncCalls == 0, tostring(retailPreSyncCalls))
 
 print(failures == 0 and "PROBE PASSED" or ("PROBE FAILED (" .. failures .. ")"))
 os.exit(failures == 0 and 0 or 1)

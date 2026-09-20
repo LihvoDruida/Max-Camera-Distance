@@ -487,7 +487,7 @@ L["ACTION_CAM_SHOULDER_FADE_START_DESC"] = "Camera distance in yards at which th
 -- Gamepad
 -- ============================================================================
 L["GAMEPAD_HEADER"] = "Gamepad"
-L["GAMEPAD_DESC_ACTIVE"] = "A gamepad is active. The camera speed sliders in General only affect the mouse camera — the gamepad has its own speed CVars, which this section drives."
+L["GAMEPAD_DESC_ACTIVE"] = "Forever Gamepad UI (Alpha) is active. Action Camera is configured first below; gamepad-only CVar controls are shown only when Blizzard does not already expose them in its own settings."
 L["GAMEPAD_DESC_INACTIVE"] = "Forever Gamepad UI (Alpha) is disabled. Addon gamepad overrides stay inactive and managed CVars are returned to client defaults until that mode is enabled."
 L["GAMEPAD_MANAGE_SPEED_NAME"] = "Manage Gamepad Camera Speed"
 L["GAMEPAD_MANAGE_SPEED_DESC"] = "Lets this addon set GamePadCameraYawSpeed and GamePadCameraPitchSpeed. Off by default, so the addon never retunes your controller behind your back. Switching it off hands both CVars back to the client's own defaults."
@@ -502,8 +502,12 @@ L["GAMEPAD_FACE_MOVEMENT_DESC"] = "Temporarily disables gamepad face-movement wh
 L["GAMEPAD_WARN_NO_CAMERA_STICK"] = "|cffff5555No stick is assigned to the gamepad camera (GamePadCameraStick is 0), so the client is sending no camera input at all. Assign one in Options > Gamepad.|r"
 L["GAMEPAD_WARN_STICK_COLLISION"] = "|cffffcc00The gamepad camera shares a physical stick with movement or the cursor. Camera input will feel unresponsive until they are separated.|r"
 L["GAMEPAD_SPEED_HEADER"] = "Camera Speed"
-L["GAMEPAD_ACTIONCAM_HEADER"] = "ActionCam Compatibility"
-L["GAMEPAD_ACTIONCAM_DESC"] = "The over-shoulder camera itself is configured under Extra Features. These settings only cover the parts of it that conflict with gamepad input."
+L["GAMEPAD_ACTIONCAM_HEADER"] = "Action Camera"
+L["GAMEPAD_ACTIONCAM_DESC"] = "Action Camera is the first camera layer for Forever gamepad mode. Shoulder and Dynamic Pitch are resolved before gamepad-only movement compatibility and speed overrides."
+L["GAMEPAD_ACTIONCAM_INACTIVE"] = "|cffffcc00Action Camera is paused until Enable Gamepad UI (Alpha) is turned on in the Forever client.|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_CENTERED"] = "|cffff5555Action Camera is blocked by CameraKeepCharacterCentered. MCD clears it before applying shoulder/pitch and restores your original value when Action Camera is no longer requested.|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_REDUCE"] = "|cffff5555Shoulder Camera is blocked by CameraReduceUnexpectedMovement. MCD clears it before applying the shoulder offset and restores your original value afterwards.|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_GENERIC"] = "|cffff5555Action Camera compatibility is not ready (%s). Shoulder/pitch are held at zero until the blocker clears.|r"
 L["GAMEPAD_PANEL_HEADER"] = "This Panel"
 L["GAMEPAD_AUTO_OPEN_NAME"] = "Open This Panel When a Gamepad Is Enabled"
 L["GAMEPAD_AUTO_OPEN_DESC"] = "Shows this panel the first time a gamepad becomes active on this character, so the camera settings that apply to it are not buried. It never opens during combat, and never opens twice unless you switch it back on here."
@@ -511,7 +515,7 @@ L["GAMEPAD_SPEED_IN_GAME_UI"] = "|cff88ff88Camera speed is already available in 
 L["GAMEPAD_ADVANCED_HEADER"] = "Not in the Game's Settings"
 L["GAMEPAD_ADVANCED_DESC"] = "Camera CVars that exist in the API but have no control in the game's Gamepad panel. If Blizzard adds one, it disappears from here automatically."
 L["GAMEPAD_ADVANCED_OVERRIDE_NAME"] = "Manage These Settings"
-L["GAMEPAD_ADVANCED_OVERRIDE_DESC"] = "Off by default. Enabling it first captures the client's current values, so turning it on does not change anything by itself. Turning it off restores the client defaults."
+L["GAMEPAD_ADVANCED_OVERRIDE_DESC"] = "Off by default. These API-only values start from the client's built-in defaults. Enabling management applies those defaults first; disabling it restores the same client defaults."
 L["GAMEPAD_PUSH_CAMERA_NAME"] = "Cursor Edge Camera Push"
 L["GAMEPAD_PUSH_CAMERA_DESC"] = "GamePadCursorPushCamera: how fast the camera turns when the gamepad cursor reaches the edge of the window. 0 disables the push entirely."
 L["GAMEPAD_TANK_TURN_NAME"] = "Tank-Turn Speed"
@@ -522,3 +526,7 @@ if AceTable then
         AceTable[key] = value
     end
 end
+
+L["GAMEPAD_ACTIONCAM_COMPAT_HEADER"] = "Gamepad Compatibility"
+
+L["GAMEPAD_ACTIONCAM_COMPAT_DESC"] = "Controller movement can fight an over-shoulder camera on some configurations. This compatibility option is applied only while Action Camera actually wants the shoulder offset."

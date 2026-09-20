@@ -229,11 +229,11 @@ local SHOULDER = {
     ZOOM_EPSILON = 0.01,
     OFFSET_EPSILON = 0.002,
     OFFSET_DEFAULT = 1.0,
-    -- test_cameraOverShoulder is clamped to +/-15 by NormalizeManagedCVarValue.
-    -- The option range is deliberately narrower: past a few units the camera is
-    -- outside the character entirely and the view is unusable.
-    OFFSET_MIN = -5.0,
-    OFFSET_MAX = 5.0,
+    -- DynamicCam and the current Blizzard CVar range both allow the full
+    -- test_cameraOverShoulder interval. Keep our UI/profile clamp aligned with
+    -- the engine instead of silently truncating valid Forever values.
+    OFFSET_MIN = -15.0,
+    OFFSET_MAX = 15.0,
     FADE_START_DEFAULT = 5.0,
     FADE_END_DEFAULT = 2.0,
     FADE_MAX = 25.0,
@@ -2542,9 +2542,26 @@ shoulderHandlerFrame:SetScript("OnUpdate", function(self, elapsed)
 end)
 shoulderHandlerFrame:Hide()
 
+function Functions:IsForeverActionCamRuntimeAllowed()
+    -- Product rule: on Forever, Action Camera now belongs to the built-in
+    -- Gamepad UI (Alpha) workflow. Do not leave a previously-enabled shoulder
+    -- profile active after that master mode is turned off. Other WoW flavours
+    -- keep their existing, independent ActionCam behaviour.
+    if not Compat.IS_FOREVER then
+        return true
+    end
+
+    local gamePad = ns.GamePad
+    if not (gamePad and gamePad.IsSupported and gamePad:IsSupported()) then
+        return false
+    end
+    return gamePad:IsActive() and true or false
+end
+
 function Functions:ShouldEnableShoulderNow()
     local db = DB()
     if not db then return false end
+    if not self:IsForeverActionCamRuntimeAllowed() then return false end
 
     local inCombatEnabled = db.actionCamShoulderInCombat and true or false
     local outOfCombatEnabled = db.actionCamShoulderOutOfCombat and true or false
@@ -2565,26 +2582,77 @@ function Functions:UpdateActionCam()
     local db = DB()
     if not db then return end
 
+    local guard = ns.CVarGuard
+
     local function PublishActionCamIntent(shoulderWanted, pitchWanted)
-        local guard = ns.CVarGuard
         if not (guard and guard.SetActionCamIntent) then return false end
         local ok, changed = pcall(guard.SetActionCamIntent, guard, shoulderWanted, pitchWanted)
         return ok and changed and true or false
     end
 
-    local pitchWanted = db.actionCamPitch and true or false
-    UpdateCVar("test_cameraDynamicPitch", pitchWanted and 1 or 0)
+    local runtimeAllowed = self:IsForeverActionCamRuntimeAllowed()
+    local pitchWanted = runtimeAllowed and db.actionCamPitch and true or false
 
-    local dragonRaceFirstPerson = self:ShouldUseDragonRacingFirstPerson(db)
-    local shoulderWanted = (not dragonRaceFirstPerson) and self:ShouldEnableShoulderNow() or false
+    local dragonRaceFirstPerson = runtimeAllowed and self:ShouldUseDragonRacingFirstPerson(db) or false
+    local shoulderWanted = runtimeAllowed
+        and (not dragonRaceFirstPerson)
+        and self:ShouldEnableShoulderNow()
+        or false
 
-    -- Tell CVarGuard what the addon WANTS before touching any CVar. The guard
-    -- used to infer this by reading test_cameraOverShoulder back, which deadlocks
-    -- as soon as the client zeroes the offset on our behalf - see the note in
-    -- CVarGuard.lua. Publishing intent first also means the keep-centered block
-    -- is already in force by the time the shoulder value is written below.
+    -- ActionCam order matters on Forever. Its client default currently leaves
+    -- CameraKeepCharacterCentered enabled, and since 11.0.2
+    -- cameraReduceUnexpectedMovement can also suppress test_cameraOverShoulder.
+    -- Mature camera addons such as DynamicCam disable those blockers before
+    -- applying the shoulder CVar. Publish intent first, then synchronously arm
+    -- CVarGuard before touching test_cameraDynamicPitch/test_cameraOverShoulder.
     local intentChanged = PublishActionCamIntent(shoulderWanted, pitchWanted)
 
+    local blockersReady = true
+    local blockerReason = nil
+    if shoulderWanted or pitchWanted then
+        -- Fast path: when intent has not changed and both blocker CVars are
+        -- already clear, do not force a full guard reconciliation on every
+        -- Smart Zoom/camera pass. External CVar changes have their own event
+        -- path and will invalidate this state immediately.
+        if guard and guard.IsActionCamReady then
+            local ok, ready, reason = pcall(guard.IsActionCamReady, guard, shoulderWanted, pitchWanted)
+            if ok then
+                blockersReady = ready and true or false
+                blockerReason = reason
+            end
+        end
+
+        if intentChanged or not blockersReady then
+            if guard and guard.Refresh then
+                local ok, err = pcall(guard.Refresh, guard, true)
+                if not ok then
+                    blockersReady = false
+                    blockerReason = "guard-error"
+                    Functions:logMessage("error", "ActionCam compatibility guard failed: " .. tostring(err))
+                end
+            end
+
+            if blockerReason ~= "guard-error" and guard and guard.IsActionCamReady then
+                local ok, ready, reason = pcall(guard.IsActionCamReady, guard, shoulderWanted, pitchWanted)
+                if ok then
+                    blockersReady = ready and true or false
+                    blockerReason = reason
+                else
+                    blockersReady = false
+                    blockerReason = "readiness-error"
+                    Functions:logMessage("error", "ActionCam readiness check failed: " .. tostring(ready))
+                end
+            end
+        end
+    end
+
+    -- If a client-protected blocker could not be cleared, keep the desired
+    -- intent published so the guard can retry after combat, but do not repeatedly
+    -- hammer ActionCam CVars that the client is currently suppressing.
+    local pitchApplied = pitchWanted and blockersReady
+    UpdateCVar("test_cameraDynamicPitch", pitchApplied and 1 or 0)
+
+    local shoulderApplied = shoulderWanted and blockersReady
     if dragonRaceFirstPerson then
         if not raceFirstPersonApplied then
             raceFirstPersonApplied = true
@@ -2601,11 +2669,7 @@ function Functions:UpdateActionCam()
             self:ScheduleStabilizedUpdate({ 0, 0.05, 0.20 }, true)
         end
 
-        if shoulderWanted then
-            if SafeGetCVar("CameraKeepCharacterCentered") == 1 then
-                UpdateCVar("CameraKeepCharacterCentered", 0)
-                Functions:logMessage("warning", L["CONFLICT_FIX_MSG"] or "ActionCam: Disabled Keep Character Centered to prevent jitter.")
-            end
+        if shoulderApplied then
             shoulderHandlerFrame:Show()
             shoulderHandlerFrame:ResetPolling()
             self:ApplyShoulderOffset(true)
@@ -2618,13 +2682,31 @@ function Functions:UpdateActionCam()
         end
     end
 
-    -- GamePadFaceMovement only has to be reconsidered when the shoulder intent
-    -- itself flips, not on every camera pass.
+    -- Gamepad face-direction compatibility is a second layer: ActionCam intent
+    -- and blockers are resolved first, then controller-specific movement policy.
     if intentChanged and ns.GamePad and ns.GamePad.RefreshFaceMovement then
         pcall(ns.GamePad.RefreshFaceMovement, ns.GamePad)
     end
 
-    RequestCVarGuardRefresh(intentChanged)
+    -- On disable (or a partial transition such as shoulder off / pitch still on)
+    -- reconcile after the ActionCam CVars have been cleared so saved Blizzard
+    -- motion settings can be restored without a one-frame fight.
+    if not shoulderWanted and not pitchWanted then
+        if ns.GamePad and ns.GamePad.SetActionCamBlockerReason then
+            pcall(ns.GamePad.SetActionCamBlockerReason, ns.GamePad, nil)
+        end
+        RequestCVarGuardRefresh(true)
+    elseif not blockersReady then
+        RequestCVarGuardRefresh(true)
+        if blockerReason and ns.GamePad and ns.GamePad.SetActionCamBlockerReason then
+            pcall(ns.GamePad.SetActionCamBlockerReason, ns.GamePad, blockerReason)
+        end
+    else
+        if ns.GamePad and ns.GamePad.SetActionCamBlockerReason then
+            pcall(ns.GamePad.SetActionCamBlockerReason, ns.GamePad, nil)
+        end
+        RequestCVarGuardRefresh(false)
+    end
 end
 
 -- =====================================================================
@@ -3198,7 +3280,21 @@ function Functions:ApplyManagedCVars()
     SanitizeRuntimeProfile(db)
 
     UpdateCVar("cameraDistanceMoveSpeed", db.moveViewDistance)
-    UpdateCVar("cameraReduceUnexpectedMovement", db.reduceUnexpectedMovement and 1 or 0)
+
+    -- CVarGuard owns the temporary ActionCam exception. Never briefly re-enable
+    -- Reduce Unexpected Movement from the profile while shoulder intent says it
+    -- must stay off; doing so causes a visible snap on Forever and an immediate
+    -- write-back from the guard.
+    local reduceUnexpectedMovement = db.reduceUnexpectedMovement and 1 or 0
+    local guard = ns.CVarGuard
+    if guard and guard.ShouldBlockReduceUnexpectedMovement then
+        local ok, shouldBlock = pcall(guard.ShouldBlockReduceUnexpectedMovement, guard)
+        if ok and shouldBlock then
+            reduceUnexpectedMovement = 0
+        end
+    end
+    UpdateCVar("cameraReduceUnexpectedMovement", reduceUnexpectedMovement)
+
     UpdateCVar("cameraYawMoveSpeed", db.cameraYawMoveSpeed)
     UpdateCVar("cameraPitchMoveSpeed", db.cameraPitchMoveSpeed)
     UpdateCVar("cameraIndirectVisibility", db.cameraIndirectVisibility and 1 or 0)
@@ -3229,6 +3325,15 @@ end
 
 function Functions:OnCVarUpdate(_, cvarName, value)
     if isInternalUpdate then return end
+
+    -- CVarGuard and GamePad wrap addon-owned writes with an internal-write scope.
+    -- Forever may fire CVAR_UPDATE from inside SetCVar before the new value is
+    -- observable, so processing that event as external state creates recursion.
+    local cvarGuard = ns.CVarGuard
+    if cvarGuard and cvarGuard.IsInternalWrite and cvarGuard:IsInternalWrite() then
+        return
+    end
+
     cvarName = CanonicalCVarName(cvarName)
 
     local db = DB()
@@ -3317,12 +3422,12 @@ function Functions:OnCVarUpdate(_, cvarName, value)
         end
         db.cameraPitchMoveSpeed = desired
     elseif cvarName == "cameraReduceUnexpectedMovement" then
-        -- Respect external/user changes unless the Motion Sickness guard is actively blocking it.
+        -- Let CVarGuard own conflict resolution. In particular, do not call the
+        -- generic UpdateCVar path from this event: on Forever CVAR_UPDATE may be
+        -- delivered synchronously while the originating SetCVar is still active.
         local guard = ns.CVarGuard
-        if guard and guard.ShouldBlockReduceUnexpectedMovement and guard:ShouldBlockReduceUnexpectedMovement() then
-            if numValue ~= 0 then
-                UpdateCVar(cvarName, 0)
-            end
+        if guard and guard.OnExternalCVarSet then
+            guard:OnExternalCVarSet(cvarName, value)
             return
         end
         db.reduceUnexpectedMovement = (numValue == 1)
@@ -3385,12 +3490,12 @@ function Functions:OnCVarUpdate(_, cvarName, value)
         db.groundEffectFade = math_floor((ClampNumber(numValue, 0, 600) or 70) + 0.5)
         NotifyConfigChanged()
     elseif cvarName == "CameraKeepCharacterCentered" then
-        -- This event used to fall straight through and do nothing. Blizzard's
-        -- camera and gamepad settings panels both write this CVar, and it
-        -- overrides ActionCam outright, so it has to reach the guard.
+        -- Forward the event VALUE to the guard instead of forcing a live-value
+        -- Refresh. On Forever the event can arrive before GetCVar observes the
+        -- SetCVar commit, which previously caused an unbounded recursive write.
         local guard = ns.CVarGuard
-        if guard and guard.Refresh then
-            pcall(guard.Refresh, guard, true)
+        if guard and guard.OnExternalCVarSet then
+            guard:OnExternalCVarSet(cvarName, value)
         end
         return
     elseif cvarName == "test_cameraDynamicPitch" or cvarName == "test_cameraOverShoulder" then
@@ -3485,6 +3590,24 @@ function Functions:PrintGamePadStatus()
     self:SendMessage(" - gamepad UI toggle: cvar=" .. Show(info.uiCVar)
         .. " value=" .. Show(info.uiCVarValue)
         .. " discovered=" .. (info.uiCVarIsFallback and "no (fell back to GamePadEnable)" or "yes"))
+
+    local actionCam = info.actionCam
+    if actionCam then
+        self:SendMessage(" - gamepad ActionCam: allowed=" .. FormatBool(actionCam.runtimeAllowed)
+            .. " shoulderIntent=" .. FormatBool(actionCam.shoulderIntent)
+            .. " pitchIntent=" .. FormatBool(actionCam.pitchIntent)
+            .. " ready=" .. FormatBool(actionCam.ready)
+            .. " blocker=" .. Show(actionCam.blockerReason))
+        self:SendMessage(" - gamepad ActionCam CVars: shoulder=" .. Show(actionCam.shoulder)
+            .. " dynamicPitch=" .. Show(actionCam.dynamicPitch)
+            .. " keepCentered=" .. Show(actionCam.keepCentered)
+            .. " reduceUnexpected=" .. Show(actionCam.reduceUnexpectedMovement))
+        self:SendMessage(" - gamepad camera policy: turnWithCamera=" .. Show(actionCam.turnWithCamera)
+            .. " lookMaxPitch=" .. Show(actionCam.lookMaxPitch)
+            .. " lookMaxYaw=" .. Show(actionCam.lookMaxYaw)
+            .. " followDelay=" .. Show(actionCam.followAdjustDelay)
+            .. " followEase=" .. Show(actionCam.followAdjustEaseIn))
+    end
 
     if info.problems and #info.problems > 0 then
         for _, id in ipairs(info.problems) do

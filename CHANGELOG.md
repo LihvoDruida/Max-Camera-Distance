@@ -1,5 +1,68 @@
 # Max Camera Distance — Changelog
 
+## v10.8 — Forever ActionCam/gamepad compatibility fix
+
+### Forever ActionCam
+
+- Fixed the Forever-specific ActionCam failure path confirmed by the current beta client: `CameraKeepCharacterCentered = 1` suppresses most ActionCam behaviour. MCD now publishes ActionCam intent, clears the blocking motion-sickness CVars, verifies that they actually committed, and only then applies `test_cameraDynamicPitch` / `test_cameraOverShoulder`.
+- Applied the second blocker in the same ordered pipeline: `CameraReduceUnexpectedMovement` must remain disabled while a shoulder offset is requested. `ApplyManagedCVars()` can no longer briefly re-enable it from the normal profile while the ActionCam guard owns the temporary exception.
+- Kept the v10.6 CVar reentrancy protection intact. Forever may deliver `CVAR_UPDATE` before a `SetCVar` commit; the ActionCam compatibility sequence never recursively writes the same CVar.
+- Added a pre-commit Gamepad UI master-toggle bridge: the event payload is used synchronously so switching **Enable Gamepad UI (Alpha)** off tears ActionCam down immediately even when `GetCVar()` still reports the previous value.
+- Expanded the shoulder offset to the full current `test_cameraOverShoulder` range of `-15 .. 15`, matching the live engine range used by DynamicCam instead of silently clamping Forever profiles to `-5 .. 5`.
+
+### Gamepad integration / diagnostics
+
+- Kept Action Camera as the first Forever Gamepad section and moved all three primary toggles onto full-width AceConfig rows so long labels are no longer clipped.
+- Added an explicit runtime status line for inactive Alpha UI and for both ActionCam blockers, so a non-working shoulder/pitch setting is diagnosable directly from the panel rather than looking like an inert checkbox.
+- Added diagnostics for `GamePadTurnWithCamera`, `GamePadCameraLookMaxPitch/Yaw`, and `CameraFollowGamepadAdjustDelay/EaseIn`. These are intentionally read-only diagnostics: they change controller policy and are not required to make ActionCam work, so MCD does not override them without a verified product requirement.
+- Kept optional face-movement relaxation separate from the core ActionCam fix. `GamePadFaceMovementMaxAngle*` can affect how controller movement feels with an offset camera, but it is a control preference, not a prerequisite for shoulder offset.
+
+### Cross-flavor safety / regression
+
+- Retail and Classic keep their existing ActionCam placement and runtime gate; only Forever requires the Gamepad UI Alpha master.
+- Added regression coverage for blocker-before-shoulder ordering, full-width Forever controls, the full `-15 .. 15` range, pre-commit Alpha master-off handling, diagnostic gamepad camera CVars, and a Retail negative control proving its ActionCam slider is not gated by Forever Gamepad state.
+
+## v10.7 — Forever camera pipeline, default-first gamepad, and cross-flavor regression
+
+### Forever / Gamepad UX
+
+- Moved the full Action Camera configuration into the dedicated Forever **Gamepad** tab and made it the first section. The old ActionCam block remains in its existing location on Retail/Classic, so this is a Forever-only presentation change rather than a second implementation.
+- Ordered the Forever controller camera pipeline explicitly as **ActionCam → gamepad compatibility → camera speed/API-only controls**. ActionCam now publishes shoulder/pitch intent before gamepad face-movement and CVar reconciliation on login, world entry, gamepad events, and the discovered Gamepad UI master-toggle path.
+- Kept a single ActionCam engine/profile/CVarGuard behind both layouts; Forever does not maintain a parallel copy that could drift from Retail/Classic behavior.
+- Made gamepad controls default-first. Fresh yaw/pitch multipliers remain `1.0x`; API-only values come from the client's built-in CVar defaults; enabling advanced gamepad management seeds built-in defaults before applying them instead of capturing arbitrary live `/console` overrides.
+- Updated the audit fixture to the current Forever beta `1.60.1.69913` / Interface `16001`. Client patch numbers are informational only; unsupported/newer APIs remain capability-detected rather than inferred from Retail version numbers.
+
+### API ownership / safety
+
+- Retained the runtime `Settings.GetSetting(cvar)` ownership rule per individual CVar. If Blizzard exposes a control, the addon hides its duplicate and stops both applying and restoring that CVar.
+- Kept Gamepad UI CVar discovery behind `VARIABLES_LOADED`, because console enumeration is incomplete during early login.
+- Kept the curated API-only approach instead of auto-generating settings for every `GamePad*` CVar. Input bindings, enums and poorly documented ranges are intentionally left to Blizzard until their semantics are verified in-client.
+- Preserved the v10.6 CVar reentrancy guards for `CameraKeepCharacterCentered` and `CameraReduceUnexpectedMovement`; the new ActionCam-first ordering does not bypass those write locks.
+
+### Cross-flavor regression
+
+- Added a client-flavor matrix covering Forever (marker and fallback detection), Retail 12.1.5, Classic Era and Mists Classic. Forever stays `IS_FOREVER=true`, `IS_RETAIL=false`, `IS_CLASSIC=false`, while using the modern API family.
+- Expanded Forever gamepad regression to verify ActionCam placement/order, ActionCam-before-gamepad execution, `1.0x` speed defaults, built-in defaults for API-only controls, and default seeding when advanced management is enabled.
+- Kept the non-Forever late-Ace3 probe as a negative control proving the Gamepad tab remains hidden and Forever-only profile keys do not leak into Retail.
+
+## v10.6 — CVar reentrancy crash fix
+
+### Fixed
+
+- Fixed a live Forever `C stack overflow` triggered by `CameraKeepCharacterCentered`. Forever can emit `CVAR_UPDATE` synchronously from inside `C_CVar.SetCVar` before `GetCVar` reflects the pending value; the old handler forced a full guard refresh, saw the stale value again, and recursively called `SetCVar` until the Lua C stack overflowed.
+- Added a per-CVar managed-write lock in `CVarGuard`, so a CVar already being committed cannot recursively write itself.
+- Added a refresh-level reentrancy guard as a second line of defense against future event-driven reconciliation loops.
+- Internal addon CVar writes are now ignored by the generic `CVAR_UPDATE` reconciliation path in both `Core.lua` and `Functions.lua`.
+- `CameraKeepCharacterCentered` and `cameraReduceUnexpectedMovement` CVAR events now forward their event value directly to `CVarGuard:OnExternalCVarSet()` instead of forcing a live-value refresh during the SetCVar call.
+- Managed writes now verify the live CVar after `SetCVar` returns before being counted as successfully committed.
+- Guarded external CVar preferences are captured from the `CVAR_UPDATE` event value instead of a potentially stale live read.
+- Added a deduplicated zero-delay reconcile after blocked external writes so an outer SetCVar that commits after the event cannot leave the conflicting value enabled.
+
+### Regression coverage
+
+- Added a stub mode that deliberately fires `CVAR_UPDATE` before the simulated CVar write commits, matching the ordering observed in the Forever crash report.
+- Added regression assertions proving the synchronous event cannot recurse, still commits `CameraKeepCharacterCentered = 0`, and does not cause runaway writes.
+
 ## v10.5 — Forever API audit, gamepad hardening, and character-state diagnostics
 
 ### Forever / API compatibility

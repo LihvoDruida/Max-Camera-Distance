@@ -429,3 +429,15 @@ L["FOREVER_GROUND_EFFECT_DIST"] = "Bodeneffekt-Distanz"
 L["FOREVER_GROUND_EFFECT_DIST_DESC"] = "Direktes groundEffectDist-CVar. Bereich: 32-600. Werte über dem normalen Bodendetail-Preset erhöhen die Sichtweite von Flora und Bodendetails. Spielstandard: %d."
 L["FOREVER_GROUND_EFFECT_FADE"] = "Bodeneffekt-Ausblenddistanz"
 L["FOREVER_GROUND_EFFECT_FADE_DESC"] = "Direktes groundEffectFade-CVar. Praktischer Bereich hier: 0-600. Ein Wert nahe groundEffectDist reduziert frühes Ausblenden der Flora. Spielstandard: %d."
+
+L["GAMEPAD_ACTIONCAM_DESC"] = "Action Camera is configured first in the Forever Gamepad panel; compatibility options follow it."
+L["GAMEPAD_ACTIONCAM_INACTIVE"] = "|cffffcc00Action Camera pausiert, bis Enable Gamepad UI (Alpha) im Forever-Client aktiviert ist.|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_CENTERED"] = "|cffff5555Action Camera wird von CameraKeepCharacterCentered blockiert. MCD deaktiviert es vor Schulterkamera/Dynamic Pitch und stellt den ursprünglichen Wert danach wieder her.|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_REDUCE"] = "|cffff5555Die Schulterkamera wird von CameraReduceUnexpectedMovement blockiert. MCD deaktiviert es vor dem Schulterversatz und stellt den ursprünglichen Wert danach wieder her.|r"
+L["GAMEPAD_ACTIONCAM_BLOCKED_GENERIC"] = "|cffff5555Action-Camera-Kompatibilität ist noch nicht bereit (%s). Schulter/Pitch bleiben auf null, bis die Blockierung behoben ist.|r"
+
+L["GAMEPAD_ADVANCED_OVERRIDE_DESC"] = "API-only values start from the client's built-in defaults. Enabling management applies those defaults; disabling it restores them."
+
+L["GAMEPAD_ACTIONCAM_COMPAT_HEADER"] = "Gamepad Compatibility"
+
+L["GAMEPAD_ACTIONCAM_COMPAT_DESC"] = "Applied only while Action Camera requests the over-shoulder camera."

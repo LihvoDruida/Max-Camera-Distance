@@ -419,6 +419,14 @@ eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
         SafeCall(InitMinimapButton, "InitMinimapButton")
     end
 
+    -- Forever sequencing only: ActionCam is the base controller-camera layer
+    -- and must publish its intent before GamePad:Refresh reconciles face
+    -- movement / keep-centered CVars. Do not change Retail/Classic world-entry
+    -- ordering just to satisfy a Forever-specific controller requirement.
+    if Compat.IS_FOREVER and ns.Functions and ns.Functions.UpdateActionCam then
+        SafeCall(ns.Functions.UpdateActionCam, "UpdateActionCamBeforeManagedCVars", ns.Functions)
+    end
+
     -- Turning/pitch speed and the other non-zoom CVars must be restored on EVERY
     -- world entry, including logins where the player is dead or a ghost and the
     -- Smart Zoom path below bails out.
@@ -577,13 +585,19 @@ eventHandlers.CVAR_UPDATE = function(event, cvarName, value)
     -- handled the event. This is the only reliable way to react to an alpha CVar
     -- whose spelling can change between beta builds.
     if ns.GamePad and ns.GamePad.IS_SUPPORTED_FLAVOR and ns.GamePad.OnCVarUpdate then
-        local ok, handled = pcall(ns.GamePad.OnCVarUpdate, ns.GamePad, cvarName)
+        local ok, handled = pcall(ns.GamePad.OnCVarUpdate, ns.GamePad, cvarName, value)
         if not ok then
             print(string.format("|cffff0000%s Error in GamePad.OnCVarUpdate:|r %s", addonName, tostring(handled)))
         elseif handled then
             return
         end
     elseif gamePadWatchedLower[lowered] then
+        return
+    end
+
+    -- Internal SetCVar calls can synchronously emit CVAR_UPDATE on Forever. Do
+    -- not feed those events back into the generic reconciliation path.
+    if ns.CVarGuard and ns.CVarGuard.IsInternalWrite and ns.CVarGuard:IsInternalWrite() then
         return
     end
 
@@ -603,11 +617,9 @@ local function OnGamePadEvent(event, ...)
     elseif ns.GamePad and ns.GamePad.Refresh then
         SafeCall(ns.GamePad.Refresh, "GamePad.Refresh", ns.GamePad, true)
     end
-    -- Enabling the gamepad can move CameraKeepCharacterCentered underneath the
-    -- ActionCam, so re-assert the addon's own camera state as well.
-    if ns.Functions and ns.Functions.UpdateActionCam then
-        SafeCall(ns.Functions.UpdateActionCam, "UpdateActionCam", ns.Functions)
-    end
+    -- GamePad.lua performs the ActionCam pre-sync before applying controller
+    -- compatibility, so there is deliberately no second post-refresh ActionCam
+    -- write here. Keeping one ordering point avoids CVar ping-pong on Forever.
 end
 
 if ns.GamePad and ns.GamePad.IS_SUPPORTED_FLAVOR and ns.GamePad.EVENTS then

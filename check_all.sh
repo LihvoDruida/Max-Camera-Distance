@@ -93,6 +93,7 @@ stage "TOC files current"         python3 tools/generate_tocs.py --check
 stage "Manifest references"       python3 tools/verify_manifest.py --allow-missing-externals
 stage "Probe: late Ace3"          lua51_probe tests/probe_lateace3.lua
 stage "Probe: gamepad/shoulder"   lua51_probe tests/probe_gamepad.lua
+stage "Probe: flavor matrix"       lua51_probe tests/probe_flavors.lua
 
 echo ""
 if [[ $failures -eq 0 ]]; then

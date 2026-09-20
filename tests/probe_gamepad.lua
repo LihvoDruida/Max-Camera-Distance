@@ -87,9 +87,9 @@ _G.C_Timer = { After = function() end, NewTicker = function() return { Cancel = 
 _G.SlashCmdList = {}
 -- Forever, not Retail: gamepad handling is scoped to this flavour, and the
 -- Camelot TOC supplies the marker below before Compat.lua classifies the client.
-_G.GetBuildInfo = function() return "1.60.1", "69893", "Sep 16 2026", 16001 end
+_G.GetBuildInfo = function() return "1.60.1", "69913", "Sep 18 2026", 16001 end
 _G.C_AddOns = {
-    GetAddOnMetadata = function(_, key) return key == "Version" and "v10.5" or nil end,
+    GetAddOnMetadata = function(_, key) return key == "Version" and "v10.8" or nil end,
     IsAddOnLoaded = function() return false end,
 }
 _G.print = print
@@ -147,8 +147,8 @@ local cvars = stub.InstallCVars({
     -- the addon must stay completely inert.
     GamePadExperimentalUIEnable = 0,
     GamePadEnable = 1,
-    GamePadCameraYawSpeed = 180,
-    GamePadCameraPitchSpeed = 90,
+    GamePadCameraYawSpeed = 2.5,
+    GamePadCameraPitchSpeed = 1.75,
     GamePadCameraStick = 2,
     GamePadMoveStick = 1,
     GamePadCursorStick = 0,
@@ -157,18 +157,28 @@ local cvars = stub.InstallCVars({
     GamePadFaceMovementMaxAngleCombat = 180,
     GamePadCursorPushCamera = 1,
     GamePadTankTurnSpeed = 0,
+    GamePadTurnWithCamera = 1,
+    GamePadCameraLookMaxPitch = 0,
+    GamePadCameraLookMaxYaw = 0,
+    CameraFollowGamepadAdjustDelay = 1,
+    CameraFollowGamepadAdjustEaseIn = 1,
     GamePadDebugUIScale = 2.5,
 })
 cvars:SetDefault("GamePadCursorPushCamera", 1)
 cvars:SetDefault("GamePadTankTurnSpeed", 0)
 cvars:SetDefault("GamePadFaceMovementMaxAngle", 0)
 cvars:SetDefault("GamePadFaceMovementMaxAngleCombat", 180)
+cvars:SetDefault("GamePadTurnWithCamera", 1)
+cvars:SetDefault("GamePadCameraLookMaxPitch", 0)
+cvars:SetDefault("GamePadCameraLookMaxYaw", 0)
+cvars:SetDefault("CameraFollowGamepadAdjustDelay", 1)
+cvars:SetDefault("CameraFollowGamepadAdjustEaseIn", 1)
 
 -- No Settings API yet: nothing is "already in the game's panel", so the addon
 -- offers its own controls. A later phase installs one and checks it steps aside.
 _G.Settings = nil
-cvars:SetDefault("GamePadCameraYawSpeed", 180)
-cvars:SetDefault("GamePadCameraPitchSpeed", 90)
+cvars:SetDefault("GamePadCameraYawSpeed", 1)
+cvars:SetDefault("GamePadCameraPitchSpeed", 1)
 cvars:SetDefault("cameraYawMoveSpeed", 180)
 cvars:SetDefault("cameraPitchMoveSpeed", 90)
 cvars:SetDefault("cameraDistanceMaxZoomFactor", 2.6)
@@ -224,7 +234,7 @@ for _, file in ipairs({
     LoadFile(file)
 end
 
-stub.InstallAce3()
+local ace = stub.InstallAce3()
 stub.Fire("ADDON_LOADED", "Max_Camera_Distance")
 
 -- C_Console.GetAllCommands is documented as incomplete before VARIABLES_LOADED.
@@ -246,6 +256,74 @@ local GamePad = ns.GamePad
 
 print("PROBE gamepad + shoulder offset")
 
+-- -------------------------------- phase 0: Forever UI placement + defaults
+local registeredOptions = ace.registry:GetOptionsTable("Max_Camera_Distance")
+local extraArgs = registeredOptions and registeredOptions.args and registeredOptions.args.extraFeatures and registeredOptions.args.extraFeatures.args
+local padArgs = registeredOptions and registeredOptions.args and registeredOptions.args.gamePadSettings and registeredOptions.args.gamePadSettings.args
+check("phase 0: ActionCam is moved out of Extra Features on Forever",
+    extraArgs and extraArgs.actionCamHeader and type(extraArgs.actionCamHeader.hidden) == "function" and extraArgs.actionCamHeader.hidden() == true)
+check("phase 0: ActionCam is the first Gamepad settings section",
+    padArgs and padArgs.gamePadActionCamHeader and padArgs.gamePadSpeedHeader
+        and padArgs.gamePadActionCamHeader.order < padArgs.gamePadSpeedHeader.order
+        and padArgs.gamePadActionCamHeader.order < padArgs.gamePadAdvancedHeader.order,
+    padArgs and tostring(padArgs.gamePadActionCamHeader and padArgs.gamePadActionCamHeader.order) or "no gamepad args")
+check("phase 0: Forever ActionCam toggles use full-width rows so labels are not clipped",
+    padArgs
+        and padArgs.gamePadEnableShoulderInCombat and padArgs.gamePadEnableShoulderInCombat.width == "full"
+        and padArgs.gamePadEnableShoulderOutOfCombat and padArgs.gamePadEnableShoulderOutOfCombat.width == "full"
+        and padArgs.gamePadEnableDynamicPitch and padArgs.gamePadEnableDynamicPitch.width == "full")
+check("phase 0: Forever shoulder offset exposes the engine's full documented range",
+    padArgs and padArgs.gamePadShoulderOffset
+        and padArgs.gamePadShoulderOffset.min == -15
+        and padArgs.gamePadShoulderOffset.max == 15,
+    padArgs and padArgs.gamePadShoulderOffset
+        and (tostring(padArgs.gamePadShoulderOffset.min) .. "/" .. tostring(padArgs.gamePadShoulderOffset.max)) or "missing")
+check("phase 0: gamepad speed multipliers start at client-default 1x",
+    near(db.gamePadCameraYawMultiplier, 1.0) and near(db.gamePadCameraPitchMultiplier, 1.0),
+    tostring(db.gamePadCameraYawMultiplier) .. "/" .. tostring(db.gamePadCameraPitchMultiplier))
+check("phase 0: API-only gamepad values start from built-in defaults",
+    near(db.gamePadCursorPushCamera, 1) and near(db.gamePadTankTurnSpeed, 0),
+    tostring(db.gamePadCursorPushCamera) .. "/" .. tostring(db.gamePadTankTurnSpeed))
+check("phase 0: optional gamepad management starts disabled",
+    db.gamePadManageCameraSpeed == false
+        and db.gamePadAdvancedOverride == false
+        and db.gamePadRelaxFaceMovement == false,
+    tostring(db.gamePadManageCameraSpeed) .. "/" .. tostring(db.gamePadAdvancedOverride) .. "/" .. tostring(db.gamePadRelaxFaceMovement))
+check("phase 0: ActionCam controls start from stable addon defaults",
+    db.actionCamShoulderInCombat == false
+        and db.actionCamShoulderOutOfCombat == false
+        and db.actionCamPitch == false
+        and near(db.actionCamShoulderOffset, 1.0)
+        and db.actionCamShoulderSmartFade == true
+        and near(db.actionCamShoulderFadeStart, 5.0)
+        and near(db.actionCamShoulderFadeEnd, 2.0),
+    tostring(db.actionCamShoulderOffset))
+
+local sequence = {}
+local originalUpdateActionCam = Functions.UpdateActionCam
+local originalGamePadRefresh = GamePad.Refresh
+Functions.UpdateActionCam = function(self, ...)
+    sequence[#sequence + 1] = "actioncam"
+    return originalUpdateActionCam(self, ...)
+end
+GamePad.Refresh = function(self, ...)
+    sequence[#sequence + 1] = "gamepad"
+    return originalGamePadRefresh(self, ...)
+end
+GamePad:OnGamePadEvent("GAME_PAD_CONFIGS_CHANGED")
+Functions.UpdateActionCam = originalUpdateActionCam
+GamePad.Refresh = originalGamePadRefresh
+check("phase 0: ActionCam is synchronized before gamepad compatibility",
+    sequence[1] == "actioncam" and sequence[2] == "gamepad",
+    table.concat(sequence, " -> "))
+
+-- Forever product rule: ActionCam in this panel is active only while the
+-- built-in Gamepad UI (Alpha) master mode is on.
+cvars:Set("GamePadExperimentalUIEnable", 1)
+GamePad:Invalidate()
+check("phase 0: enabling the Forever Gamepad UI arms ActionCam runtime",
+    GamePad:IsActive() == true)
+
 -- ------------------------------------------- phase 1: the offset is settable
 db.actionCamShoulderInCombat = true
 db.actionCamShoulderOutOfCombat = true
@@ -254,8 +332,18 @@ db.actionCamShoulderSmartFade = false
 db.actionCamShoulderOffset = 1.0
 
 cameraZoom = 12
+-- Forever currently starts with Keep Character Centered enabled. Reproduce that
+-- exact client state, plus Reduce Unexpected Movement, and verify MCD clears
+-- both BEFORE it commits the shoulder CVar.
+cvars:Set("CameraKeepCharacterCentered", 1)
+cvars:Set("cameraReduceUnexpectedMovement", 1)
 Functions:UpdateActionCam()
 
+check("phase 1: ActionCam blockers are cleared before shoulder application",
+    cvars:Number("CameraKeepCharacterCentered") == 0
+        and cvars:Number("cameraReduceUnexpectedMovement") == 0,
+    tostring(cvars:Number("CameraKeepCharacterCentered")) .. "/"
+        .. tostring(cvars:Number("cameraReduceUnexpectedMovement")))
 check("phase 1: the shoulder CVar follows the configured offset (1.0)",
     near(cvars:Number("test_cameraOverShoulder"), 1.0),
     tostring(cvars:Number("test_cameraOverShoulder")))
@@ -270,6 +358,17 @@ db.actionCamShoulderOffset = -1.5
 Functions:ApplyShoulderOffset(true)
 check("phase 1: a negative offset swaps to the other shoulder",
     near(cvars:Number("test_cameraOverShoulder"), -1.5),
+    tostring(cvars:Number("test_cameraOverShoulder")))
+
+db.actionCamShoulderOffset = 15
+Functions:ApplyShoulderOffset(true)
+check("phase 1: the full documented +15 shoulder range is available",
+    near(cvars:Number("test_cameraOverShoulder"), 15),
+    tostring(cvars:Number("test_cameraOverShoulder")))
+db.actionCamShoulderOffset = -15
+Functions:ApplyShoulderOffset(true)
+check("phase 1: the full documented -15 shoulder range is available",
+    near(cvars:Number("test_cameraOverShoulder"), -15),
     tostring(cvars:Number("test_cameraOverShoulder")))
 
 -- ------------------------------------------ phase 2: the fade window applies
@@ -364,6 +463,15 @@ db.actionCamShoulderInCombat = true
 db.actionCamShoulderOutOfCombat = true
 Functions:UpdateActionCam()
 
+-- Put the product master back to OFF so phase 5 can verify that a connected
+-- controller alone never activates MCD's Forever gamepad layer.
+cvars:Set("GamePadExperimentalUIEnable", 0)
+GamePad:Invalidate()
+Functions:UpdateActionCam()
+check("phase 4: Gamepad UI master-off tears down Forever ActionCam",
+    cvars:Number("test_cameraOverShoulder") == 0
+        and select(1, Guard:GetActionCamIntent()) == false)
+
 -- ------------------------------------------------- phase 5: gamepad plumbing
 check("phase 5: the gamepad module reports support on Forever",
     GamePad:IsSupported() == true)
@@ -378,6 +486,38 @@ cvars:Set("GamePadExperimentalUIEnable", 1)
 GamePad:Invalidate()
 check("phase 5: enabling the Gamepad UI toggle activates the addon's gamepad mode",
     GamePad:IsActive() == true)
+local actionCamDiag = GamePad:GetActionCamDiagnostics()
+check("phase 5: ActionCam diagnostics include non-managed gamepad camera-policy CVars",
+    actionCamDiag
+        and actionCamDiag.turnWithCamera == 1
+        and actionCamDiag.lookMaxPitch == 0
+        and actionCamDiag.lookMaxYaw == 0
+        and actionCamDiag.followAdjustDelay == 1
+        and actionCamDiag.followAdjustEaseIn == 1,
+    actionCamDiag and tostring(actionCamDiag.turnWithCamera) or "nil")
+
+-- Reproduce Forever's pre-commit CVAR_UPDATE ordering for the Alpha UI master:
+-- the event says OFF while GetCVar still returns 1. ActionCam must tear down
+-- during that callback, not wait for a later frame that may never arrive.
+db.actionCamShoulderInCombat = true
+db.actionCamShoulderOutOfCombat = true
+db.actionCamShoulderSmartFade = false
+db.actionCamShoulderOffset = 1.0
+Functions:UpdateActionCam()
+check("phase 5: pre-commit setup has a live shoulder before master-off",
+    near(cvars:Number("test_cameraOverShoulder"), 1.0))
+GamePad:OnCVarUpdate("GamePadExperimentalUIEnable", "0")
+check("phase 5: pre-commit master-off event tears down ActionCam using the event value",
+    near(cvars:Number("test_cameraOverShoulder"), 0)
+        and select(1, Guard:GetActionCamIntent()) == false,
+    tostring(cvars:Number("test_cameraOverShoulder")))
+-- Simulate the outer client write committing after the callback, then re-enable
+-- for the remaining gamepad phases.
+cvars:Set("GamePadExperimentalUIEnable", 0)
+GamePad:Invalidate()
+cvars:Set("GamePadExperimentalUIEnable", 1)
+GamePad:Invalidate()
+Functions:UpdateActionCam()
 
 -- The discovered alpha CVar is intentionally NOT in GamePad.WATCHED_CVARS.
 -- Core must still forward its CVAR_UPDATE dynamically.
@@ -403,10 +543,10 @@ db.gamePadCameraPitchMultiplier = 0.5
 GamePad:ApplyCameraSpeeds(true)
 
 check("phase 5: the yaw multiplier scales the client's own default",
-    near(cvars:Number("GamePadCameraYawSpeed"), 270),
+    near(cvars:Number("GamePadCameraYawSpeed"), 1.5),
     tostring(cvars:Number("GamePadCameraYawSpeed")))
 check("phase 5: the pitch multiplier scales the client's own default",
-    near(cvars:Number("GamePadCameraPitchSpeed"), 45),
+    near(cvars:Number("GamePadCameraPitchSpeed"), 0.5),
     tostring(cvars:Number("GamePadCameraPitchSpeed")))
 check("phase 5: the mouse camera CVars are untouched by gamepad settings",
     cvars:Number("cameraYawMoveSpeed") == 180 and cvars:Number("cameraPitchMoveSpeed") == 90,
@@ -414,7 +554,7 @@ check("phase 5: the mouse camera CVars are untouched by gamepad settings",
 
 GamePad:RestoreCameraSpeeds()
 check("phase 5: switching the option off hands the CVars back to the client",
-    near(cvars:Number("GamePadCameraYawSpeed"), 180) and near(cvars:Number("GamePadCameraPitchSpeed"), 90),
+    near(cvars:Number("GamePadCameraYawSpeed"), 1) and near(cvars:Number("GamePadCameraPitchSpeed"), 1),
     tostring(cvars:Number("GamePadCameraYawSpeed")) .. "/" .. tostring(cvars:Number("GamePadCameraPitchSpeed")))
 
 -- --------------------------------- phase 6: face-movement is opt-in and safe
@@ -586,16 +726,16 @@ check("phase 10: camera-speed ownership is resolved per axis",
         and GamePad:CanManageCameraAxis("pitch") == true
         and GamePad:CanManageCameraSpeed() == true)
 
-cvars:Set("GamePadCameraYawSpeed", 180)
-cvars:Set("GamePadCameraPitchSpeed", 90)
+cvars:Set("GamePadCameraYawSpeed", 2.0)
+cvars:Set("GamePadCameraPitchSpeed", 1.0)
 db.gamePadManageCameraSpeed = true
 db.gamePadCameraYawMultiplier = 2.0
 db.gamePadCameraPitchMultiplier = 0.5
 cvars:ResetCounters()
 GamePad:ApplyCameraSpeeds(true)
 check("phase 10: the addon writes only the unowned camera axis",
-    cvars:Number("GamePadCameraYawSpeed") == 180
-        and near(cvars:Number("GamePadCameraPitchSpeed"), 45)
+    near(cvars:Number("GamePadCameraYawSpeed"), 2.0)
+        and near(cvars:Number("GamePadCameraPitchSpeed"), 0.5)
         and cvars.writes == 1,
     "yaw=" .. tostring(cvars:Number("GamePadCameraYawSpeed"))
         .. " pitch=" .. tostring(cvars:Number("GamePadCameraPitchSpeed"))
@@ -643,13 +783,14 @@ check("phase 11: nothing is written while the override is off",
     cvars.writes == 0,
     "writes=" .. cvars.writes)
 
--- Enabling must capture the live values first, so it changes nothing by itself.
+-- The Forever Gamepad panel is default-first: an arbitrary live console value
+-- must NOT become the addon's baseline when management is enabled.
 cvars:Set("GamePadCursorPushCamera", 2.5)
-GamePad:OnOptionChanged("gamePadAdvancedOverride", true)
 db.gamePadAdvancedOverride = true
-check("phase 11: enabling the override captures the client's current value",
-    near(tonumber(db.gamePadCursorPushCamera), 2.5)
-        and near(cvars:Number("GamePadCursorPushCamera"), 2.5),
+GamePad:OnOptionChanged("gamePadAdvancedOverride", true)
+check("phase 11: enabling the override seeds the client built-in default",
+    near(tonumber(db.gamePadCursorPushCamera), 1)
+        and near(cvars:Number("GamePadCursorPushCamera"), 1),
     tostring(db.gamePadCursorPushCamera) .. "/" .. tostring(cvars:Number("GamePadCursorPushCamera")))
 
 db.gamePadCursorPushCamera = 0
@@ -676,8 +817,8 @@ stub.Fire("CVAR_UPDATE", "GamePadExperimentalUIEnable", "0")
 check("phase 12: turning the Gamepad UI off deactivates the addon's gamepad mode",
     GamePad:IsActive() == false)
 check("phase 12: master-off restores addon-managed CVars to client defaults",
-    near(cvars:Number("GamePadCameraYawSpeed"), 180)
-        and near(cvars:Number("GamePadCameraPitchSpeed"), 90)
+    near(cvars:Number("GamePadCameraYawSpeed"), 1)
+        and near(cvars:Number("GamePadCameraPitchSpeed"), 1)
         and near(cvars:Number("GamePadCursorPushCamera"), 1),
     tostring(cvars:Number("GamePadCameraYawSpeed")) .. "/"
         .. tostring(cvars:Number("GamePadCameraPitchSpeed")) .. "/"
@@ -751,6 +892,54 @@ check("phase 13: ghost state is reported independently",
     status and (tostring(status.isDead) .. "/" .. tostring(status.isGhost)) or "nil")
 dead = false
 ghost = false
+
+
+-- ------------------------------------------------ phase 14: synchronous CVAR_UPDATE reentrancy
+-- Forever 1.60.1 can deliver CVAR_UPDATE from inside C_CVar.SetCVar before the
+-- new value is visible to GetCVar. This is the exact ordering behind the live
+-- C stack overflow reported for CameraKeepCharacterCentered.
+local writesBeforeReentrantProbe = cvars.writes
+cvars:Set("CameraKeepCharacterCentered", 1)
+cvars:Set("cameraReduceUnexpectedMovement", 1)
+Guard:SetActionCamIntent(true, false)
+cvars:SetBeforeWriteHook(function(name, value)
+    local lowered = tostring(name):lower()
+    if lowered == "camerakeepcharactercentered" or lowered == "camerareduceunexpectedmovement" then
+        stub.Fire("CVAR_UPDATE", name, tostring(value))
+    end
+end)
+local reentrantOk, reentrantErr = pcall(Guard.Refresh, Guard, true)
+cvars:SetBeforeWriteHook(nil)
+check("phase 14: synchronous CVAR_UPDATE does not recurse/overflow", reentrantOk, reentrantErr)
+check("phase 14: keep-centered still commits to 0",
+    cvars:Number("CameraKeepCharacterCentered") == 0,
+    cvars:Get("CameraKeepCharacterCentered"))
+check("phase 14: reduce-unexpected-movement still commits to 0",
+    cvars:Number("cameraReduceUnexpectedMovement") == 0,
+    cvars:Get("cameraReduceUnexpectedMovement"))
+check("phase 14: reentrant events do not explode write count",
+    (cvars.writes - writesBeforeReentrantProbe) <= 3,
+    cvars.writes - writesBeforeReentrantProbe)
+
+
+-- -------------------------------- phase 15: early external event keeps user intent
+-- Simulate an external SetCVar(1) whose CVAR_UPDATE arrives while GetCVar still
+-- reports the previous 0. The guard must remember the requested 1 and restore it
+-- once ActionCam no longer needs to block keep-centered.
+cvars:Set("CameraKeepCharacterCentered", 0)
+Guard:SetActionCamIntent(true, false)
+Guard:OnExternalCVarSet("CameraKeepCharacterCentered", "1")
+-- Outer client write commits after the event callback returns.
+cvars:Set("CameraKeepCharacterCentered", 1)
+Guard:Refresh(true)
+check("phase 15: post-event reconcile re-blocks keep-centered",
+    cvars:Number("CameraKeepCharacterCentered") == 0,
+    cvars:Get("CameraKeepCharacterCentered"))
+Guard:SetActionCamIntent(false, false)
+Guard:Refresh(true)
+check("phase 15: user keep-centered preference survives the early event",
+    cvars:Number("CameraKeepCharacterCentered") == 1,
+    cvars:Get("CameraKeepCharacterCentered"))
 
 print(failures == 0 and "PROBE PASSED" or ("PROBE FAILED (" .. failures .. ")"))
 os.exit(failures == 0 and 0 or 1)

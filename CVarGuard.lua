@@ -15,6 +15,9 @@ local C_CVar = C_CVar
 
 local internalWriteDepth = 0
 local isInitialized = false
+local refreshInProgress = false
+local managedWriteLocks = {}
+local reconcileScheduled = false
 
 local debugCounters = {
     cvarWrites = 0,
@@ -22,6 +25,8 @@ local debugCounters = {
     preventedExternalCvars = 0,
     restoredMotionSicknessSettings = 0,
     ignoredInternalWrites = 0,
+    ignoredReentrantWrites = 0,
+    ignoredReentrantRefreshes = 0,
 }
 
 local REDUCE_UNEXPECTED_MOVEMENT_CVARS = {
@@ -98,6 +103,17 @@ local function SafeSetCVar(name, value)
 end
 
 local function SetManagedCVar(name, value)
+    name = NormalizeCVarName(name)
+
+    -- Forever can deliver CVAR_UPDATE synchronously from inside C_CVar.SetCVar,
+    -- before GetCVar reflects the value being committed. Without a per-CVar lock
+    -- that event can re-enter Refresh -> Force* -> SetManagedCVar forever while
+    -- every nested read still sees the old value.
+    if managedWriteLocks[name] then
+        debugCounters.ignoredReentrantWrites = debugCounters.ignoredReentrantWrites + 1
+        return false
+    end
+
     local current = SafeGetCVar(name)
     local target = tonumber(value) or 0
 
@@ -110,9 +126,20 @@ local function SetManagedCVar(name, value)
         return false
     end
 
+    managedWriteLocks[name] = true
     internalWriteDepth = internalWriteDepth + 1
     local ok = SafeSetCVar(name, value)
     internalWriteDepth = internalWriteDepth - 1
+    if internalWriteDepth < 0 then internalWriteDepth = 0 end
+    managedWriteLocks[name] = nil
+
+    -- SafeSetCVar reports whether the API call itself succeeded. Verify the live
+    -- value after the call before claiming that the managed write committed.
+    if ok then
+        local committed = SafeGetCVar(name)
+        ok = committed ~= nil and tonumber(committed) == target
+    end
+
     if ok then
         debugCounters.cvarWrites = debugCounters.cvarWrites + 1
     else
@@ -123,6 +150,24 @@ end
 
 local function IsInternalWrite()
     return internalWriteDepth > 0
+end
+
+local function ScheduleReconcile()
+    if reconcileScheduled then return end
+    if not (C_Timer and C_Timer.After) then return end
+
+    reconcileScheduled = true
+    C_Timer.After(0, function()
+        reconcileScheduled = false
+        -- The originating SetCVar has returned by now, so GetCVar can observe
+        -- the committed value even on clients that fired CVAR_UPDATE early.
+        if CVarGuard and CVarGuard.Refresh then
+            local ok, err = pcall(CVarGuard.Refresh, CVarGuard, true)
+            if not ok and ns.Functions and ns.Functions.logMessage then
+                ns.Functions:logMessage("error", "CVarGuard deferred reconcile error: " .. tostring(err))
+            end
+        end
+    end)
 end
 
 function CVarGuard:BeginInternalWrite()
@@ -182,6 +227,31 @@ end
 
 function CVarGuard:GetActionCamIntent()
     return shoulderIntent, dynamicPitchIntent
+end
+
+-- Read-only readiness check used by Functions:UpdateActionCam after a forced
+-- guard refresh. Forever may keep ActionCam blocked until these compatibility
+-- CVars are actually committed, so applying test_cameraOverShoulder first is
+-- not reliable enough.
+function CVarGuard:IsActionCamReady(shoulderWanted, pitchWanted)
+    local needsShoulder = shoulderWanted and true or false
+    local needsPitch = pitchWanted and true or false
+
+    if needsShoulder or needsPitch then
+        local keepCentered = SafeGetCVar("CameraKeepCharacterCentered")
+        if keepCentered ~= nil and tonumber(keepCentered) == 1 then
+            return false, "CameraKeepCharacterCentered"
+        end
+    end
+
+    if needsShoulder then
+        local reduceUnexpected = SafeGetCVar("cameraReduceUnexpectedMovement")
+        if reduceUnexpected ~= nil and tonumber(reduceUnexpected) == 1 then
+            return false, "cameraReduceUnexpectedMovement"
+        end
+    end
+
+    return true, nil
 end
 
 local function GetCameraViewDefault()
@@ -316,7 +386,7 @@ function CVarGuard:RestoreReduceUnexpectedMovementIfPossible()
     end
 end
 
-function CVarGuard:Refresh(force)
+local function RunRefresh(self, force)
     local blockKeepCentered = self:ShouldBlockKeepCentered()
     local blockReduceUnexpectedMovement = self:ShouldBlockReduceUnexpectedMovement()
 
@@ -346,6 +416,26 @@ function CVarGuard:Refresh(force)
     self:RestoreReduceUnexpectedMovementIfPossible()
 end
 
+function CVarGuard:Refresh(force)
+    -- Defense in depth for synchronous CVAR_UPDATE delivery. The per-CVar write
+    -- lock above is the primary guard; this prevents any future refresh path from
+    -- recursively entering the whole reconciliation pass.
+    if refreshInProgress then
+        debugCounters.ignoredReentrantRefreshes = debugCounters.ignoredReentrantRefreshes + 1
+        return false
+    end
+
+    refreshInProgress = true
+    local ok, err = pcall(RunRefresh, self, force)
+    refreshInProgress = false
+
+    if not ok then
+        error(err, 0)
+    end
+
+    return true
+end
+
 function CVarGuard:OnExternalCVarSet(cvar, value)
     if IsInternalWrite() then
         debugCounters.ignoredInternalWrites = debugCounters.ignoredInternalWrites + 1
@@ -366,19 +456,19 @@ function CVarGuard:OnExternalCVarSet(cvar, value)
         local num = tonumber(value)
 
         if num == 1 or value == true or value == "true" then
+            -- The event value is the user's requested value. Do not read the live
+            -- CVar here: Forever may deliver this event before the outer SetCVar
+            -- commits, so GetCVar can still expose the previous value.
+            savedUserValues.CameraKeepCharacterCentered = 1
             if self:ShouldBlockKeepCentered() then
-                self:CaptureUserValue("CameraKeepCharacterCentered")
                 if SetManagedCVar("CameraKeepCharacterCentered", 0) then
                     debugCounters.preventedExternalCvars = debugCounters.preventedExternalCvars + 1
                 end
+                ScheduleReconcile()
                 self:LogOnce("lastForcedKeepCentered", "Disabled CameraKeepCharacterCentered because it conflicts with ActionCam.")
-            else
-                savedUserValues.CameraKeepCharacterCentered = 1
             end
         elseif num == 0 or value == false or value == "false" then
-            if not self:ShouldBlockKeepCentered() then
-                savedUserValues.CameraKeepCharacterCentered = 0
-            end
+            savedUserValues.CameraKeepCharacterCentered = 0
         end
 
         return
@@ -388,20 +478,20 @@ function CVarGuard:OnExternalCVarSet(cvar, value)
         local num = tonumber(value)
 
         if num == 1 or value == true or value == "true" then
+            savedUserValues.cameraReduceUnexpectedMovement = 1
             if self:ShouldBlockReduceUnexpectedMovement() then
-                self:CaptureUserValue("cameraReduceUnexpectedMovement")
                 if SetManagedCVar("cameraReduceUnexpectedMovement", 0) then
                     debugCounters.preventedExternalCvars = debugCounters.preventedExternalCvars + 1
                 end
+                ScheduleReconcile()
                 self:LogOnce("lastForcedReduceUnexpectedMovement", "Disabled cameraReduceUnexpectedMovement because it conflicts with shoulder offset.")
             else
-                savedUserValues.cameraReduceUnexpectedMovement = 1
                 local db = DB()
                 if db then db.reduceUnexpectedMovement = true end
             end
         elseif num == 0 or value == false or value == "false" then
+            savedUserValues.cameraReduceUnexpectedMovement = 0
             if not self:ShouldBlockReduceUnexpectedMovement() then
-                savedUserValues.cameraReduceUnexpectedMovement = 0
                 local db = DB()
                 if db then db.reduceUnexpectedMovement = false end
             end
