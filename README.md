@@ -40,23 +40,23 @@ Turn your screen into a screensaver when you step away:
 Activates only when **Gameplay → Gamepad (Alpha) → Enable Gamepad UI** is switched on. A connected controller alone changes nothing; with the toggle off the client keeps all of its own defaults.
 
 The addon deliberately **does not duplicate anything the game's own Gamepad panel already controls** — it checks Blizzard's settings registry at runtime, so duplicates disappear by themselves as the alpha grows. What it adds is the gap: camera CVars that exist in the API but have no control in that panel.
-* **Guided Setup:** The first time a gamepad becomes active, the addon opens its settings on a dedicated **Gamepad** tab, so the controller-specific camera options are not left to be discovered. Never in combat, once per character, and switchable off.
+* **Guided Setup:** The first time a gamepad becomes active, the addon opens its settings on a dedicated **Gamepad** tab, so the controller-specific camera options are not left to be discovered. It never auto-opens in combat or while dead/ghost, runs once per character, and can be switched off.
 * **Gamepad Camera Speed:** `GamePadCameraYawSpeed` / `GamePadCameraPitchSpeed` as a multiplier of the client's own default — *shown only while the game itself has no slider for them*. The addon's mouse-camera sliders have never affected these, which is why they seemed to do nothing with a controller.
 * **API-only Camera CVars:** `GamePadCursorPushCamera` and `GamePadTankTurnSpeed`, which have no control in the game's panel.
 * **AFK Safe Exit on Controller:** any gamepad button exits the cinematic AFK mode, not just keyboard ESC.
 * **ActionCam Compatibility:** `CameraKeepCharacterCentered` overrides ActionCam outright, and enabling the gamepad is a common way to end up with it switched on. The addon now tracks its own intent rather than reading the shoulder CVar back, so the shoulder camera can no longer get permanently stuck off.
-* **Face-Movement Conflict:** `GamePadFaceMovement` fights the over-shoulder offset. It can optionally be suspended while the shoulder camera is active and is restored afterwards. Off by default.
+* **Face-Movement Conflict:** Uses the modern `GamePadFaceMovementMaxAngle` / `GamePadFaceMovementMaxAngleCombat` controls when available, with `GamePadFaceMovement` only as a legacy fallback. The addon can temporarily relax face-movement while the shoulder camera is active and restores the client values afterwards. Off by default.
 * **Stick Diagnostics:** Warns when no stick is assigned to the camera, or when the camera shares a physical stick with movement or the cursor.
 
 ### ⚙️ System Integration & Optimization
-* **Zero-Lag Core:** Uses **Event Throttling** to process camera logic only once per frame, ensuring 0% FPS drop even in heavy raid combat.
+* **Event-Driven Core:** Uses throttling, debouncing, short-lived state caches and lazy status checks so camera work runs only when relevant instead of polling every subsystem continuously.
 * **Blizzard Settings Hook:** Intercepts the default UI to disable the "Mouse Look Speed" slider, preventing conflicts with the addon's precision Pitch/Yaw controls.
 * **Limit Breaker:** Extends camera distance up to 39 yards (Retail) / 50 yards (Classic).
 
 ## 🛠️ Quality of Life
 * **Always Sharpen (FSR):** Forces FidelityFX sharpness for a crisper image without upscaling.
 * **Soft Target Icons:** Displays interaction icons over NPCs and portals.
-* **Quest Cleaner:** One-click button to untrack all quests for instant FPS boost in raids.
+* **Quest Cleaner:** One-click button to untrack all quests for a cleaner objective tracker during raids, screenshots or streaming.
 
 ## 💻 Commands
 
@@ -68,10 +68,12 @@ The addon deliberately **does not duplicate anything the game's own Gamepad pane
 
 ## ✅ Compatibility
 
-Fully compatible with:
-* **Retail:** Midnight (12.x) - *Safe for Raids (Private Aura crash fixed!)*, *Full Skyriding Support*
-* **Classic:** Mists of Pandaria Classic
-* **Anniversary:** The Burning Crusade (TBC)
+Supported client families use separate manifests and capability checks:
+* **Retail:** Midnight 12.x, including current live/PTR interface generations supported by the TOC.
+* **World of Warcraft: Forever:** dedicated Camelot/Forever flavor (`16001`) with Forever-only gamepad, fog and advanced ground-effect controls.
+* **Classic:** Classic Era / Anniversary, Burning Crusade Anniversary, Mists of Pandaria Classic, and the additional Classic manifests shipped with the addon.
+
+Features that do not exist on a client are hidden or disabled through capability checks rather than assumed to be available.
 
 ## 🐞 Bug Reporting
 

@@ -2,3 +2,5 @@
 *.zip
 /.idea
 *.exe
+luac.out
+*.out

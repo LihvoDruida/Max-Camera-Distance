@@ -167,9 +167,18 @@ function Compat.Plain(value)
     return value
 end
 
--- 12.1 added C_CVar.AreCVarsLoaded. Probing CVars before they exist reports
--- "unsupported" and would permanently disable feature-gated options, so treat an
--- unavailable API as "loaded" and only ever return false when we truly know.
+-- 12.1 added C_CVar.AreCVarsLoaded, but Forever 1.60.x and several Classic
+-- branches do not expose it even though their CVar/console tables are still
+-- incomplete before VARIABLES_LOADED. Track that event ourselves instead of
+-- treating a missing AreCVarsLoaded API as proof that enumeration is ready.
+local variablesLoadedSeen = false
+
+function Compat.MarkCVarsLoaded()
+    if variablesLoadedSeen then return end
+    variablesLoadedSeen = true
+    Compat.InvalidateCVarCaches()
+end
+
 function Compat.AreCVarsLoaded()
     if C_CVar and C_CVar.AreCVarsLoaded then
         local ok, result = pcall(C_CVar.AreCVarsLoaded)
@@ -177,7 +186,7 @@ function Compat.AreCVarsLoaded()
             return result and true or false
         end
     end
-    return true
+    return variablesLoadedSeen
 end
 
 function Compat.SafeGetCVar(name)

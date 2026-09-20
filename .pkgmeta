@@ -21,6 +21,9 @@ ignore:
   - tests
   - check_all.sh
   - .DS_Store
+  - luac.out
+  - texluac.out
+  - "*.out"
 
 externals:
   libs/LibStub:

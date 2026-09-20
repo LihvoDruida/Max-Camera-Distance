@@ -164,6 +164,17 @@ local function GamePadCanManageSpeed()
     return (ns.GamePad and ns.GamePad.CanManageCameraSpeed and ns.GamePad:CanManageCameraSpeed()) and true or false
 end
 
+local function GamePadCanManageAxis(axis)
+    if ns.GamePad and ns.GamePad.CanManageCameraAxis then
+        return ns.GamePad:CanManageCameraAxis(axis) and true or false
+    end
+    return GamePadCanManageSpeed()
+end
+
+local function GamePadCanManageFaceMovement()
+    return (ns.GamePad and ns.GamePad.CanManageFaceMovement and ns.GamePad:CanManageFaceMovement()) and true or false
+end
+
 local function GamePadAdvancedVisible()
     if not (ns.GamePad and ns.GamePad.ADVANCED_CONTROLS) then return false end
     for _, control in ipairs(ns.GamePad.ADVANCED_CONTROLS) do
@@ -1882,7 +1893,7 @@ function Config:SetupOptions()
                             if GamePadActive() then
                                 return L["GAMEPAD_DESC_ACTIVE"] or "A gamepad is active. The camera speed sliders in General only affect the mouse camera; the gamepad has its own speed CVars, which this panel drives."
                             end
-                            return L["GAMEPAD_DESC_INACTIVE"] or "No gamepad detected. These settings apply as soon as one is enabled (/console GamePadEnable 1)."
+                            return L["GAMEPAD_DESC_INACTIVE"] or "Forever Gamepad UI (Alpha) is disabled. Addon gamepad overrides stay inactive and managed CVars are returned to client defaults until that mode is enabled."
                         end,
                         order = 1,
                     },
@@ -1914,7 +1925,7 @@ function Config:SetupOptions()
                         width = 2,
                     },
                     gamePadYawMultiplier = {
-                        hidden = function() return not GamePadCanManageSpeed() end,
+                        hidden = function() return not GamePadCanManageAxis("yaw") end,
                         type = "range",
                         name = L["GAMEPAD_YAW_MULTIPLIER_NAME"] or "Gamepad Horizontal Speed",
                         desc = function()
@@ -1928,7 +1939,7 @@ function Config:SetupOptions()
                         disabled = function() return not GetOption("gamePadManageCameraSpeed") end,
                     },
                     gamePadPitchMultiplier = {
-                        hidden = function() return not GamePadCanManageSpeed() end,
+                        hidden = function() return not GamePadCanManageAxis("pitch") end,
                         type = "range",
                         name = L["GAMEPAD_PITCH_MULTIPLIER_NAME"] or "Gamepad Vertical Speed",
                         desc = function()
@@ -1954,12 +1965,12 @@ function Config:SetupOptions()
                     gamePadRelaxFaceMovement = {
                         type = "toggle",
                         name = L["GAMEPAD_FACE_MOVEMENT_NAME"] or "Disable Face-Movement with Shoulder Cam",
-                        desc = L["GAMEPAD_FACE_MOVEMENT_DESC"] or "GamePadFaceMovement turns your character to face the stick direction, which fights the over-shoulder offset. Turn this on to suspend it while the shoulder camera is active; the original value is restored afterwards.",
+                        desc = L["GAMEPAD_FACE_MOVEMENT_DESC"] or "Temporarily disables gamepad face-movement while the shoulder camera is active. Current clients use GamePadFaceMovementMaxAngle / Combat; the legacy GamePadFaceMovement switch is only a fallback. Original values are restored afterwards.",
                         get = function() return GetOption("gamePadRelaxFaceMovement") and true or false end,
                         set = function(_, val) SetOption("gamePadRelaxFaceMovement", val and true or false) end,
                         order = 22,
                         width = 2,
-                        hidden = function() return not GamePadCanManage("GamePadFaceMovement") end,
+                        hidden = function() return not GamePadCanManageFaceMovement() end,
                     },
                     gamePadAdvancedHeader = {
                         type = "header",

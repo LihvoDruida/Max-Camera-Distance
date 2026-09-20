@@ -94,7 +94,9 @@ local PLAYER_ONLY_EVENTS = {
     UNIT_AURA = true,
     UNIT_MODEL_CHANGED = true,
     UNIT_ENTERING_VEHICLE = true,
+    UNIT_ENTERED_VEHICLE = true,
     UNIT_EXITING_VEHICLE = true,
+    UNIT_EXITED_VEHICLE = true,
 }
 
 local function SafeRegisterEvent(targetFrame, eventName)
@@ -367,7 +369,27 @@ end
 -- ADDON_LOADED is too early for that, and because WoW stores the enabled addon
 -- list per character, whether it was early enough differed from character to
 -- character - which is what made this look like a per-toon bug.
+local function MarkRuntimeVariablesReady()
+    -- Forever 1.60.x and older Classic branches do not expose
+    -- C_CVar.AreCVarsLoaded. Mark the event explicitly so capability probes can
+    -- cache negative answers safely from this point onward. PLAYER_LOGIN calls
+    -- this too as a defensive fallback for unusual on-demand/load-order cases
+    -- where an addon may have missed VARIABLES_LOADED. Both callees are
+    -- idempotent.
+    if Compat.MarkCVarsLoaded then
+        SafeCall(Compat.MarkCVarsLoaded, "Compat.MarkCVarsLoaded")
+    elseif Compat.InvalidateCVarCaches then
+        SafeCall(Compat.InvalidateCVarCaches, "Compat.InvalidateCVarCaches")
+    end
+    if ns.GamePad and ns.GamePad.IS_SUPPORTED_FLAVOR and ns.GamePad.OnVariablesLoaded then
+        SafeCall(ns.GamePad.OnVariablesLoaded, "GamePad.OnVariablesLoaded", ns.GamePad)
+    end
+end
+
+eventHandlers.VARIABLES_LOADED = MarkRuntimeVariablesReady
+
 eventHandlers.PLAYER_LOGIN = function()
+    MarkRuntimeVariablesReady()
     ResolveOptionalLibs()
 
     if ns.Database and ns.Database.UpgradeFallbackDB then
@@ -505,19 +527,19 @@ eventHandlers.UNIT_AURA = function(event, unit)
     end
 end
 
-eventHandlers.UNIT_ENTERING_VEHICLE = function(event, unit)
+local function OnPlayerVehicleStateChanged(event, unit)
     if unit ~= "player" then return end
     InvalidateMountCache()
+    InvalidateRuntimeCaches()
     RequestShoulderRefresh()
-    RequestSmartUpdate()
+    RequestSmartUpdate(event)
+    RefreshAfkRelevantState()
 end
 
-eventHandlers.UNIT_EXITING_VEHICLE = function(event, unit)
-    if unit ~= "player" then return end
-    InvalidateMountCache()
-    RequestShoulderRefresh()
-    RequestSmartUpdate()
-end
+eventHandlers.UNIT_ENTERING_VEHICLE = OnPlayerVehicleStateChanged
+eventHandlers.UNIT_ENTERED_VEHICLE = OnPlayerVehicleStateChanged
+eventHandlers.UNIT_EXITING_VEHICLE = OnPlayerVehicleStateChanged
+eventHandlers.UNIT_EXITED_VEHICLE = OnPlayerVehicleStateChanged
 
 eventHandlers.LOADING_SCREEN_DISABLED = function()
     InvalidateMountCache()
@@ -527,6 +549,7 @@ eventHandlers.LOADING_SCREEN_DISABLED = function()
     end
 end
 eventHandlers.PLAYER_CONTROL_GAINED = ForceSmartUpdate
+eventHandlers.PLAYER_CONTROL_LOST = ForceSmartUpdate
 eventHandlers.GROUP_ROSTER_UPDATE = RequestSmartUpdate
 eventHandlers.ENCOUNTER_START = ForceSmartUpdate
 eventHandlers.ENCOUNTER_END = ForceSmartUpdate
@@ -548,10 +571,19 @@ eventHandlers.CVAR_UPDATE = function(event, cvarName, value)
 
     local lowered = cvarName:lower()
 
-    if gamePadWatchedLower[lowered] then
-        if ns.GamePad and ns.GamePad.OnCVarUpdate then
-            SafeCall(ns.GamePad.OnCVarUpdate, "GamePad.OnCVarUpdate", ns.GamePad, cvarName)
+    -- The Forever Gamepad UI master CVar is discovered at runtime, so it cannot
+    -- be present in a static watch table. Forward every Forever CVar update to
+    -- the module first; it performs cheap name checks and reports whether it
+    -- handled the event. This is the only reliable way to react to an alpha CVar
+    -- whose spelling can change between beta builds.
+    if ns.GamePad and ns.GamePad.IS_SUPPORTED_FLAVOR and ns.GamePad.OnCVarUpdate then
+        local ok, handled = pcall(ns.GamePad.OnCVarUpdate, ns.GamePad, cvarName)
+        if not ok then
+            print(string.format("|cffff0000%s Error in GamePad.OnCVarUpdate:|r %s", addonName, tostring(handled)))
+        elseif handled then
+            return
         end
+    elseif gamePadWatchedLower[lowered] then
         return
     end
 
@@ -565,8 +597,10 @@ end
 -- Registered from the module's own list so the set cannot drift between files,
 -- and only on the flavour the module supports (Forever). SafeRegisterEvent
 -- would also skip them on a client that has no gamepad support at all.
-local function OnGamePadEvent()
-    if ns.GamePad and ns.GamePad.Refresh then
+local function OnGamePadEvent(event, ...)
+    if ns.GamePad and ns.GamePad.OnGamePadEvent then
+        SafeCall(ns.GamePad.OnGamePadEvent, "GamePad.OnGamePadEvent", ns.GamePad, event, ...)
+    elseif ns.GamePad and ns.GamePad.Refresh then
         SafeCall(ns.GamePad.Refresh, "GamePad.Refresh", ns.GamePad, true)
     end
     -- Enabling the gamepad can move CameraKeepCharacterCentered underneath the

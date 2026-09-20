@@ -488,7 +488,7 @@ L["ACTION_CAM_SHOULDER_FADE_START_DESC"] = "Camera distance in yards at which th
 -- ============================================================================
 L["GAMEPAD_HEADER"] = "Gamepad"
 L["GAMEPAD_DESC_ACTIVE"] = "A gamepad is active. The camera speed sliders in General only affect the mouse camera — the gamepad has its own speed CVars, which this section drives."
-L["GAMEPAD_DESC_INACTIVE"] = "No gamepad detected. These settings take effect as soon as one is enabled (/console GamePadEnable 1)."
+L["GAMEPAD_DESC_INACTIVE"] = "Forever Gamepad UI (Alpha) is disabled. Addon gamepad overrides stay inactive and managed CVars are returned to client defaults until that mode is enabled."
 L["GAMEPAD_MANAGE_SPEED_NAME"] = "Manage Gamepad Camera Speed"
 L["GAMEPAD_MANAGE_SPEED_DESC"] = "Lets this addon set GamePadCameraYawSpeed and GamePadCameraPitchSpeed. Off by default, so the addon never retunes your controller behind your back. Switching it off hands both CVars back to the client's own defaults."
 L["GAMEPAD_YAW_MULTIPLIER_NAME"] = "Gamepad Horizontal Speed"
@@ -498,7 +498,7 @@ L["GAMEPAD_PITCH_MULTIPLIER_DESC"] = "Multiplier applied to the client's own def
 L["GAMEPAD_SPEED_RESOLVED"] = "Resolves to:"
 L["GAMEPAD_SPEED_CLIENT_DEFAULT"] = "client default"
 L["GAMEPAD_FACE_MOVEMENT_NAME"] = "Disable Face-Movement with Shoulder Cam"
-L["GAMEPAD_FACE_MOVEMENT_DESC"] = "GamePadFaceMovement turns your character to face the stick direction, which fights the over-the-shoulder offset. Turn this on to suspend it while the shoulder camera is active; your original value is restored as soon as the shoulder camera turns off."
+L["GAMEPAD_FACE_MOVEMENT_DESC"] = "Temporarily disables gamepad face-movement while the shoulder camera is active. Current clients use GamePadFaceMovementMaxAngle / Combat; the legacy GamePadFaceMovement switch is only a fallback. Original values are restored afterwards."
 L["GAMEPAD_WARN_NO_CAMERA_STICK"] = "|cffff5555No stick is assigned to the gamepad camera (GamePadCameraStick is 0), so the client is sending no camera input at all. Assign one in Options > Gamepad.|r"
 L["GAMEPAD_WARN_STICK_COLLISION"] = "|cffffcc00The gamepad camera shares a physical stick with movement or the cursor. Camera input will feel unresponsive until they are separated.|r"
 L["GAMEPAD_SPEED_HEADER"] = "Camera Speed"

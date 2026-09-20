@@ -1,5 +1,45 @@
 # Max Camera Distance — Changelog
 
+## v10.5 — Forever API audit, gamepad hardening, and character-state diagnostics
+
+### Forever / API compatibility
+
+- Audited the current Forever Beta line against build `1.60.1.69893` / Interface `16001`. Forever remains a distinct product flavor while using the modern API family exposed by that client; APIs that are not guaranteed on Forever are capability-detected at runtime rather than inferred from Retail patch numbers.
+- Fixed early CVar capability discovery on clients without `C_CVar.AreCVarsLoaded`: negative capability results are no longer cached before `VARIABLES_LOADED`.
+- Fixed the Gamepad UI (Alpha) toggle discovery race. `C_Console.GetAllCommands()` is now scanned only after `VARIABLES_LOADED`, because Blizzard documents the command list as incomplete earlier in login.
+- Improved runtime discovery of the undocumented Forever Gamepad UI toggle: candidates must be real CVars, boolean-like, and are ranked deterministically instead of accepting the first name containing `gamepad` + `ui`.
+- Fixed `CVAR_UPDATE` routing for a dynamically discovered Gamepad UI CVar, which cannot exist in the module's static watch list.
+
+### Gamepad
+
+- Corrected camera-speed fallback defaults to the documented `GamePadCameraYawSpeed = 1` and `GamePadCameraPitchSpeed = 1`; the client's own `GetCVarDefault` result still has priority. A user's current override is no longer mistaken for a default baseline.
+- Added current `GamePadFaceMovementMaxAngle` / `GamePadFaceMovementMaxAngleCombat` handling (`0` / `180` defaults) and retained `GamePadFaceMovement` only as a legacy fallback.
+- Fixed a Settings-ownership bypass: if Blizzard exposes the modern face-movement controls, the addon no longer modifies the legacy binary CVar behind the game's UI.
+- Made Blizzard Settings ownership per-CVar/per-axis. If the game owns only yaw, the addon can still manage pitch without touching yaw.
+- Applied the same Settings-ownership rule to restore paths, not just writes: a CVar that becomes game-owned later in the session is immediately left alone.
+- Removed redundant restore writes by comparing live values with client defaults before calling `SetCVar`.
+- When the Forever Gamepad UI master switch is disabled, addon-owned gamepad values are reconciled to client defaults once and are not repeatedly rewritten.
+- Improved gamepad runtime diagnostics with input-active state, active device ID, CVar-enumeration readiness, and the resolved Alpha UI toggle.
+- Prevented the automatic Gamepad settings panel from opening while the player is dead/ghost in addition to the existing combat guard.
+
+### Character-state detection
+
+- Split physical mount state from travel-form state. Druid/Shaman-style travel forms are no longer reported as a physical mount or sent through mount-journal-only resolution.
+- Added explicit `travelActive` state for logic that intentionally treats mounts and travel forms together.
+- Expanded diagnostics with vehicle, taxi, flying, falling, swimming, submerged, AFK, dead, and ghost states.
+- Added feature-detected gliding diagnostics through `C_PlayerInfo.GetGlidingInfo` when that API exists; it is not assumed to exist on Forever.
+- Added both pre/post vehicle transition events (`UNIT_ENTERING/ENTERED_VEHICLE`, `UNIT_EXITING/EXITED_VEHICLE`) and invalidated mount/runtime caches at each relevant player transition.
+- AFK cinematic entry now rejects vehicle state and treats travel forms as mounted when the "skip mounted" safeguard is enabled.
+- Removed a small shapeshift-status table allocation from a frequently used form lookup path.
+
+### Regression coverage
+
+- Expanded the Forever gamepad probe to cover the `VARIABLES_LOADED` discovery race, a runtime-only Alpha UI CVar, partial Blizzard Settings ownership, modern face-movement ownership, no-write restore semantics, Gamepad master-off reconciliation, physical mount vs travel form, and feature-detected gliding.
+- Kept the Retail late-Ace3 probe as a negative control proving that Forever-only profile keys/UI remain absent off the Camelot flavor.
+- Added explicit dead/ghost regression coverage for both Gamepad panel auto-open suppression and character-state diagnostics.
+- Hardened `check_all.sh` so a missing `lua5.1`/`luac5.1` toolchain fails the relevant gate instead of allowing the global-leak stage to pass silently.
+- Excluded accidental `luac.out` compiler artifacts from both Git and packaged releases.
+
 ## v10.4 — Gamepad support, configurable shoulder offset, ActionCam deadlock fix
 
 ### Gamepad scope and rules

@@ -525,13 +525,16 @@ local function GetShapeshiftFormSpellID(formIndex)
     local ok, a, b, c, d = pcall(GetShapeshiftFormInfo, formIndex)
     if not ok then return nil end
 
-    for _, value in ipairs({ d, c, b, a }) do
-        local plainValue
-        if Compat.Plain then
-            plainValue = Compat.Plain(value)
-        else
-            plainValue = value
-        end
+    -- Avoid allocating a temporary { d, c, b, a } table on every form check;
+    -- this path is hit by shapeshift/aura-driven camera updates.
+    for i = 1, 4 do
+        local value
+        if i == 1 then value = d
+        elseif i == 2 then value = c
+        elseif i == 3 then value = b
+        else value = a end
+
+        local plainValue = Compat.Plain and Compat.Plain(value) or value
         if plainValue ~= nil then
             local num = tonumber(plainValue)
             if num and num > 0 and type(plainValue) ~= "boolean" then
@@ -1650,6 +1653,26 @@ local function ResolveThreatFlag()
     return (numericStatus ~= nil and numericStatus > 0) and true or false
 end
 
+function Functions:ResolveGlidingInfo(signals)
+    if rawget(signals, "__glideResolved") then return end
+    rawset(signals, "__glideResolved", true)
+
+    local isGliding, canGlide, forwardSpeed = false, false, nil
+    if _G.C_PlayerInfo and _G.C_PlayerInfo.GetGlidingInfo then
+        local ok, glidingValue, canGlideValue, speedValue = pcall(_G.C_PlayerInfo.GetGlidingInfo)
+        if ok then
+            isGliding = IsTruthySafe(glidingValue)
+            canGlide = IsTruthySafe(canGlideValue)
+            local plainSpeed = Compat.Plain and Compat.Plain(speedValue) or speedValue
+            forwardSpeed = tonumber(plainSpeed)
+        end
+    end
+
+    rawset(signals, "isGliding", isGliding)
+    rawset(signals, "canGlide", canGlide)
+    rawset(signals, "glideSpeed", forwardSpeed)
+end
+
 -- Signals are lazy except for the activity context, which is cheap and shared.
 -- Combat/threat and anything that touches the mount journal, aura scans or
 -- shapeshift probes is computed on FIRST ACCESS and then memoised.
@@ -1673,17 +1696,56 @@ local LAZY_SIGNALS = {
     forceCombatZoom = function(db)
         return (db and ShouldForceCombatZoom(db)) and true or false
     end,
+    -- Keep physical mount and shapeshift/travel-form state separate.
+    -- called their union "isMounted", which made Druid travel form look like a
+    -- mount and triggered unnecessary mount-journal resolution in diagnostics.
     isMounted = function()
-        return IsInTravelForm() and true or false
+        return SafeBoolCall(IsMounted)
+    end,
+    isTravelForm = function()
+        return Functions:IsTravelFormOnlyActive() and true or false
+    end,
+    travelActive = function(db, s)
+        return s.isMounted or s.isTravelForm
     end,
     mountZoomActive = function(db, s)
-        return s.isMounted and Functions:ShouldUseMountZoom(db, true) or false
+        return s.travelActive and Functions:ShouldUseMountZoom(db, true) or false
     end,
     isSkyriding = function(db, s)
-        return s.isMounted and Functions:IsSkyriding() or false
+        return s.travelActive and Functions:IsSkyriding() or false
     end,
     isDragonRacing = function(db, s)
         return s.isMounted and Functions:IsDragonRacingRaceActive() or false
+    end,
+    inVehicle = function()
+        return SafeBoolCall(_G.UnitInVehicle, "player")
+    end,
+    onTaxi = function()
+        return SafeBoolCall(UnitOnTaxi, "player")
+    end,
+    isFlying = function()
+        return SafeBoolCall(IsFlying, "player")
+    end,
+    isFalling = function()
+        return SafeBoolCall(_G.IsFalling, "player")
+    end,
+    isSwimming = function()
+        return SafeBoolCall(_G.IsSwimming, "player")
+    end,
+    isSubmerged = function()
+        return SafeBoolCall(_G.IsSubmerged, "player")
+    end,
+    isGliding = function(db, s)
+        Functions:ResolveGlidingInfo(s)
+        return rawget(s, "isGliding")
+    end,
+    canGlide = function(db, s)
+        Functions:ResolveGlidingInfo(s)
+        return rawget(s, "canGlide")
+    end,
+    glideSpeed = function(db, s)
+        Functions:ResolveGlidingInfo(s)
+        return rawget(s, "glideSpeed")
     end,
     dragonRacingFirstPerson = function(db)
         return Functions:ShouldUseDragonRacingFirstPerson(db) and true or false
@@ -1890,6 +1952,20 @@ local function BuildStatusSnapshot(db)
         groupInCombat = signals.groupInCombat,
         hasThreat = signals.hasThreat,
         isMounted = signals.isMounted,
+        isTravelForm = signals.isTravelForm,
+        travelActive = signals.travelActive,
+        inVehicle = signals.inVehicle,
+        onTaxi = signals.onTaxi,
+        isFlying = signals.isFlying,
+        isFalling = signals.isFalling,
+        isSwimming = signals.isSwimming,
+        isSubmerged = signals.isSubmerged,
+        isGliding = signals.isGliding,
+        canGlide = signals.canGlide,
+        glideSpeed = signals.glideSpeed,
+        isAFK = SafeBoolCall(UnitIsAFK, "player"),
+        isDead = SafeBoolCall(UnitIsDead, "player"),
+        isGhost = SafeBoolCall(UnitIsGhost, "player"),
         mountZoomActive = signals.mountZoomActive,
         mountZoomMode = signals.mountZoomMode,
         isFlyingMount = signals.isFlyingMount,
@@ -2048,8 +2124,12 @@ local function CanEnterAfkMode(db)
         return false, "on_taxi"
     end
 
-    if db.afkSkipMounted ~= false and SafeBoolCall(IsMounted) then
-        return false, "mounted"
+    if SafeBoolCall(_G.UnitInVehicle, "player") then
+        return false, "in_vehicle"
+    end
+
+    if db.afkSkipMounted ~= false and IsInTravelForm() then
+        return false, "travel_active"
     end
 
     if db.afkSkipFlying ~= false and SafeBoolCall(IsFlying) then
@@ -2942,8 +3022,25 @@ function Functions:PrintRuntimeStatus()
     self:SendMessage(" - target yards: " .. tostring(snapshot and snapshot.targetYards or "unknown"))
     self:SendMessage(" - pending return: " .. tostring(snapshot and snapshot.pendingReturnActive and "active" or "none") .. " remaining=" .. tostring(snapshot and snapshot.pendingReturnRemaining or 0))
     self:SendMessage(" - combat: player=" .. FormatBool(snapshot and snapshot.playerInCombat) .. " group=" .. FormatBool(snapshot and snapshot.groupInCombat) .. " threat=" .. FormatBool(snapshot and snapshot.hasThreat))
-    self:SendMessage(" - travel: mounted=" .. FormatBool(snapshot and snapshot.isMounted) .. " skyriding=" .. FormatBool(snapshot and snapshot.isSkyriding) .. " dragonFP=" .. FormatBool(snapshot and snapshot.dragonRacingFirstPerson))
-    self:SendMessage(" - afk=" .. FormatBool(snapshot and snapshot.afkActive) .. " shoulder=" .. FormatBool(snapshot and snapshot.actionCamShoulderActive) .. " dynamicPitch=" .. FormatBool(snapshot and snapshot.dynamicPitchActive))
+    self:SendMessage(" - travel: mounted=" .. FormatBool(snapshot and snapshot.isMounted)
+        .. " travelForm=" .. FormatBool(snapshot and snapshot.isTravelForm)
+        .. " active=" .. FormatBool(snapshot and snapshot.travelActive)
+        .. " flying=" .. FormatBool(snapshot and snapshot.isFlying)
+        .. " skyriding=" .. FormatBool(snapshot and snapshot.isSkyriding))
+    self:SendMessage(" - movement: gliding=" .. FormatBool(snapshot and snapshot.isGliding)
+        .. " canGlide=" .. FormatBool(snapshot and snapshot.canGlide)
+        .. " glideSpeed=" .. tostring(snapshot and snapshot.glideSpeed or "n/a")
+        .. " vehicle=" .. FormatBool(snapshot and snapshot.inVehicle)
+        .. " taxi=" .. FormatBool(snapshot and snapshot.onTaxi)
+        .. " falling=" .. FormatBool(snapshot and snapshot.isFalling)
+        .. " swimming=" .. FormatBool(snapshot and snapshot.isSwimming)
+        .. " submerged=" .. FormatBool(snapshot and snapshot.isSubmerged))
+    self:SendMessage(" - player: afkFlag=" .. FormatBool(snapshot and snapshot.isAFK)
+        .. " dead=" .. FormatBool(snapshot and snapshot.isDead)
+        .. " ghost=" .. FormatBool(snapshot and snapshot.isGhost)
+        .. " afkMode=" .. FormatBool(snapshot and snapshot.afkActive)
+        .. " shoulder=" .. FormatBool(snapshot and snapshot.actionCamShoulderActive)
+        .. " dynamicPitch=" .. FormatBool(snapshot and snapshot.dynamicPitchActive))
     self:SendMessage(" - CVars: cameraDistanceMaxZoomFactor=" .. FormatCVar("cameraDistanceMaxZoomFactor") .. ", cameraDistanceMax=" .. FormatCVar("cameraDistanceMax") .. ", cameraDistanceMoveSpeed=" .. FormatCVar("cameraDistanceMoveSpeed") .. ", cameraZoomSpeed=" .. FormatCVar("cameraZoomSpeed"))
     self:SendMessage(" - timing: manualWheelSpeed=" .. tostring(db.moveViewDistance or "unknown") .. ", zoomTransitionTime=" .. tostring(db.zoomTransitionTime or "unknown"))
     self:SendMessage(" - CVars: keepCentered=" .. FormatCVar("CameraKeepCharacterCentered") .. ", reduceUnexpectedMovement=" .. FormatCVar("cameraReduceUnexpectedMovement") .. ", shoulder=" .. FormatCVar("test_cameraOverShoulder") .. ", dynamicPitch=" .. FormatCVar("test_cameraDynamicPitch"))
@@ -3368,7 +3465,10 @@ function Functions:PrintGamePadStatus()
         return tostring(value)
     end
 
-    self:SendMessage(" - gamepad: active=" .. FormatBool(info.active)
+    self:SendMessage(" - gamepad: modeActive=" .. FormatBool(info.active)
+        .. " inputActive=" .. Show(info.inputActive)
+        .. " device=" .. Show(info.activeDeviceID)
+        .. " cvarsReady=" .. FormatBool(info.cvarEnumerationReady)
         .. " GamePadEnable=" .. Show(info.enableCVar)
         .. " managingSpeed=" .. FormatBool(info.managingSpeed)
         .. " relaxFaceMovement=" .. FormatBool(info.relaxFaceMovement)

@@ -24,6 +24,10 @@ stage() {
 }
 
 lua_syntax() {
+    if ! command -v luac5.1 >/dev/null 2>&1; then
+        echo "luac5.1 is required for the Lua 5.1 syntax gate" >&2
+        return 127
+    fi
     local rc=0
     while IFS= read -r -d '' f; do
         luac5.1 -p "$f" || rc=1
@@ -35,6 +39,10 @@ lua_syntax() {
 ALLOWED_GLOBALS="SLASH_MAXCAMDIST1"
 
 global_leaks() {
+    if ! command -v luac5.1 >/dev/null 2>&1; then
+        echo "luac5.1 is required for the Lua 5.1 global-leak audit" >&2
+        return 127
+    fi
     local rc=0
     while IFS= read -r -d '' f; do
         local leaked
@@ -53,6 +61,15 @@ global_leaks() {
         fi
     done < <(find . -name '*.lua' -not -path './libs/*' -not -path './tests/*' -print0)
     return $rc
+}
+
+
+lua51_probe() {
+    if ! command -v lua5.1 >/dev/null 2>&1; then
+        echo "lua5.1 is required for runtime regression probes" >&2
+        return 127
+    fi
+    lua5.1 "$@"
 }
 
 xml_wellformed() {
@@ -74,8 +91,8 @@ stage "Global leak audit"         global_leaks
 stage "XML well-formedness"       xml_wellformed
 stage "TOC files current"         python3 tools/generate_tocs.py --check
 stage "Manifest references"       python3 tools/verify_manifest.py --allow-missing-externals
-stage "Probe: late Ace3"          lua5.1 tests/probe_lateace3.lua
-stage "Probe: gamepad/shoulder"   lua5.1 tests/probe_gamepad.lua
+stage "Probe: late Ace3"          lua51_probe tests/probe_lateace3.lua
+stage "Probe: gamepad/shoulder"   lua51_probe tests/probe_gamepad.lua
 
 echo ""
 if [[ $failures -eq 0 ]]; then
