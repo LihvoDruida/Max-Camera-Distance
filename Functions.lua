@@ -857,6 +857,65 @@ local function UpdateCVar(key, value)
     end
 end
 
+-- ActionCam outputs are different from ordinary managed CVars: the player or a
+-- second camera addon may already have a shoulder/pitch value before MCD takes
+-- control. Capture that value once and let CVarGuard restore it when MCD stops
+-- managing the output, instead of assuming zero is always the correct teardown.
+-- These are methods rather than more top-level locals because Functions.lua is
+-- already close to Lua 5.1's 200-local limit for one chunk.
+function Functions:ArmExperimentalCameraWarningSuppression()
+    if not IS_FOREVER then return end
+
+    local now = (GetTime and GetTime()) or 0
+    self._experimentalCameraSuppressUntil = now + 0.35
+
+    if not self._experimentalCameraHookInstalled
+        and type(hooksecurefunc) == "function"
+        and type(_G.StaticPopup_Show) == "function" then
+        local ok = pcall(hooksecurefunc, "StaticPopup_Show", function(which)
+            if which ~= "EXPERIMENTAL_CVAR_WARNING" then return end
+            local deadline = Functions._experimentalCameraSuppressUntil or 0
+            local current = (GetTime and GetTime()) or 0
+            if current <= deadline and type(_G.StaticPopup_Hide) == "function" then
+                pcall(_G.StaticPopup_Hide, which)
+            end
+        end)
+        self._experimentalCameraHookInstalled = ok and true or false
+    end
+end
+
+function Functions:HideOwnExperimentalCameraWarning()
+    if not IS_FOREVER then return end
+    local deadline = self._experimentalCameraSuppressUntil or 0
+    local now = (GetTime and GetTime()) or 0
+    if now <= deadline and type(_G.StaticPopup_Hide) == "function" then
+        pcall(_G.StaticPopup_Hide, "EXPERIMENTAL_CVAR_WARNING")
+    end
+end
+
+function Functions:UpdateOwnedActionCamCVar(key, value)
+    self:ArmExperimentalCameraWarningSuppression()
+    local guard = ns.CVarGuard
+    if guard and guard.CaptureActionCamOutput then
+        guard:CaptureActionCamOutput(key)
+    end
+
+    UpdateCVar(key, value)
+    self:HideOwnExperimentalCameraWarning()
+
+    if guard and guard.RecordActionCamOutputWrite then
+        guard:RecordActionCamOutputWrite(key)
+    end
+end
+
+function Functions:RestoreOwnedActionCamCVar(key)
+    local guard = ns.CVarGuard
+    if guard and guard.RestoreActionCamOutput then
+        return guard:RestoreActionCamOutput(key)
+    end
+    return false
+end
+
 -- =====================================================================
 -- 7) MOUNT / TRAVEL DETECT
 -- =====================================================================
@@ -2411,8 +2470,7 @@ function Functions:ApplyShoulderOffset(force)
     if raceFirstPersonApplied or not shoulderHandlerFrame:IsShown() then
         shoulderHandlerFrame.lastZoom = -1
         shoulderHandlerFrame.lastOffset = nil
-        UpdateCVar("test_cameraOverShoulder", 0)
-        return true, true
+        return false, false
     end
 
     local offset, fadeStart, fadeEnd, smartFade, compensate = self:GetShoulderSettings(db)
@@ -2452,7 +2510,7 @@ function Functions:ApplyShoulderOffset(force)
     end
 
     shoulderHandlerFrame.lastOffset = target
-    UpdateCVar("test_cameraOverShoulder", target)
+    self:UpdateOwnedActionCamCVar("test_cameraOverShoulder", target)
     return true, true
 end
 
@@ -2591,10 +2649,14 @@ function Functions:UpdateActionCam()
     end
 
     local runtimeAllowed = self:IsForeverActionCamRuntimeAllowed()
-    local pitchWanted = runtimeAllowed and db.actionCamPitch and true or false
+    local shoulderManaged = runtimeAllowed
+        and (db.actionCamShoulderInCombat or db.actionCamShoulderOutOfCombat)
+        and true or false
+    local pitchManaged = runtimeAllowed and db.actionCamPitch and true or false
+    local pitchWanted = pitchManaged
 
     local dragonRaceFirstPerson = runtimeAllowed and self:ShouldUseDragonRacingFirstPerson(db) or false
-    local shoulderWanted = runtimeAllowed
+    local shoulderWanted = shoulderManaged
         and (not dragonRaceFirstPerson)
         and self:ShouldEnableShoulderNow()
         or false
@@ -2650,10 +2712,14 @@ function Functions:UpdateActionCam()
     -- intent published so the guard can retry after combat, but do not repeatedly
     -- hammer ActionCam CVars that the client is currently suppressing.
     local pitchApplied = pitchWanted and blockersReady
-    UpdateCVar("test_cameraDynamicPitch", pitchApplied and 1 or 0)
+    if pitchManaged then
+        self:UpdateOwnedActionCamCVar("test_cameraDynamicPitch", pitchApplied and 1 or 0)
+    else
+        self:RestoreOwnedActionCamCVar("test_cameraDynamicPitch")
+    end
 
     local shoulderApplied = shoulderWanted and blockersReady
-    if dragonRaceFirstPerson then
+    if shoulderManaged and dragonRaceFirstPerson then
         if not raceFirstPersonApplied then
             raceFirstPersonApplied = true
         end
@@ -2662,14 +2728,14 @@ function Functions:UpdateActionCam()
         shoulderHandlerFrame:ResetPolling()
         shoulderHandlerFrame.lastZoom = -1
         shoulderHandlerFrame.lastOffset = nil
-        UpdateCVar("test_cameraOverShoulder", 0)
+        self:UpdateOwnedActionCamCVar("test_cameraOverShoulder", 0)
     else
         if raceFirstPersonApplied then
             raceFirstPersonApplied = false
             self:ScheduleStabilizedUpdate({ 0, 0.05, 0.20 }, true)
         end
 
-        if shoulderApplied then
+        if shoulderManaged and shoulderApplied then
             shoulderHandlerFrame:Show()
             shoulderHandlerFrame:ResetPolling()
             self:ApplyShoulderOffset(true)
@@ -2678,7 +2744,11 @@ function Functions:UpdateActionCam()
             shoulderHandlerFrame:ResetPolling()
             shoulderHandlerFrame.lastZoom = -1
             shoulderHandlerFrame.lastOffset = nil
-            UpdateCVar("test_cameraOverShoulder", 0)
+            if shoulderManaged then
+                self:UpdateOwnedActionCamCVar("test_cameraOverShoulder", 0)
+            else
+                self:RestoreOwnedActionCamCVar("test_cameraOverShoulder")
+            end
         end
     end
 
@@ -2706,6 +2776,85 @@ function Functions:UpdateActionCam()
             pcall(ns.GamePad.SetActionCamBlockerReason, ns.GamePad, nil)
         end
         RequestCVarGuardRefresh(false)
+    end
+end
+
+function Functions:ToggleActionCamShoulderForCurrentContext()
+    local db = DB()
+    if not db then return false end
+
+    local inCombat = SafeBoolCall(UnitAffectingCombat, "player")
+    local key = inCombat and "actionCamShoulderInCombat" or "actionCamShoulderOutOfCombat"
+    db[key] = not db[key]
+    self:UpdateActionCam()
+    NotifyConfigChanged()
+    return db[key]
+end
+
+function Functions:SwapActionCamShoulder()
+    local db = DB()
+    if not db then return nil end
+
+    local offset = ClampNumber(db.actionCamShoulderOffset, SHOULDER.OFFSET_MIN, SHOULDER.OFFSET_MAX)
+        or SHOULDER.OFFSET_DEFAULT
+    if math_abs(offset) < SHOULDER.OFFSET_EPSILON then
+        offset = SHOULDER.OFFSET_DEFAULT
+    else
+        offset = -offset
+    end
+    db.actionCamShoulderOffset = offset
+    self:UpdateActionCam()
+    NotifyConfigChanged()
+    return offset
+end
+
+function Functions:CenterActionCamShoulder()
+    local db = DB()
+    if not db then return false end
+    db.actionCamShoulderOffset = 0
+    self:UpdateActionCam()
+    NotifyConfigChanged()
+    return true
+end
+
+function Functions:OpenActionCamSettings()
+    if IS_FOREVER and ns.Config and ns.Config.OpenGamePadPanel then
+        ns.Config:OpenGamePadPanel()
+        return true
+    end
+    if ns.Config and ns.Config.Open then
+        ns.Config:Open()
+        return true
+    end
+    return false
+end
+
+function Functions:PrepareForLogout()
+    -- Temporary ActionCam values should never become the next session's client
+    -- defaults simply because the player logged out while the feature was on.
+    -- Keep the profile preference, release only the runtime ownership. The next
+    -- login/world-entry pass will re-apply it after the camera is initialized.
+    shoulderHandlerFrame:Hide()
+    shoulderHandlerFrame:ResetPolling()
+    shoulderHandlerFrame.lastZoom = -1
+    shoulderHandlerFrame.lastOffset = nil
+    raceFirstPersonApplied = false
+
+    local guard = ns.CVarGuard
+    if guard and guard.SetActionCamIntent then
+        guard:SetActionCamIntent(false, false)
+    end
+    if guard and guard.RestoreActionCamOutputs then
+        guard:RestoreActionCamOutputs()
+    end
+    if guard and guard.Refresh then
+        guard:Refresh(true)
+    end
+
+    if ns.GamePad and ns.GamePad.RestoreFaceMovementDefaults then
+        pcall(ns.GamePad.RestoreFaceMovementDefaults, ns.GamePad)
+    elseif ns.GamePad and ns.GamePad.RefreshFaceMovement then
+        pcall(ns.GamePad.RefreshFaceMovement, ns.GamePad)
     end
 end
 
@@ -3499,6 +3648,10 @@ function Functions:OnCVarUpdate(_, cvarName, value)
         end
         return
     elseif cvarName == "test_cameraDynamicPitch" or cvarName == "test_cameraOverShoulder" then
+        local guard = ns.CVarGuard
+        if guard and guard.OnExternalCVarSet then
+            guard:OnExternalCVarSet(cvarName, value)
+        end
         Functions:UpdateActionCam()
         return
     end
@@ -3660,7 +3813,7 @@ function Functions:SlashCmdHandler(msg)
     local db = ns.Database.db.profile
 
     if command == "" or command == "help" then
-        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | gamepad [cvars] | deps | fastzoom | slowzoom | reset | debug on | debug off")
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | shoulder [toggle|swap|center] | status | gamepad [cvars] | deps | fastzoom | slowzoom | reset | debug on | debug off")
 
     elseif command == "config" then
         if ns.Config and ns.Config.Open then
@@ -3685,6 +3838,22 @@ function Functions:SlashCmdHandler(msg)
         Functions:AdjustCamera(true)
         local state = db.autoMountZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
         Functions:SendMessage("Auto Mount Zoom: " .. state)
+
+    elseif command == "shoulder" or command == "actioncam" then
+        if arg == "toggle" or arg == "" then
+            local enabled = Functions:ToggleActionCamShoulderForCurrentContext()
+            Functions:SendMessage("ActionCam shoulder (current context): " .. (enabled and (L["ENABLED"] or "enabled") or (L["DISABLED"] or "disabled")))
+        elseif arg == "swap" then
+            local offset = Functions:SwapActionCamShoulder()
+            Functions:SendMessage(string.format("ActionCam shoulder offset: %.2f", tonumber(offset) or 0))
+        elseif arg == "center" then
+            Functions:CenterActionCamShoulder()
+            Functions:SendMessage("ActionCam shoulder offset: 0")
+        elseif arg == "config" then
+            Functions:OpenActionCamSettings()
+        else
+            Functions:SendMessage("Usage: /mcd shoulder toggle | swap | center | config")
+        end
 
     elseif command == "status" then
         Functions:PrintRuntimeStatus()

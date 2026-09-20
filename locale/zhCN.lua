@@ -487,3 +487,13 @@ L["GAMEPAD_ADVANCED_OVERRIDE_DESC"] = "API-only values start from the client's b
 L["GAMEPAD_ACTIONCAM_COMPAT_HEADER"] = "Gamepad Compatibility"
 
 L["GAMEPAD_ACTIONCAM_COMPAT_DESC"] = "Applied only while Action Camera requests the over-shoulder camera."
+
+L["ACTION_CAM_SHOULDER_SWAP"] = "切换肩侧"
+L["ACTION_CAM_SHOULDER_SWAP_DESC"] = "将当前肩部镜头偏移镜像到另一侧。"
+L["ACTION_CAM_SHOULDER_CENTER"] = "居中"
+L["ACTION_CAM_SHOULDER_CENTER_DESC"] = "将肩部镜头偏移设为零，而不关闭 ActionCam。"
+L["BINDING_HEADER_MAXCAMDISTANCE"] = "Max Camera Distance"
+L["BINDING_TOGGLE_SHOULDER"] = "切换当前状态的肩部镜头"
+L["BINDING_SWAP_SHOULDER"] = "切换肩侧"
+L["BINDING_CENTER_SHOULDER"] = "居中肩部镜头"
+L["BINDING_OPEN_CAMERA_SETTINGS"] = "打开镜头设置"

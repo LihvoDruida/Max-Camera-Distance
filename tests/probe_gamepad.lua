@@ -89,7 +89,7 @@ _G.SlashCmdList = {}
 -- Camelot TOC supplies the marker below before Compat.lua classifies the client.
 _G.GetBuildInfo = function() return "1.60.1", "69913", "Sep 18 2026", 16001 end
 _G.C_AddOns = {
-    GetAddOnMetadata = function(_, key) return key == "Version" and "v10.8" or nil end,
+    GetAddOnMetadata = function(_, key) return key == "Version" and "v10.9" or nil end,
     IsAddOnLoaded = function() return false end,
 }
 _G.print = print
@@ -278,6 +278,18 @@ check("phase 0: Forever shoulder offset exposes the engine's full documented ran
         and padArgs.gamePadShoulderOffset.max == 15,
     padArgs and padArgs.gamePadShoulderOffset
         and (tostring(padArgs.gamePadShoulderOffset.min) .. "/" .. tostring(padArgs.gamePadShoulderOffset.max)) or "missing")
+check("phase 0: Forever shoulder controls include reset, swap and center actions",
+    padArgs and padArgs.gamePadShoulderOffsetReset
+        and padArgs.gamePadShoulderOffsetSwap
+        and padArgs.gamePadShoulderOffsetCenter)
+local bindingsFile = io.open("Bindings.xml", "r")
+local bindingsText = bindingsFile and bindingsFile:read("*a") or ""
+if bindingsFile then bindingsFile:close() end
+check("phase 0: static bindings expose shoulder toggle/swap/center/settings",
+    bindingsText:find("MAXCAMDIST_TOGGLE_SHOULDER", 1, true)
+        and bindingsText:find("MAXCAMDIST_SWAP_SHOULDER", 1, true)
+        and bindingsText:find("MAXCAMDIST_CENTER_SHOULDER", 1, true)
+        and bindingsText:find("MAXCAMDIST_OPEN_CAMERA_SETTINGS", 1, true))
 check("phase 0: gamepad speed multipliers start at client-default 1x",
     near(db.gamePadCameraYawMultiplier, 1.0) and near(db.gamePadCameraPitchMultiplier, 1.0),
     tostring(db.gamePadCameraYawMultiplier) .. "/" .. tostring(db.gamePadCameraPitchMultiplier))
@@ -940,6 +952,103 @@ Guard:Refresh(true)
 check("phase 15: user keep-centered preference survives the early event",
     cvars:Number("CameraKeepCharacterCentered") == 1,
     cvars:Get("CameraKeepCharacterCentered"))
+
+
+-- ------------------------ phase 16: ActionCam output ownership / restoration
+-- Simple shoulder-only addons commonly preserve the pre-existing experimental
+-- CVar values. MCD must do the same, otherwise disabling it destroys a shoulder
+-- or dynamic-pitch configuration that belonged to the player/another addon.
+cvars:Set("GamePadExperimentalUIEnable", 1)
+GamePad:Invalidate()
+db.actionCamShoulderInCombat = false
+db.actionCamShoulderOutOfCombat = false
+db.actionCamPitch = false
+Functions:UpdateActionCam()
+
+cvars:Set("test_cameraOverShoulder", 2.25)
+cvars:Set("test_cameraDynamicPitch", 1)
+cvars:Set("CameraKeepCharacterCentered", 1)
+cvars:Set("cameraReduceUnexpectedMovement", 1)
+db.actionCamShoulderInCombat = true
+db.actionCamShoulderOutOfCombat = true
+db.actionCamPitch = true
+db.actionCamShoulderSmartFade = false
+db.actionCamShoulderModelCompensation = false
+db.actionCamShoulderOffset = 1.0
+Functions:UpdateActionCam()
+local ownedOriginal = select(1, Guard:GetActionCamOutputOwnership("test_cameraOverShoulder"))
+check("phase 16: MCD captures the pre-existing shoulder CVar before taking ownership",
+    near(ownedOriginal, 2.25), tostring(ownedOriginal))
+check("phase 16: MCD applies its own shoulder while preserving that original",
+    near(cvars:Number("test_cameraOverShoulder"), 1.0),
+    tostring(cvars:Number("test_cameraOverShoulder")))
+
+-- Disable all MCD ActionCam outputs: the previous values and blocker settings
+-- must return instead of being hard-reset to zero.
+db.actionCamShoulderInCombat = false
+db.actionCamShoulderOutOfCombat = false
+db.actionCamPitch = false
+Functions:UpdateActionCam()
+check("phase 16: disabling MCD restores the previous shoulder value",
+    near(cvars:Number("test_cameraOverShoulder"), 2.25),
+    tostring(cvars:Number("test_cameraOverShoulder")))
+check("phase 16: disabling MCD restores the previous dynamic-pitch value",
+    near(cvars:Number("test_cameraDynamicPitch"), 1),
+    tostring(cvars:Number("test_cameraDynamicPitch")))
+check("phase 16: blocker CVars are restored even when the external shoulder remains active",
+    cvars:Number("CameraKeepCharacterCentered") == 1
+        and cvars:Number("cameraReduceUnexpectedMovement") == 1,
+    tostring(cvars:Number("CameraKeepCharacterCentered")) .. "/"
+        .. tostring(cvars:Number("cameraReduceUnexpectedMovement")))
+
+-- If somebody changes the shoulder while MCD owns it, that external request is
+-- the new restoration point. MCD may reassert its active view, but must hand the
+-- requested value back on disable.
+db.actionCamShoulderInCombat = true
+db.actionCamShoulderOutOfCombat = true
+Functions:UpdateActionCam()
+cvars:Set("test_cameraOverShoulder", -3.0)
+stub.Fire("CVAR_UPDATE", "test_cameraOverShoulder", "-3")
+check("phase 16: MCD reasserts its active shoulder after an external change",
+    near(cvars:Number("test_cameraOverShoulder"), 1.0),
+    tostring(cvars:Number("test_cameraOverShoulder")))
+db.actionCamShoulderInCombat = false
+db.actionCamShoulderOutOfCombat = false
+Functions:UpdateActionCam()
+check("phase 16: the latest external shoulder request is restored on release",
+    near(cvars:Number("test_cameraOverShoulder"), -3.0),
+    tostring(cvars:Number("test_cameraOverShoulder")))
+
+-- ----------------------------------------- phase 17: clean logout/reload handoff
+-- A normal logout/reload should not persist MCD's temporary blocker/output CVars
+-- as if they were the player's own client settings. The saved profile remains
+-- enabled and will be re-applied on the next world-entry pass.
+cvars:Set("test_cameraOverShoulder", 3.5)
+cvars:Set("test_cameraDynamicPitch", 0)
+cvars:Set("CameraKeepCharacterCentered", 1)
+cvars:Set("cameraReduceUnexpectedMovement", 1)
+db.actionCamShoulderInCombat = true
+db.actionCamShoulderOutOfCombat = true
+db.actionCamPitch = true
+Functions:UpdateActionCam()
+check("phase 17: setup actually owns temporary ActionCam state before logout",
+    near(cvars:Number("test_cameraOverShoulder"), 1.0)
+        and cvars:Number("CameraKeepCharacterCentered") == 0,
+    tostring(cvars:Number("test_cameraOverShoulder")) .. "/"
+        .. tostring(cvars:Number("CameraKeepCharacterCentered")))
+stub.Fire("PLAYER_LOGOUT")
+check("phase 17: logout restores pre-existing ActionCam outputs",
+    near(cvars:Number("test_cameraOverShoulder"), 3.5)
+        and near(cvars:Number("test_cameraDynamicPitch"), 0),
+    tostring(cvars:Number("test_cameraOverShoulder")) .. "/"
+        .. tostring(cvars:Number("test_cameraDynamicPitch")))
+check("phase 17: logout restores temporary blocker CVars",
+    cvars:Number("CameraKeepCharacterCentered") == 1
+        and cvars:Number("cameraReduceUnexpectedMovement") == 1,
+    tostring(cvars:Number("CameraKeepCharacterCentered")) .. "/"
+        .. tostring(cvars:Number("cameraReduceUnexpectedMovement")))
+check("phase 17: logout cleanup does not erase the saved ActionCam preference",
+    db.actionCamShoulderInCombat == true and db.actionCamShoulderOutOfCombat == true and db.actionCamPitch == true)
 
 print(failures == 0 and "PROBE PASSED" or ("PROBE FAILED (" .. failures .. ")"))
 os.exit(failures == 0 and 0 or 1)

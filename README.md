@@ -18,11 +18,13 @@ Unlike simple scripts, this addon features a **reactive engine** that adapts to 
 ### 🎬 Cinematic ActionCam (New!)
 Transform your WoW experience with modern RPG camera mechanics:
 * **Smart Shoulder Offset:** Moves the camera over your character's shoulder for an immersive view.
-    * *Adjustable Intensity:* Set exactly how far off-centre the camera sits (−5 to +5). Negative values move it to the other shoulder.
+    * *Adjustable Intensity:* Set exactly how far off-centre the camera sits (−15 to +15). Negative values move it to the other shoulder.
     * *Dynamic Interpolation:* Automatically centers the camera when you zoom in close (for looting/interacting) and shifts to the shoulder as you zoom out. Both edges of that window are configurable, and it can be switched off for a constant offset.
     * *Model Compensation:* Blizzard scales the offset by your model's width, so the same value looks different on a Tauren, a Gnome or a mount. Compensation is on by default and can be disabled to use the raw CVar value.
 * **Dynamic Pitch:** Subtly adjusts the camera angle based on your character's movement.
-* **Jitter Protection:** Automatically disables the conflicting *"Keep Character Centered"* setting to ensure smooth motion.
+* **Ownership-safe restore:** If a shoulder offset or Dynamic Pitch value already existed before MCD took control, it is restored when MCD releases that feature instead of being hard-reset to zero. Normal logout/reload also hands temporary ActionCam CVars back before the client exits.
+* **Swap / Center controls:** Flip the current offset to the opposite shoulder or centre it without disabling ActionCam.
+* **Jitter Protection:** Automatically disables the conflicting *"Keep Character Centered"* setting to ensure smooth motion, then restores the player's previous value when MCD no longer needs the exception.
 
 ### 🧠 Smart Zoom System
 The addon intelligently changes your camera distance based on priority:
@@ -53,6 +55,7 @@ Gamepad values are **default-first**: fresh profiles use the client's built-in C
 * **AFK Safe Exit on Controller:** any gamepad button exits cinematic AFK mode, not just keyboard ESC.
 * **ActionCam Compatibility:** the addon tracks ActionCam *intent* rather than reading the overridden shoulder CVar back. On Forever it clears `CameraKeepCharacterCentered` first and, for shoulder offset, `CameraReduceUnexpectedMovement` second; only after both blockers are confirmed clear does it apply Dynamic Pitch / `test_cameraOverShoulder`. The original motion-sickness values are restored when ActionCam no longer needs the exception.
 * **Full shoulder range:** Forever and the shared ActionCam engine expose the current `test_cameraOverShoulder` range from **-15 to +15**, with negative values moving the view to the opposite shoulder.
+* **Controller-bindable camera actions:** shoulder toggle, swap, center and camera settings are registered through WoW's normal `Bindings.xml`, so they can be assigned to keyboard/mouse or gamepad buttons without MCD installing override bindings.
 * **Controller-policy diagnostics:** `/mcd gamepad` reports `GamePadTurnWithCamera`, camera-look limits and gamepad follow timing so controller-specific snapping/follow behaviour can be diagnosed without automatically overriding player preferences.
 * **Face-Movement Conflict:** prefers `GamePadFaceMovementMaxAngle` / `GamePadFaceMovementMaxAngleCombat` when available, with the legacy binary CVar only as a capability-detected fallback.
 * **Stick Diagnostics:** warns when no stick is assigned to camera input, or when camera input collides with movement/cursor assignment.
@@ -72,6 +75,7 @@ Gamepad values are **default-first**: fresh profiles use the client's built-in C
 * `/mcd config` - Open the configuration panel (GUI).
 * `/mcd autozoom` - Toggle Smart Combat Zoom.
 * `/mcd automount` - Toggle Smart Mount Zoom.
+* `/mcd shoulder toggle|swap|center|config` - Control ActionCam shoulder behaviour or open its settings.
 * `/mcd status` - Print full runtime diagnostics.
 * `/mcd gamepad` - Print gamepad state, stick assignment and camera speeds.
 

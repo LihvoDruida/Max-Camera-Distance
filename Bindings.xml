@@ -1,0 +1,14 @@
+<Bindings>
+    <Binding name="MAXCAMDIST_TOGGLE_SHOULDER" header="MAXCAMDISTANCE">
+        if SlashCmdList and SlashCmdList.MAXCAMDIST then SlashCmdList.MAXCAMDIST("shoulder toggle") end
+    </Binding>
+    <Binding name="MAXCAMDIST_SWAP_SHOULDER">
+        if SlashCmdList and SlashCmdList.MAXCAMDIST then SlashCmdList.MAXCAMDIST("shoulder swap") end
+    </Binding>
+    <Binding name="MAXCAMDIST_CENTER_SHOULDER">
+        if SlashCmdList and SlashCmdList.MAXCAMDIST then SlashCmdList.MAXCAMDIST("shoulder center") end
+    </Binding>
+    <Binding name="MAXCAMDIST_OPEN_CAMERA_SETTINGS">
+        if SlashCmdList and SlashCmdList.MAXCAMDIST then SlashCmdList.MAXCAMDIST("shoulder config") end
+    </Binding>
+</Bindings>

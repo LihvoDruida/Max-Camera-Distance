@@ -9,6 +9,7 @@ local tostring = tostring
 local pcall = pcall
 local select = select
 local hooksecurefunc = hooksecurefunc
+local math_abs = math.abs
 
 local Compat = ns.Compat or {}
 local C_CVar = C_CVar
@@ -37,6 +38,18 @@ local REDUCE_UNEXPECTED_MOVEMENT_CVARS = {
 local savedUserValues = {
     CameraKeepCharacterCentered = nil,
     cameraReduceUnexpectedMovement = nil,
+}
+
+-- ActionCam output ownership. Unlike the blocker CVars above, these are the
+-- experimental camera values MCD itself drives. A player or another camera
+-- addon may already have configured them before MCD starts, so remember the
+-- pre-existing value and restore it when MCD stops managing that output.
+-- lastApplied lets us restore only values we still own; if somebody else
+-- changes the CVar while MCD is active, that new external value becomes the
+-- restoration point instead of being silently overwritten on teardown.
+local actionCamOutputs = {
+    test_cameraOverShoulder = { original = nil, lastApplied = nil },
+    test_cameraDynamicPitch = { original = nil, lastApplied = nil },
 }
 
 -- Cache of current guard state to avoid repeated force/restore work.
@@ -100,6 +113,15 @@ local function SafeSetCVar(name, value)
         return Compat.SafeSetCVar(name, value)
     end
     return false
+end
+
+local function SameCVarValue(a, b)
+    if a == nil or b == nil then return a == b end
+    local x, y = tonumber(a), tonumber(b)
+    if x and y then
+        return math_abs(x - y) < 0.0001
+    end
+    return tostring(a) == tostring(b)
 end
 
 local function SetManagedCVar(name, value)
@@ -199,18 +221,6 @@ end
 local shoulderIntent = false
 local dynamicPitchIntent = false
 
-local function IsShoulderActive()
-    if shoulderIntent then return true end
-    local v = SafeGetCVar("test_cameraOverShoulder")
-    return v ~= nil and (v > 0.0001 or v < -0.0001)
-end
-
-local function IsDynamicPitchActive()
-    if dynamicPitchIntent then return true end
-    local v = SafeGetCVar("test_cameraDynamicPitch")
-    return v ~= nil and v == 1
-end
-
 -- Returns true when the value actually changed, so callers can skip a refresh.
 function CVarGuard:SetActionCamIntent(shoulderWanted, pitchWanted)
     local newShoulder = shoulderWanted and true or false
@@ -227,6 +237,77 @@ end
 
 function CVarGuard:GetActionCamIntent()
     return shoulderIntent, dynamicPitchIntent
+end
+
+function CVarGuard:CaptureActionCamOutput(name)
+    name = NormalizeCVarName(name)
+    local state = actionCamOutputs[name]
+    if not state then return false end
+    if state.original ~= nil then return true end
+
+    local current = SafeGetCVar(name)
+    if current == nil then return false end
+
+    state.original = current
+    state.lastApplied = nil
+    return true
+end
+
+function CVarGuard:RecordActionCamOutputWrite(name)
+    name = NormalizeCVarName(name)
+    local state = actionCamOutputs[name]
+    if not state or state.original == nil then return false end
+
+    local current = SafeGetCVar(name)
+    if current == nil then return false end
+    state.lastApplied = current
+    return true
+end
+
+function CVarGuard:RestoreActionCamOutput(name)
+    name = NormalizeCVarName(name)
+    local state = actionCamOutputs[name]
+    if not state or state.original == nil then return true end
+
+    local current = SafeGetCVar(name)
+    if current == nil then return false end
+
+    -- If the live value no longer matches our last write, another owner changed
+    -- it after us. Preserve that value instead of restoring over it.
+    if state.lastApplied ~= nil and not SameCVarValue(current, state.lastApplied) then
+        state.original = nil
+        state.lastApplied = nil
+        return true
+    end
+
+    local original = state.original
+    if SameCVarValue(current, original) then
+        state.original = nil
+        state.lastApplied = nil
+        return true
+    end
+
+    local changed = SetManagedCVar(name, original)
+    if changed or SameCVarValue(SafeGetCVar(name), original) then
+        state.original = nil
+        state.lastApplied = nil
+        return true
+    end
+
+    return false
+end
+
+function CVarGuard:RestoreActionCamOutputs()
+    local shoulderOK = self:RestoreActionCamOutput("test_cameraOverShoulder")
+    local pitchOK = self:RestoreActionCamOutput("test_cameraDynamicPitch")
+    return shoulderOK and pitchOK
+end
+
+function CVarGuard:GetActionCamOutputOwnership(name)
+    name = NormalizeCVarName(name)
+    local state = actionCamOutputs[name]
+    if not state then return nil end
+    return state.original, state.lastApplied
 end
 
 -- Read-only readiness check used by Functions:UpdateActionCam after a forced
@@ -268,11 +349,14 @@ local function IsValidCameraView(value)
 end
 
 function CVarGuard:ShouldBlockKeepCentered()
-    return IsShoulderActive() or IsDynamicPitchActive()
+    -- Only MCD's published intent may claim these blocker CVars. Looking at a
+    -- live shoulder/pitch CVar here would make MCD keep changing Blizzard
+    -- settings even after another addon/user regains ownership of ActionCam.
+    return shoulderIntent or dynamicPitchIntent
 end
 
 function CVarGuard:ShouldBlockReduceUnexpectedMovement()
-    return IsShoulderActive()
+    return shoulderIntent
 end
 
 function CVarGuard:CaptureUserValue(name)
@@ -507,7 +591,17 @@ function CVarGuard:OnExternalCVarSet(cvar, value)
     end
 
     if cvar == "test_cameraOverShoulder" or cvar == "test_cameraDynamicPitch" then
-        self:Refresh(true)
+        local state = actionCamOutputs[cvar]
+        if state and state.original ~= nil then
+            -- Deferred CVAR_UPDATE can arrive after our internal-write scope has
+            -- ended. If it simply echoes the value we last applied, it is still
+            -- ours. Any different external request becomes the value to restore
+            -- when MCD releases this ActionCam output.
+            if state.lastApplied == nil or not SameCVarValue(value, state.lastApplied) then
+                state.original = tonumber(value) or value
+            end
+        end
+        return
     end
 end
 

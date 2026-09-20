@@ -19,6 +19,14 @@ local L = setmetatable({}, {
     end,
 })
 
+-- Static Bindings.xml labels. Using _G[...] keeps the intentional binding
+-- globals explicit without introducing accidental Lua globals in this file.
+_G["BINDING_HEADER_MAXCAMDISTANCE"] = L["BINDING_HEADER_MAXCAMDISTANCE"] or "Max Camera Distance"
+_G["BINDING_NAME_MAXCAMDIST_TOGGLE_SHOULDER"] = L["BINDING_TOGGLE_SHOULDER"] or "Toggle shoulder camera (current context)"
+_G["BINDING_NAME_MAXCAMDIST_SWAP_SHOULDER"] = L["BINDING_SWAP_SHOULDER"] or "Swap shoulder side"
+_G["BINDING_NAME_MAXCAMDIST_CENTER_SHOULDER"] = L["BINDING_CENTER_SHOULDER"] or "Center shoulder camera"
+_G["BINDING_NAME_MAXCAMDIST_OPEN_CAMERA_SETTINGS"] = L["BINDING_OPEN_CAMERA_SETTINGS"] or "Open camera settings"
+
 local USES_MODERN_API = Compat.USES_MODERN_API and true or false
 
 -- Cached globals
@@ -451,6 +459,12 @@ eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
     end
 
     RefreshAfkRelevantState()
+end
+
+eventHandlers.PLAYER_LOGOUT = function()
+    if ns.Functions and ns.Functions.PrepareForLogout then
+        SafeCall(ns.Functions.PrepareForLogout, "PrepareForLogout", ns.Functions)
+    end
 end
 
 eventHandlers.PLAYER_REGEN_DISABLED = function(event)

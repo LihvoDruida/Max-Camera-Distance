@@ -1757,7 +1757,7 @@ function Config:SetupOptions()
                         get = function() return tonumber(GetOption("actionCamShoulderOffset")) or 1.0 end,
                         set = function(_, val) SetOption("actionCamShoulderOffset", tonumber(val) or 1.0) end,
                         order = 5.1,
-                        width = 1.6,
+                        width = "full",
                     },
                     shoulderOffsetReset = {
                         type = "execute",
@@ -1766,7 +1766,33 @@ function Config:SetupOptions()
                         hidden = function() return IS_FOREVER or not HasCVar("test_cameraOverShoulder") end,
                         func = function() SetOption("actionCamShoulderOffset", 1.0) end,
                         order = 5.15,
-                        width = 0.6,
+                        width = 0.8,
+                    },
+                    shoulderOffsetSwap = {
+                        type = "execute",
+                        name = L["ACTION_CAM_SHOULDER_SWAP"] or "Swap Shoulder",
+                        desc = L["ACTION_CAM_SHOULDER_SWAP_DESC"] or "Mirror the current shoulder offset to the opposite side.",
+                        hidden = function() return IS_FOREVER or not HasCVar("test_cameraOverShoulder") end,
+                        func = function()
+                            if ns.Functions and ns.Functions.SwapActionCamShoulder then
+                                ns.Functions:SwapActionCamShoulder()
+                            end
+                        end,
+                        order = 5.16,
+                        width = 1.0,
+                    },
+                    shoulderOffsetCenter = {
+                        type = "execute",
+                        name = L["ACTION_CAM_SHOULDER_CENTER"] or "Center",
+                        desc = L["ACTION_CAM_SHOULDER_CENTER_DESC"] or "Set the shoulder offset to zero without disabling ActionCam.",
+                        hidden = function() return IS_FOREVER or not HasCVar("test_cameraOverShoulder") end,
+                        func = function()
+                            if ns.Functions and ns.Functions.CenterActionCamShoulder then
+                                ns.Functions:CenterActionCamShoulder()
+                            end
+                        end,
+                        order = 5.17,
+                        width = 0.8,
                     },
                     shoulderModelCompensation = {
                         type = "toggle",
@@ -2002,7 +2028,7 @@ function Config:SetupOptions()
                         get = function() return tonumber(GetOption("actionCamShoulderOffset")) or 1.0 end,
                         set = function(_, val) SetOption("actionCamShoulderOffset", tonumber(val) or 1.0) end,
                         order = 5,
-                        width = 2.0,
+                        width = "full",
                     },
                     gamePadShoulderOffsetReset = {
                         type = "execute",
@@ -2012,7 +2038,35 @@ function Config:SetupOptions()
                         disabled = GamePadActionCamDisabled,
                         func = function() SetOption("actionCamShoulderOffset", 1.0) end,
                         order = 5.1,
-                        width = 0.7,
+                        width = 0.8,
+                    },
+                    gamePadShoulderOffsetSwap = {
+                        type = "execute",
+                        name = L["ACTION_CAM_SHOULDER_SWAP"] or "Swap Shoulder",
+                        desc = L["ACTION_CAM_SHOULDER_SWAP_DESC"] or "Mirror the current shoulder offset to the opposite side.",
+                        hidden = function() return not HasCVar("test_cameraOverShoulder") end,
+                        disabled = GamePadActionCamDisabled,
+                        func = function()
+                            if ns.Functions and ns.Functions.SwapActionCamShoulder then
+                                ns.Functions:SwapActionCamShoulder()
+                            end
+                        end,
+                        order = 5.11,
+                        width = 1.0,
+                    },
+                    gamePadShoulderOffsetCenter = {
+                        type = "execute",
+                        name = L["ACTION_CAM_SHOULDER_CENTER"] or "Center",
+                        desc = L["ACTION_CAM_SHOULDER_CENTER_DESC"] or "Set the shoulder offset to zero without disabling ActionCam.",
+                        hidden = function() return not HasCVar("test_cameraOverShoulder") end,
+                        disabled = GamePadActionCamDisabled,
+                        func = function()
+                            if ns.Functions and ns.Functions.CenterActionCamShoulder then
+                                ns.Functions:CenterActionCamShoulder()
+                            end
+                        end,
+                        order = 5.12,
+                        width = 0.8,
                     },
                     gamePadShoulderModelCompensation = {
                         type = "toggle",

@@ -1,5 +1,26 @@
 # Max Camera Distance — Changelog
 
+## v10.9 — ActionCam ownership, clean restore, and controller bindings
+
+### ActionCam ownership / Forever reliability
+
+- Added explicit ownership tracking for `test_cameraOverShoulder` and `test_cameraDynamicPitch`. MCD now captures the value that existed before it took control and restores that value when the corresponding ActionCam feature is released instead of assuming `0` is always the correct teardown state.
+- External shoulder/pitch changes made while MCD owns the camera become the new restoration target. MCD may reassert its active view while enabled, but it hands the player's/latest external value back when disabled.
+- Changed blocker ownership to follow only MCD's published ActionCam intent. A pre-existing shoulder value from the player or another addon no longer makes MCD keep `CameraKeepCharacterCentered` / `CameraReduceUnexpectedMovement` forced off after MCD itself has released ActionCam.
+- Added `PLAYER_LOGOUT` cleanup for temporary ActionCam state. Normal logout/reload restores owned shoulder/pitch values and temporary Blizzard blocker values while preserving the saved MCD profile so the configured camera is reapplied on the next world entry.
+- Added narrowly-scoped Forever suppression for the experimental-camera popup only around MCD's own ActionCam CVar writes. Unlike broad UI event unregistration, this does not permanently disable Blizzard's experimental-CVar warning path.
+
+### Shoulder controls / gamepad usability
+
+- Added **Swap Shoulder** and **Center** actions beside the shoulder offset control on both the Forever Gamepad ActionCam section and the normal Retail/Classic ActionCam section.
+- Added `Bindings.xml` entries for toggling the shoulder camera in the current combat context, swapping shoulder side, centering the shoulder camera, and opening camera settings. Blizzard loads this file automatically, so these actions can be assigned through the normal Key Bindings UI, including gamepad buttons where supported.
+- Added `/mcd shoulder toggle|swap|center|config` (also available as `/mcd actioncam ...`) as the binding-safe command surface. The toggle changes only the current combat/out-of-combat shoulder state so a split profile is not destroyed.
+- Kept the full `-15 .. +15` shoulder range, Smart Fade and model compensation; the simpler Forever shoulder addon used for comparison does not replace these stronger MCD features.
+
+### Regression
+
+- Added regression coverage for preserving a pre-existing shoulder/pitch setup, updating the restoration target after an external ActionCam change, restoring blocker CVars even when an external shoulder remains active, and cleaning temporary ActionCam state on logout without clearing profile preferences.
+
 ## v10.8 — Forever ActionCam/gamepad compatibility fix
 
 ### Forever ActionCam

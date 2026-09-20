@@ -441,3 +441,13 @@ L["GAMEPAD_ADVANCED_OVERRIDE_DESC"] = "API-only values start from the client's b
 L["GAMEPAD_ACTIONCAM_COMPAT_HEADER"] = "Gamepad Compatibility"
 
 L["GAMEPAD_ACTIONCAM_COMPAT_DESC"] = "Applied only while Action Camera requests the over-shoulder camera."
+
+L["ACTION_CAM_SHOULDER_SWAP"] = "Changer d'épaule"
+L["ACTION_CAM_SHOULDER_SWAP_DESC"] = "Inverse le décalage actuel de la caméra vers l'autre épaule."
+L["ACTION_CAM_SHOULDER_CENTER"] = "Centrer"
+L["ACTION_CAM_SHOULDER_CENTER_DESC"] = "Met le décalage d'épaule à zéro sans désactiver ActionCam."
+L["BINDING_HEADER_MAXCAMDISTANCE"] = "Max Camera Distance"
+L["BINDING_TOGGLE_SHOULDER"] = "Basculer la caméra d'épaule pour l'état actuel"
+L["BINDING_SWAP_SHOULDER"] = "Changer de côté d'épaule"
+L["BINDING_CENTER_SHOULDER"] = "Centrer la caméra d'épaule"
+L["BINDING_OPEN_CAMERA_SETTINGS"] = "Ouvrir les réglages de caméra"

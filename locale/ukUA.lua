@@ -562,3 +562,14 @@ end
 L["GAMEPAD_ACTIONCAM_COMPAT_HEADER"] = "Сумісність із геймпадом"
 
 L["GAMEPAD_ACTIONCAM_COMPAT_DESC"] = "На деяких конфігураціях рух персонажа з геймпада може конфліктувати з плечовою камерою. Ця сумісність застосовується лише тоді, коли Action Camera справді потребує плечового зсуву."
+
+-- ActionCam ownership / controller bindings
+L["ACTION_CAM_SHOULDER_SWAP"] = "Змінити плече"
+L["ACTION_CAM_SHOULDER_SWAP_DESC"] = "Дзеркально перенести поточний зсув камери на інше плече."
+L["ACTION_CAM_SHOULDER_CENTER"] = "По центру"
+L["ACTION_CAM_SHOULDER_CENTER_DESC"] = "Встановити зсув камери в нуль, не вимикаючи ActionCam."
+L["BINDING_HEADER_MAXCAMDISTANCE"] = "Max Camera Distance"
+L["BINDING_TOGGLE_SHOULDER"] = "Перемкнути камеру через плече для поточного стану"
+L["BINDING_SWAP_SHOULDER"] = "Змінити сторону плеча"
+L["BINDING_CENTER_SHOULDER"] = "Центрувати камеру через плече"
+L["BINDING_OPEN_CAMERA_SETTINGS"] = "Відкрити налаштування камери"

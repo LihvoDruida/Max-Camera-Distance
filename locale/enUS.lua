@@ -530,3 +530,14 @@ end
 L["GAMEPAD_ACTIONCAM_COMPAT_HEADER"] = "Gamepad Compatibility"
 
 L["GAMEPAD_ACTIONCAM_COMPAT_DESC"] = "Controller movement can fight an over-shoulder camera on some configurations. This compatibility option is applied only while Action Camera actually wants the shoulder offset."
+
+-- ActionCam ownership / controller bindings
+L["ACTION_CAM_SHOULDER_SWAP"] = "Swap Shoulder"
+L["ACTION_CAM_SHOULDER_SWAP_DESC"] = "Mirror the current shoulder offset to the opposite side."
+L["ACTION_CAM_SHOULDER_CENTER"] = "Center"
+L["ACTION_CAM_SHOULDER_CENTER_DESC"] = "Set the shoulder offset to zero without disabling ActionCam."
+L["BINDING_HEADER_MAXCAMDISTANCE"] = "Max Camera Distance"
+L["BINDING_TOGGLE_SHOULDER"] = "Toggle shoulder camera (current context)"
+L["BINDING_SWAP_SHOULDER"] = "Swap shoulder side"
+L["BINDING_CENTER_SHOULDER"] = "Center shoulder camera"
+L["BINDING_OPEN_CAMERA_SETTINGS"] = "Open camera settings"
