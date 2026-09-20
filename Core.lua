@@ -307,7 +307,7 @@ local watchedCVars = {
 -- The gamepad module owns these; listing them here is what turns a change made
 -- in Blizzard's own gamepad panel into something the addon can react to.
 local gamePadWatchedLower = {}
-if ns.GamePad and ns.GamePad.WATCHED_CVARS then
+if ns.GamePad and ns.GamePad.IS_SUPPORTED_FLAVOR and ns.GamePad.WATCHED_CVARS then
     for _, name in ipairs(ns.GamePad.WATCHED_CVARS) do
         watchedCVars[name] = true
         gamePadWatchedLower[name:lower()] = true
@@ -562,9 +562,9 @@ eventHandlers.CVAR_UPDATE = function(event, cvarName, value)
 end
 
 -- GAME_PAD_ACTIVE_CHANGED / CONNECTED / DISCONNECTED / CONFIGS_CHANGED.
--- Registered from the module's own list so the set cannot drift between files;
--- SafeRegisterEvent quietly skips any of them on a client that has no gamepad
--- support at all.
+-- Registered from the module's own list so the set cannot drift between files,
+-- and only on the flavour the module supports (Forever). SafeRegisterEvent
+-- would also skip them on a client that has no gamepad support at all.
 local function OnGamePadEvent()
     if ns.GamePad and ns.GamePad.Refresh then
         SafeCall(ns.GamePad.Refresh, "GamePad.Refresh", ns.GamePad, true)
@@ -576,7 +576,7 @@ local function OnGamePadEvent()
     end
 end
 
-if ns.GamePad and ns.GamePad.EVENTS then
+if ns.GamePad and ns.GamePad.IS_SUPPORTED_FLAVOR and ns.GamePad.EVENTS then
     for _, eventName in ipairs(ns.GamePad.EVENTS) do
         eventHandlers[eventName] = OnGamePadEvent
     end

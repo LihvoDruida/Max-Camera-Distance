@@ -36,8 +36,9 @@ Turn your screen into a screensaver when you step away:
 * **Safe Exit (Anti-Trap):** Pressing **ESC** while the UI is hidden immediately restores the interface and exits AFK mode. No more getting stuck!
 * **Settings Protection:** Prevents the Settings Panel from becoming transparent during AFK.
 
-### 🎮 Gamepad Support
-Native controller support is handled separately from the mouse camera, because the game keeps them on different CVars:
+### 🎮 Gamepad Support *(WoW: Forever only)*
+Native controller support is handled separately from the mouse camera, because the game keeps them on different CVars. It is scoped to Forever on purpose — the CVars exist elsewhere, but the behaviour has only been verified against that client:
+* **Guided Setup:** The first time a gamepad becomes active, the addon opens its settings on a dedicated **Gamepad** tab, so the controller-specific camera options are not left to be discovered. Never in combat, once per character, and switchable off.
 * **Gamepad Camera Speed:** `GamePadCameraYawSpeed` / `GamePadCameraPitchSpeed` are managed as a multiplier of the client's own default. The addon's mouse-camera sliders have never affected these — that is why they seemed to do nothing with a controller. Off by default.
 * **ActionCam Compatibility:** `CameraKeepCharacterCentered` overrides ActionCam outright, and enabling the gamepad is a common way to end up with it switched on. The addon now tracks its own intent rather than reading the shoulder CVar back, so the shoulder camera can no longer get permanently stuck off.
 * **Face-Movement Conflict:** `GamePadFaceMovement` fights the over-shoulder offset. It can optionally be suspended while the shoulder camera is active and is restored afterwards. Off by default.

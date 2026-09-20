@@ -3332,7 +3332,11 @@ function Functions:PrintGamePadStatus()
 
     local info = gamePad:GetDiagnostics()
     if not info.supported then
-        self:SendMessage(" - gamepad: not supported on this client")
+        if gamePad.IS_SUPPORTED_FLAVOR == false then
+            self:SendMessage(" - gamepad: handled on WoW: Forever only (client is " .. tostring(Compat.CLIENT_TAG or "unknown") .. ")")
+        else
+            self:SendMessage(" - gamepad: not supported on this client")
+        end
         return
     end
 
@@ -3344,7 +3348,9 @@ function Functions:PrintGamePadStatus()
     self:SendMessage(" - gamepad: active=" .. FormatBool(info.active)
         .. " GamePadEnable=" .. Show(info.enableCVar)
         .. " managingSpeed=" .. FormatBool(info.managingSpeed)
-        .. " relaxFaceMovement=" .. FormatBool(info.relaxFaceMovement))
+        .. " relaxFaceMovement=" .. FormatBool(info.relaxFaceMovement)
+        .. " autoOpenPanel=" .. FormatBool(info.autoOpenPanel)
+        .. " panelShown=" .. FormatBool(info.panelShown))
     self:SendMessage(" - gamepad sticks: camera=" .. Show(info.cameraStick)
         .. " move=" .. Show(info.moveStick)
         .. " cursor=" .. Show(info.cursorStick)

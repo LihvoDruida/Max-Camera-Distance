@@ -501,6 +501,12 @@ L["GAMEPAD_FACE_MOVEMENT_NAME"] = "Disable Face-Movement with Shoulder Cam"
 L["GAMEPAD_FACE_MOVEMENT_DESC"] = "GamePadFaceMovement turns your character to face the stick direction, which fights the over-the-shoulder offset. Turn this on to suspend it while the shoulder camera is active; your original value is restored as soon as the shoulder camera turns off."
 L["GAMEPAD_WARN_NO_CAMERA_STICK"] = "|cffff5555No stick is assigned to the gamepad camera (GamePadCameraStick is 0), so the client is sending no camera input at all. Assign one in Options > Gamepad.|r"
 L["GAMEPAD_WARN_STICK_COLLISION"] = "|cffffcc00The gamepad camera shares a physical stick with movement or the cursor. Camera input will feel unresponsive until they are separated.|r"
+L["GAMEPAD_SPEED_HEADER"] = "Camera Speed"
+L["GAMEPAD_ACTIONCAM_HEADER"] = "ActionCam Compatibility"
+L["GAMEPAD_ACTIONCAM_DESC"] = "The over-shoulder camera itself is configured under Extra Features. These settings only cover the parts of it that conflict with gamepad input."
+L["GAMEPAD_PANEL_HEADER"] = "This Panel"
+L["GAMEPAD_AUTO_OPEN_NAME"] = "Open This Panel When a Gamepad Is Enabled"
+L["GAMEPAD_AUTO_OPEN_DESC"] = "Shows this panel the first time a gamepad becomes active on this character, so the camera settings that apply to it are not buried. It never opens during combat, and never opens twice unless you switch it back on here."
 
 if AceTable then
     for key, value in pairs(L) do

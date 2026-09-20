@@ -48,6 +48,10 @@ end
 
 -- ------------------------------------------------------------- WoW globals
 local cameraZoom = 10
+-- GamePad.lua caches InCombatLockdown as an upvalue at load time, exactly as
+-- every other module here does, so the probe has to flip a variable the stub
+-- closes over rather than swapping the global out afterwards.
+local inCombat = false
 
 _G.CreateFrame = stub.CreateFrame
 _G.UnitName = function() return "Hiddenscar" end
@@ -68,14 +72,16 @@ _G.hooksecurefunc = function() end
 _G.CopyTable = nil
 _G.C_Timer = { After = function() end, NewTicker = function() return { Cancel = function() end } end }
 _G.SlashCmdList = {}
-_G.GetBuildInfo = function() return "12.0.0", "60000", "Sep 1 2026", 120007 end
+-- Forever, not Retail: gamepad handling is scoped to this flavour, and the
+-- Camelot TOC supplies the marker below before Compat.lua classifies the client.
+_G.GetBuildInfo = function() return "1.60.0", "61000", "Sep 1 2026", 16001 end
 _G.C_AddOns = {
     GetAddOnMetadata = function(_, key) return key == "Version" and "v10.3" or nil end,
     IsAddOnLoaded = function() return false end,
 }
 _G.print = print
 _G.GameTooltip = setmetatable({}, { __index = function() return function() end end })
-_G.InCombatLockdown = function() return false end
+_G.InCombatLockdown = function() return inCombat end
 _G.IsInInstance = function() return false, "none" end
 _G.IsInGroup = function() return false end
 _G.IsInRaid = function() return false end
@@ -130,6 +136,9 @@ stub.InstallLibStub()
 
 -- ------------------------------------------------------------- load the addon
 local ns = {}
+
+-- Exactly what Max_Camera_Distance_Camelot.toc does: load Forever.lua before
+-- manifest.xml so Compat.lua gets an unambiguous flavour signal.
 local function LoadFile(path)
     local chunk, err = loadfile(path)
     if not chunk then error("could not load " .. path .. ": " .. tostring(err)) end
@@ -141,6 +150,7 @@ LoadFile("libs/LibCamera/LibCamera.lua")
 
 -- Mirrors manifest.xml.
 for _, file in ipairs({
+    "Forever.lua",
     "Compatibility.lua",
     "locale/enUS.lua", "locale/deDE.lua", "locale/frFR.lua", "locale/zhCN.lua", "locale/ukUA.lua",
     "Locales.lua",
@@ -364,6 +374,78 @@ problems = GamePad:GetStickProblems()
 check("phase 7: sharing a stick with movement is reported",
     problems[1] == "cameraStickSharedWithMovement",
     table.concat(problems, ","))
+
+-- ------------------------------------------- phase 8: flavour scoping
+check("phase 8: the probe really is running as Forever",
+    ns.Compat.IS_FOREVER == true and ns.Compat.IS_RETAIL == false,
+    "forever=" .. tostring(ns.Compat.IS_FOREVER) .. " retail=" .. tostring(ns.Compat.IS_RETAIL))
+check("phase 8: the module advertises itself as Forever-scoped",
+    GamePad.IS_SUPPORTED_FLAVOR == true)
+check("phase 8: Forever profiles carry the gamepad keys",
+    db.gamePadAutoOpenConfig ~= nil and db.gamePadCameraYawMultiplier ~= nil)
+
+-- --------------------------------- phase 9: the panel opens once, not always
+local opened = 0
+local originalOpen = ns.Config.OpenGamePadPanel
+ns.Config.OpenGamePadPanel = function() opened = opened + 1; return true end
+
+db.gamePadAutoOpenConfig = true
+db.gamePadPanelShown = false
+
+-- A Refresh while the gamepad is already active is not a transition.
+GamePad:Refresh(true)
+check("phase 9: an already-active gamepad does not open the panel",
+    opened == 0,
+    "opened=" .. opened)
+
+-- Off and on again: that is the transition the player just made.
+cvars:Set("GamePadEnable", 0)
+GamePad:Refresh(true)
+cvars:Set("GamePadEnable", 1)
+GamePad:Refresh(true)
+check("phase 9: enabling the gamepad opens the panel once",
+    opened == 1,
+    "opened=" .. opened)
+
+cvars:Set("GamePadEnable", 0)
+GamePad:Refresh(true)
+cvars:Set("GamePadEnable", 1)
+GamePad:Refresh(true)
+check("phase 9: it does not open again on the next toggle",
+    opened == 1,
+    "opened=" .. opened)
+
+-- Combat must never be interrupted by a settings window.
+db.gamePadPanelShown = false
+inCombat = true
+cvars:Set("GamePadEnable", 0)
+GamePad:Refresh(true)
+cvars:Set("GamePadEnable", 1)
+GamePad:Refresh(true)
+check("phase 9: the panel never opens in combat",
+    opened == 1,
+    "opened=" .. opened)
+inCombat = false
+
+-- Turning the toggle back on re-arms it rather than leaving it spent.
+db.gamePadPanelShown = true
+GamePad:OnOptionChanged("gamePadAutoOpenConfig", true)
+check("phase 9: re-enabling the option re-arms the one-time panel",
+    db.gamePadPanelShown == false,
+    tostring(db.gamePadPanelShown))
+
+-- And the opt-out is honoured.
+db.gamePadAutoOpenConfig = false
+db.gamePadPanelShown = false
+cvars:Set("GamePadEnable", 0)
+GamePad:Refresh(true)
+cvars:Set("GamePadEnable", 1)
+GamePad:Refresh(true)
+check("phase 9: the opt-out is respected",
+    opened == 1,
+    "opened=" .. opened)
+
+ns.Config.OpenGamePadPanel = originalOpen
 
 print(failures == 0 and "PROBE PASSED" or ("PROBE FAILED (" .. failures .. ")"))
 os.exit(failures == 0 and 0 or 1)

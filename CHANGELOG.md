@@ -12,10 +12,11 @@
 
 - **Shoulder offset is configurable.** The base offset was hardcoded to `1.0`; it is now the `actionCamShoulderOffset` setting (range −5…5, negative values move the camera to the other shoulder), with a Reset button.
 - The zoom recentring window is configurable too (previously hardcoded at 2.0 and 5.0 yards), can be switched off entirely for a constant offset, and per-model compensation can be disabled to send the raw CVar value.
-- **Gamepad support (`GamePad.lua`).** Detects the gamepad through `C_GamePad.IsEnabled` / `GetActiveDeviceID` with a `GamePadEnable` CVar fallback, and reacts to `GAME_PAD_ACTIVE_CHANGED`, `GAME_PAD_CONNECTED`, `GAME_PAD_DISCONNECTED` and `GAME_PAD_CONFIGS_CHANGED`.
+- **Gamepad support (`GamePad.lua`), scoped to WoW: Forever.** The CVars and the `C_GamePad` namespace exist on Retail and Classic too, so this is a product decision rather than a technical limit — the behaviour has only been reasoned about against Forever. Off Forever the module reports no support, the options tab is hidden, the `GAME_PAD_*` events are never registered, and the profile keys are stripped rather than left dead. Detects the gamepad through `C_GamePad.IsEnabled` / `GetActiveDeviceID` with a `GamePadEnable` CVar fallback, and reacts to `GAME_PAD_ACTIVE_CHANGED`, `GAME_PAD_CONNECTED`, `GAME_PAD_DISCONNECTED` and `GAME_PAD_CONFIGS_CHANGED`.
 - Optional management of `GamePadCameraYawSpeed` / `GamePadCameraPitchSpeed`. Every existing camera speed option in this addon writes `cameraYawMoveSpeed` / `cameraPitchMoveSpeed`, which only drive the mouse camera — which is why those sliders appeared to do nothing with a controller. Stored as a **multiplier** of the client's own default rather than an absolute number, because the scale of these CVars is not reliably documented. Off by default; switching it off hands both CVars back to the client.
 - Optional suspension of `GamePadFaceMovement` while the shoulder camera is active, restoring the player's own value afterwards. Off by default.
 - Diagnostics for the mundane cause of "no camera input": `GamePadCameraStick` set to `0`, or sharing a physical stick with movement or the cursor. Surfaced as a one-shot warning, in the options panel, and in `/mcd status`.
+- **The gamepad panel opens itself once.** When a gamepad first becomes active on a character, the addon opens its settings window on a dedicated **Gamepad** tab, because the camera settings that apply to a controller are not the ones the player has been using. It opens only on an inactive → active transition, never in combat, once per character, and there is a visible toggle that both disables and re-arms it.
 - `/mcd gamepad` and new `/mcd status` lines covering gamepad state, stick assignment, resolved camera speeds, ActionCam intent and the current shoulder polling rate.
 
 ### Changed
@@ -25,7 +26,8 @@
 
 ### Tests
 
-- New `tests/probe_gamepad.lua` (27 assertions) covering the offset, the fade window, write suppression, the keep-centered deadlock, gamepad speed mirroring, face-movement restore and stick misconfiguration. Verified against negative controls: reverting either the intent fix or the write-suppression fix makes it fail.
+- New `tests/probe_gamepad.lua` (36 assertions), running as a Forever client via `Forever.lua`, covering the offset, the fade window, write suppression, the keep-centered deadlock, gamepad speed mirroring, face-movement restore and stick misconfiguration. Verified against negative controls: reverting either the intent fix or the write-suppression fix makes it fail.
+- `tests/probe_lateace3.lua` runs as Retail and now doubles as the negative control for the Forever scope: no support, no profile keys, hidden options tab.
 - `tests/wow_stub.lua` gained real shown/hidden frame state and a case-insensitive CVar store with read/write counting.
 
 ## v10.3 — Forever ground-effect default reset controls

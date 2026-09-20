@@ -148,5 +148,27 @@ check("phase 4: re-running init does not duplicate Blizzard categories",
     #ace.dialog.blizCategories == 2,
     "categories=" .. #ace.dialog.blizCategories)
 
+-- ------------------- phase 5: gamepad handling stays out of non-Forever builds
+-- This probe runs as Retail (interface 120007, no Forever.lua marker), which
+-- makes it the negative control for the Forever-only gamepad scope.
+check("phase 5: this probe is NOT a Forever client",
+    ns.Compat.IS_FOREVER == false,
+    tostring(ns.Compat.IS_FOREVER))
+check("phase 5: the gamepad module reports no support off Forever",
+    ns.GamePad and ns.GamePad.IsSupported() == false)
+check("phase 5: no gamepad keys leak into a non-Forever profile",
+    ns.Database.db.profile.gamePadManageCameraSpeed == nil
+        and ns.Database.db.profile.gamePadAutoOpenConfig == nil,
+    tostring(ns.Database.db.profile.gamePadManageCameraSpeed))
+-- Read the options table the addon actually registered, so this cannot pass by
+-- accident if the group is renamed or moved.
+local registered = ace.registry:GetOptionsTable("Max_Camera_Distance")
+local gamePadGroup = registered and registered.args and registered.args.gamePadSettings
+check("phase 5: the gamepad options group exists in the table",
+    gamePadGroup ~= nil)
+check("phase 5: the gamepad options tab is hidden off Forever",
+    gamePadGroup ~= nil and type(gamePadGroup.hidden) == "function" and gamePadGroup.hidden() == true,
+    gamePadGroup and tostring(gamePadGroup.hidden) or "no group")
+
 print(failures == 0 and "PROBE PASSED" or ("PROBE FAILED (" .. failures .. ")"))
 os.exit(failures == 0 and 0 or 1)

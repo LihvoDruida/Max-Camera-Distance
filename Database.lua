@@ -303,14 +303,6 @@ local PROFILE_DEFAULTS = {
     actionCamShoulderFadeStart = 5.0,
     actionCamShoulderFadeEnd = 2.0,
     actionCamShoulderModelCompensation = true,
-
-    -- gamepad
-    -- Default off across the board: the addon must not silently retune
-    -- somebody's controller the first time they log in with this build.
-    gamePadManageCameraSpeed = false,
-    gamePadCameraYawMultiplier = 1.0,
-    gamePadCameraPitchMultiplier = 1.0,
-    gamePadRelaxFaceMovement = false,
     afkMode = false,
     afkHideUI = true,
     afkDelay = 3,
@@ -337,6 +329,22 @@ local PROFILE_DEFAULTS = {
 -- shared defaults prevents Retail/Classic profiles from acquiring settings they
 -- can never use.
 if IS_FOREVER then
+    -- Gamepad keys are Forever-only, for the same reason the module itself is
+    -- (see GamePad.lua). Keeping them out of the shared defaults stops
+    -- Retail/Classic profiles from acquiring settings they can never use.
+    --
+    -- Every one of them defaults to inert: the addon must not silently retune
+    -- somebody's controller the first time they log in with this build.
+    PROFILE_DEFAULTS.gamePadManageCameraSpeed = false
+    PROFILE_DEFAULTS.gamePadCameraYawMultiplier = 1.0
+    PROFILE_DEFAULTS.gamePadCameraPitchMultiplier = 1.0
+    PROFILE_DEFAULTS.gamePadRelaxFaceMovement = false
+    -- Opening the panel once IS on by default: the settings that apply to a
+    -- gamepad are not the ones the player has been using, so leaving them to be
+    -- discovered is the worse default.
+    PROFILE_DEFAULTS.gamePadAutoOpenConfig = true
+    PROFILE_DEFAULTS.gamePadPanelShown = false
+
     PROFILE_DEFAULTS.volumeFog = (tonumber(defaultVolumeFog) or 0) == 1
     PROFILE_DEFAULTS.volumeFogInterior = (tonumber(defaultVolumeFogInterior) or 0) == 1
     PROFILE_DEFAULTS.volumeFogLevel = defaultVolumeFogLevel
@@ -532,10 +540,23 @@ function Database:ApplyMigrations(profile)
     -- Gamepad camera speed is stored as a multiplier of the client's own
     -- default rather than an absolute value, so it stays meaningful if Blizzard
     -- retunes the defaults or the scale differs between flavours.
-    profile.gamePadManageCameraSpeed = NormalizeBoolean(profile.gamePadManageCameraSpeed, PROFILE_DEFAULTS.gamePadManageCameraSpeed)
-    profile.gamePadRelaxFaceMovement = NormalizeBoolean(profile.gamePadRelaxFaceMovement, PROFILE_DEFAULTS.gamePadRelaxFaceMovement)
-    profile.gamePadCameraYawMultiplier = Clamp(tonumber(profile.gamePadCameraYawMultiplier) or 1.0, 0.1, 4)
-    profile.gamePadCameraPitchMultiplier = Clamp(tonumber(profile.gamePadCameraPitchMultiplier) or 1.0, 0.1, 4)
+    if IS_FOREVER then
+        profile.gamePadManageCameraSpeed = NormalizeBoolean(profile.gamePadManageCameraSpeed, PROFILE_DEFAULTS.gamePadManageCameraSpeed)
+        profile.gamePadRelaxFaceMovement = NormalizeBoolean(profile.gamePadRelaxFaceMovement, PROFILE_DEFAULTS.gamePadRelaxFaceMovement)
+        profile.gamePadAutoOpenConfig = NormalizeBoolean(profile.gamePadAutoOpenConfig, PROFILE_DEFAULTS.gamePadAutoOpenConfig)
+        profile.gamePadPanelShown = NormalizeBoolean(profile.gamePadPanelShown, PROFILE_DEFAULTS.gamePadPanelShown)
+        profile.gamePadCameraYawMultiplier = Clamp(tonumber(profile.gamePadCameraYawMultiplier) or 1.0, 0.1, 4)
+        profile.gamePadCameraPitchMultiplier = Clamp(tonumber(profile.gamePadCameraPitchMultiplier) or 1.0, 0.1, 4)
+    else
+        -- A profile copied over from a Forever character must not leave dead
+        -- gamepad keys behind on a client that cannot act on them.
+        profile.gamePadManageCameraSpeed = nil
+        profile.gamePadRelaxFaceMovement = nil
+        profile.gamePadAutoOpenConfig = nil
+        profile.gamePadPanelShown = nil
+        profile.gamePadCameraYawMultiplier = nil
+        profile.gamePadCameraPitchMultiplier = nil
+    end
 
     local VALID_PRESETS = {
         manual = true,

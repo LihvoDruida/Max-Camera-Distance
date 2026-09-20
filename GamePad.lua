@@ -14,6 +14,22 @@ local math_abs = math.abs
 
 local C_GamePad = _G.C_GamePad
 local GetTime = GetTime
+local InCombatLockdown = InCombatLockdown
+
+-- =====================================================================
+-- SCOPE
+-- =====================================================================
+-- Gamepad handling is intentionally limited to WoW: Forever.
+--
+-- The CVars and the C_GamePad namespace exist on Retail and the Classic
+-- branches too, so this is a product decision rather than a technical limit:
+-- the behaviour below has only been reasoned about and tested against Forever,
+-- and silently managing somebody's controller CVars on a client where that was
+-- never verified is worse than doing nothing. Compat.IS_FOREVER is the same
+-- signal the rest of the addon uses, set from the Camelot TOC's Forever.lua
+-- marker because Forever still reports the mainline project ID.
+local IS_FOREVER = Compat.IS_FOREVER and true or false
+GamePad.IS_SUPPORTED_FLAVOR = IS_FOREVER
 
 -- =====================================================================
 -- CVAR NAMES
@@ -153,6 +169,9 @@ end
 -- SUPPORT / ACTIVE DETECTION
 -- =====================================================================
 function GamePad:IsSupported()
+    if not IS_FOREVER then
+        return false
+    end
     if type(C_GamePad) == "table" then
         return true
     end
@@ -402,8 +421,59 @@ function GamePad:GetDiagnostics()
         pitchDefault = GetClientDefault(CVAR.PITCH_SPEED),
         managingSpeed = (db and db.gamePadManageCameraSpeed) and true or false,
         relaxFaceMovement = (db and db.gamePadRelaxFaceMovement) and true or false,
+        autoOpenPanel = (db and db.gamePadAutoOpenConfig ~= false) and true or false,
+        panelShown = (db and db.gamePadPanelShown) and true or false,
         problems = self:GetStickProblems(),
     }
+end
+
+-- =====================================================================
+-- FIRST-RUN PANEL
+-- =====================================================================
+-- When a player turns the gamepad on, the settings that actually apply to it
+-- are not the ones they have been using, so the panel is surfaced once rather
+-- than left to be discovered. Three rules keep this from being obnoxious:
+--   * once per character, recorded in the profile;
+--   * never in combat, and never while the player is dead - the window would
+--     be in the way at exactly the wrong moment;
+--   * a visible toggle that turns it off, and also re-arms it when switched
+--     back on, so it is never a one-way door.
+local function ShouldOfferPanel(db)
+    if not db then return false end
+    if db.gamePadAutoOpenConfig == false then return false end
+    if db.gamePadPanelShown then return false end
+
+    if type(InCombatLockdown) == "function" then
+        local ok, inCombat = pcall(InCombatLockdown)
+        if ok and inCombat then return false end
+    end
+
+    return true
+end
+
+function GamePad:OfferConfigPanel()
+    local db = DB()
+    if not ShouldOfferPanel(db) then return false end
+    if not self:IsActive() then return false end
+
+    if not (ns.Config and ns.Config.OpenGamePadPanel) then return false end
+
+    -- Recorded before the attempt, not after: if the window fails to open for
+    -- any reason the player should get the chat pointer below once, not a retry
+    -- on every gamepad event for the rest of the session.
+    db.gamePadPanelShown = true
+
+    local opened = false
+    local ok, result = pcall(ns.Config.OpenGamePadPanel, ns.Config)
+    if ok then opened = result and true or false end
+
+    if opened then
+        LogMessage("info", "Gamepad detected - opened the Max Camera Distance gamepad settings.")
+    else
+        LogMessage("warning", "Gamepad detected. Camera settings for it are under /mcd config > Gamepad.")
+    end
+
+    return opened
 end
 
 -- =====================================================================
@@ -413,10 +483,18 @@ end
 function GamePad:Refresh(force)
     if not self:IsSupported() then return end
 
+    local wasActive = state.active
     self:Invalidate()
 
     local db = DB()
     if not db then return end
+
+    -- Only an inactive -> active transition counts as "the player just turned
+    -- the gamepad on". Refresh runs on plenty of other paths (login, every
+    -- managed-CVar pass) and must not pop a window on any of them.
+    if self:IsActive() and not wasActive then
+        self:OfferConfigPanel()
+    end
 
     if db.gamePadManageCameraSpeed then
         self:ApplyCameraSpeeds(force)
@@ -496,6 +574,16 @@ function GamePad:OnOptionChanged(key, value)
 
     if key == "gamePadRelaxFaceMovement" then
         self:RefreshFaceMovement()
+        return
+    end
+
+    if key == "gamePadAutoOpenConfig" then
+        -- Switching the option back on re-arms it, so the toggle means what it
+        -- says instead of being permanently spent after the first showing.
+        local db = DB()
+        if db and value then
+            db.gamePadPanelShown = false
+        end
         return
     end
 end

@@ -1742,78 +1742,6 @@ function Config:SetupOptions()
                         order = 5.5,
                     },
 
-                    gamePadHeader = {
-                        type = "header",
-                        name = L["GAMEPAD_HEADER"] or "Gamepad",
-                        order = 6,
-                        hidden = function() return not GamePadSupported() end,
-                    },
-                    gamePadDesc = {
-                        type = "description",
-                        name = function()
-                            if GamePadActive() then
-                                return L["GAMEPAD_DESC_ACTIVE"] or "A gamepad is active. The camera speed sliders above only affect the mouse camera; the gamepad has its own speed CVars, which this section drives."
-                            end
-                            return L["GAMEPAD_DESC_INACTIVE"] or "No gamepad detected. These settings apply as soon as one is enabled (/console GamePadEnable 1)."
-                        end,
-                        order = 6.1,
-                        hidden = function() return not GamePadSupported() end,
-                    },
-                    gamePadManageCameraSpeed = {
-                        type = "toggle",
-                        name = L["GAMEPAD_MANAGE_SPEED_NAME"] or "Manage Gamepad Camera Speed",
-                        desc = L["GAMEPAD_MANAGE_SPEED_DESC"] or "Lets this addon set GamePadCameraYawSpeed and GamePadCameraPitchSpeed. Off by default so the addon never retunes your controller behind your back.",
-                        get = function() return GetOption("gamePadManageCameraSpeed") and true or false end,
-                        set = function(_, val) SetOption("gamePadManageCameraSpeed", val and true or false) end,
-                        order = 6.2,
-                        hidden = function() return not GamePadSupported() end,
-                    },
-                    gamePadYawMultiplier = {
-                        type = "range",
-                        name = L["GAMEPAD_YAW_MULTIPLIER_NAME"] or "Gamepad Horizontal Speed",
-                        desc = function()
-                            return DescribeGamePadSpeed("yaw",
-                                L["GAMEPAD_YAW_MULTIPLIER_DESC"] or "Multiplier applied to the client's own default gamepad yaw speed.")
-                        end,
-                        min = 0.1, max = 4, step = 0.05, bigStep = 0.25,
-                        get = function() return tonumber(GetOption("gamePadCameraYawMultiplier")) or 1.0 end,
-                        set = function(_, val) SetOption("gamePadCameraYawMultiplier", tonumber(val) or 1.0) end,
-                        order = 6.3,
-                        hidden = function() return not GamePadSupported() end,
-                        disabled = function() return not GetOption("gamePadManageCameraSpeed") end,
-                    },
-                    gamePadPitchMultiplier = {
-                        type = "range",
-                        name = L["GAMEPAD_PITCH_MULTIPLIER_NAME"] or "Gamepad Vertical Speed",
-                        desc = function()
-                            return DescribeGamePadSpeed("pitch",
-                                L["GAMEPAD_PITCH_MULTIPLIER_DESC"] or "Multiplier applied to the client's own default gamepad pitch speed.")
-                        end,
-                        min = 0.1, max = 4, step = 0.05, bigStep = 0.25,
-                        get = function() return tonumber(GetOption("gamePadCameraPitchMultiplier")) or 1.0 end,
-                        set = function(_, val) SetOption("gamePadCameraPitchMultiplier", tonumber(val) or 1.0) end,
-                        order = 6.4,
-                        hidden = function() return not GamePadSupported() end,
-                        disabled = function() return not GetOption("gamePadManageCameraSpeed") end,
-                    },
-                    gamePadRelaxFaceMovement = {
-                        type = "toggle",
-                        name = L["GAMEPAD_FACE_MOVEMENT_NAME"] or "Disable Face-Movement with Shoulder Cam",
-                        desc = L["GAMEPAD_FACE_MOVEMENT_DESC"] or "GamePadFaceMovement turns your character to face the stick direction, which fights the over-shoulder offset. Turn this on to suspend it while the shoulder camera is active; the original value is restored afterwards.",
-                        get = function() return GetOption("gamePadRelaxFaceMovement") and true or false end,
-                        set = function(_, val) SetOption("gamePadRelaxFaceMovement", val and true or false) end,
-                        order = 6.5,
-                        hidden = function() return not (GamePadSupported() and HasCVar("GamePadFaceMovement")) end,
-                    },
-                    gamePadStickWarning = {
-                        type = "description",
-                        name = function() return DescribeGamePadStickProblems() end,
-                        order = 6.6,
-                        hidden = function()
-                            return DescribeGamePadStickProblems() == nil
-                        end,
-                    },
-
                     afkHeader = { type = "header", name = L["AFK_MODE_HEADER"], order = 10 },
                     descAFK = { type = "description", name = L["AFK_MODE_DESC_SAFE"], order = 10.5 },
                     enableAFK = {
@@ -1911,6 +1839,108 @@ function Config:SetupOptions()
                         order = 19
                     },
                 }
+            },
+
+            gamePadSettings = {
+                type = "group",
+                name = L["GAMEPAD_HEADER"] or "Gamepad",
+                order = 6.5,
+                -- Gamepad handling is deliberately Forever-only; see the note in
+                -- GamePad.lua. The whole tab disappears on every other flavour
+                -- rather than showing options that could not do anything there.
+                hidden = function() return not GamePadSupported() end,
+                args = {
+                    gamePadDesc = {
+                        type = "description",
+                        name = function()
+                            if GamePadActive() then
+                                return L["GAMEPAD_DESC_ACTIVE"] or "A gamepad is active. The camera speed sliders in General only affect the mouse camera; the gamepad has its own speed CVars, which this panel drives."
+                            end
+                            return L["GAMEPAD_DESC_INACTIVE"] or "No gamepad detected. These settings apply as soon as one is enabled (/console GamePadEnable 1)."
+                        end,
+                        order = 1,
+                    },
+                    gamePadStickWarning = {
+                        type = "description",
+                        name = function() return DescribeGamePadStickProblems() end,
+                        order = 2,
+                        hidden = function() return DescribeGamePadStickProblems() == nil end,
+                    },
+                    gamePadSpeedHeader = {
+                        type = "header",
+                        name = L["GAMEPAD_SPEED_HEADER"] or "Camera Speed",
+                        order = 10,
+                    },
+                    gamePadManageCameraSpeed = {
+                        type = "toggle",
+                        name = L["GAMEPAD_MANAGE_SPEED_NAME"] or "Manage Gamepad Camera Speed",
+                        desc = L["GAMEPAD_MANAGE_SPEED_DESC"] or "Lets this addon set GamePadCameraYawSpeed and GamePadCameraPitchSpeed. Off by default so the addon never retunes your controller behind your back.",
+                        get = function() return GetOption("gamePadManageCameraSpeed") and true or false end,
+                        set = function(_, val) SetOption("gamePadManageCameraSpeed", val and true or false) end,
+                        order = 11,
+                        width = 2,
+                    },
+                    gamePadYawMultiplier = {
+                        type = "range",
+                        name = L["GAMEPAD_YAW_MULTIPLIER_NAME"] or "Gamepad Horizontal Speed",
+                        desc = function()
+                            return DescribeGamePadSpeed("yaw",
+                                L["GAMEPAD_YAW_MULTIPLIER_DESC"] or "Multiplier applied to the client's own default gamepad yaw speed.")
+                        end,
+                        min = 0.1, max = 4, step = 0.05, bigStep = 0.25,
+                        get = function() return tonumber(GetOption("gamePadCameraYawMultiplier")) or 1.0 end,
+                        set = function(_, val) SetOption("gamePadCameraYawMultiplier", tonumber(val) or 1.0) end,
+                        order = 12,
+                        disabled = function() return not GetOption("gamePadManageCameraSpeed") end,
+                    },
+                    gamePadPitchMultiplier = {
+                        type = "range",
+                        name = L["GAMEPAD_PITCH_MULTIPLIER_NAME"] or "Gamepad Vertical Speed",
+                        desc = function()
+                            return DescribeGamePadSpeed("pitch",
+                                L["GAMEPAD_PITCH_MULTIPLIER_DESC"] or "Multiplier applied to the client's own default gamepad pitch speed.")
+                        end,
+                        min = 0.1, max = 4, step = 0.05, bigStep = 0.25,
+                        get = function() return tonumber(GetOption("gamePadCameraPitchMultiplier")) or 1.0 end,
+                        set = function(_, val) SetOption("gamePadCameraPitchMultiplier", tonumber(val) or 1.0) end,
+                        order = 13,
+                        disabled = function() return not GetOption("gamePadManageCameraSpeed") end,
+                    },
+                    gamePadActionCamHeader = {
+                        type = "header",
+                        name = L["GAMEPAD_ACTIONCAM_HEADER"] or "ActionCam Compatibility",
+                        order = 20,
+                    },
+                    gamePadActionCamDesc = {
+                        type = "description",
+                        name = L["GAMEPAD_ACTIONCAM_DESC"] or "The over-shoulder camera itself is configured under Extra Features. These settings only cover the parts of it that conflict with gamepad input.",
+                        order = 21,
+                    },
+                    gamePadRelaxFaceMovement = {
+                        type = "toggle",
+                        name = L["GAMEPAD_FACE_MOVEMENT_NAME"] or "Disable Face-Movement with Shoulder Cam",
+                        desc = L["GAMEPAD_FACE_MOVEMENT_DESC"] or "GamePadFaceMovement turns your character to face the stick direction, which fights the over-shoulder offset. Turn this on to suspend it while the shoulder camera is active; the original value is restored afterwards.",
+                        get = function() return GetOption("gamePadRelaxFaceMovement") and true or false end,
+                        set = function(_, val) SetOption("gamePadRelaxFaceMovement", val and true or false) end,
+                        order = 22,
+                        width = 2,
+                        hidden = function() return not HasCVar("GamePadFaceMovement") end,
+                    },
+                    gamePadPanelHeader = {
+                        type = "header",
+                        name = L["GAMEPAD_PANEL_HEADER"] or "This Panel",
+                        order = 30,
+                    },
+                    gamePadAutoOpenConfig = {
+                        type = "toggle",
+                        name = L["GAMEPAD_AUTO_OPEN_NAME"] or "Open This Panel When a Gamepad Is Enabled",
+                        desc = L["GAMEPAD_AUTO_OPEN_DESC"] or "Shows this panel the first time a gamepad becomes active on this character, so the camera settings that apply to it are not buried. It never opens during combat, and never opens twice unless you switch it back on here.",
+                        get = function() return GetOption("gamePadAutoOpenConfig") ~= false end,
+                        set = function(_, val) SetOption("gamePadAutoOpenConfig", val and true or false) end,
+                        order = 31,
+                        width = 2.5,
+                    },
+                },
             },
 
             debugSettings = {
@@ -2089,6 +2119,26 @@ function Config:Open()
     end
 
     return true
+end
+
+-- Opens the settings window straight on the Gamepad tab. AceConfigDialog's
+-- SelectGroup only works on an already-open window, so the order here matters:
+-- open first, then select.
+function Config:OpenGamePadPanel()
+    ResolveConfigLibs()
+
+    if not self:Open() then
+        return false
+    end
+
+    if not (AceConfigDialog and AceConfigDialog.SelectGroup) then
+        -- The window is open on its default tab, which is still better than
+        -- nothing; only the deep link is unavailable.
+        return true
+    end
+
+    local ok = pcall(AceConfigDialog.SelectGroup, AceConfigDialog, addonName, "gamePadSettings")
+    return ok and true or true
 end
 
 local function ApplyHookTooltip(target, titleText, descText, pathText)
