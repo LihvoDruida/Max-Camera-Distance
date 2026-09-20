@@ -385,11 +385,6 @@ L["ADAPTIVE_RETURN_DESC"] = "While you keep pulling, the camera measures how lon
 L["ADAPTIVE_RETURN_MAX"] = "Adaptive Delay Ceiling"
 L["ADAPTIVE_RETURN_MAX_DESC"] = "The longest the adaptive delay is ever allowed to grow. Your configured per-activity delay stays the floor."
 
-if AceTable then
-    for key, value in pairs(L) do
-        AceTable[key] = value
-    end
-end
 
 -- Per-activity combat contexts (PvE / PvP split)
 L["CONTEXT_GROUP_NEUTRAL"] = "Outside Activities"
@@ -471,3 +466,44 @@ L["FOREVER_GROUND_EFFECT_DIST"] = "Ground Effect Distance"
 L["FOREVER_GROUND_EFFECT_DIST_DESC"] = "Raw groundEffectDist CVar. Range: 32-600. Values above the normal Ground Clutter preset extend flora/ground-object draw distance. Game default: %d."
 L["FOREVER_GROUND_EFFECT_FADE"] = "Ground Effect Fade Distance"
 L["FOREVER_GROUND_EFFECT_FADE_DESC"] = "Raw groundEffectFade CVar. Practical range exposed here: 0-600. Matching this to groundEffectDist reduces early flora fading. Game default: %d."
+
+-- ============================================================================
+-- ActionCam shoulder shaping
+-- ============================================================================
+L["ACTION_CAM_SHOULDER_OFFSET_NAME"] = "Shoulder Offset"
+L["ACTION_CAM_SHOULDER_OFFSET_DESC"] = "How far the camera sits off your character's centre line (test_cameraOverShoulder). Higher values give a more extreme over-the-shoulder view; negative values move the camera to the other shoulder. The addon default is 1.0."
+L["ACTION_CAM_SHOULDER_RESET"] = "Reset"
+L["ACTION_CAM_SHOULDER_RESET_DESC"] = "Restore the shoulder offset to the addon's default of 1.0."
+L["ACTION_CAM_SHOULDER_COMPENSATION_NAME"] = "Compensate for Model Size"
+L["ACTION_CAM_SHOULDER_COMPENSATION_DESC"] = "Blizzard scales the shoulder offset by the width of your current model, so the same value looks very different on a Tauren, a Gnome, a druid form or a mount. Leave this on for a consistent offset everywhere; turn it off to send the raw value straight to the CVar."
+L["ACTION_CAM_SHOULDER_FADE_NAME"] = "Recentre When Zoomed In"
+L["ACTION_CAM_SHOULDER_FADE_DESC"] = "Fades the offset back to centre as you zoom in, so looting and interacting stay aimed at your character. Turn this off for a constant offset at every camera distance."
+L["ACTION_CAM_SHOULDER_FADE_END_NAME"] = "Fully Centred Below"
+L["ACTION_CAM_SHOULDER_FADE_END_DESC"] = "Camera distance in yards at which the offset reaches zero."
+L["ACTION_CAM_SHOULDER_FADE_START_NAME"] = "Full Offset Above"
+L["ACTION_CAM_SHOULDER_FADE_START_DESC"] = "Camera distance in yards at which the offset reaches its full value. Must be larger than the centred distance."
+
+-- ============================================================================
+-- Gamepad
+-- ============================================================================
+L["GAMEPAD_HEADER"] = "Gamepad"
+L["GAMEPAD_DESC_ACTIVE"] = "A gamepad is active. The camera speed sliders in General only affect the mouse camera — the gamepad has its own speed CVars, which this section drives."
+L["GAMEPAD_DESC_INACTIVE"] = "No gamepad detected. These settings take effect as soon as one is enabled (/console GamePadEnable 1)."
+L["GAMEPAD_MANAGE_SPEED_NAME"] = "Manage Gamepad Camera Speed"
+L["GAMEPAD_MANAGE_SPEED_DESC"] = "Lets this addon set GamePadCameraYawSpeed and GamePadCameraPitchSpeed. Off by default, so the addon never retunes your controller behind your back. Switching it off hands both CVars back to the client's own defaults."
+L["GAMEPAD_YAW_MULTIPLIER_NAME"] = "Gamepad Horizontal Speed"
+L["GAMEPAD_YAW_MULTIPLIER_DESC"] = "Multiplier applied to the client's own default gamepad yaw speed. Stored as a multiplier rather than an absolute number so it stays correct if Blizzard retunes the defaults."
+L["GAMEPAD_PITCH_MULTIPLIER_NAME"] = "Gamepad Vertical Speed"
+L["GAMEPAD_PITCH_MULTIPLIER_DESC"] = "Multiplier applied to the client's own default gamepad pitch speed."
+L["GAMEPAD_SPEED_RESOLVED"] = "Resolves to:"
+L["GAMEPAD_SPEED_CLIENT_DEFAULT"] = "client default"
+L["GAMEPAD_FACE_MOVEMENT_NAME"] = "Disable Face-Movement with Shoulder Cam"
+L["GAMEPAD_FACE_MOVEMENT_DESC"] = "GamePadFaceMovement turns your character to face the stick direction, which fights the over-the-shoulder offset. Turn this on to suspend it while the shoulder camera is active; your original value is restored as soon as the shoulder camera turns off."
+L["GAMEPAD_WARN_NO_CAMERA_STICK"] = "|cffff5555No stick is assigned to the gamepad camera (GamePadCameraStick is 0), so the client is sending no camera input at all. Assign one in Options > Gamepad.|r"
+L["GAMEPAD_WARN_STICK_COLLISION"] = "|cffffcc00The gamepad camera shares a physical stick with movement or the cursor. Camera input will feel unresponsive until they are separated.|r"
+
+if AceTable then
+    for key, value in pairs(L) do
+        AceTable[key] = value
+    end
+end

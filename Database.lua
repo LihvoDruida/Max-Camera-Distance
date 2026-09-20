@@ -293,6 +293,24 @@ local PROFILE_DEFAULTS = {
     actionCamShoulderInCombat = false,
     actionCamShoulderOutOfCombat = false,
     actionCamPitch = false,
+
+    -- Shoulder shaping. actionCamShoulderOffset is the value that used to be
+    -- hardcoded to 1.0 in Functions.lua, i.e. how far the camera sits off the
+    -- character's centre line before the zoom fade and the per-model
+    -- compensation factor are applied.
+    actionCamShoulderOffset = 1.0,
+    actionCamShoulderSmartFade = true,
+    actionCamShoulderFadeStart = 5.0,
+    actionCamShoulderFadeEnd = 2.0,
+    actionCamShoulderModelCompensation = true,
+
+    -- gamepad
+    -- Default off across the board: the addon must not silently retune
+    -- somebody's controller the first time they log in with this build.
+    gamePadManageCameraSpeed = false,
+    gamePadCameraYawMultiplier = 1.0,
+    gamePadCameraPitchMultiplier = 1.0,
+    gamePadRelaxFaceMovement = false,
     afkMode = false,
     afkHideUI = true,
     afkDelay = 3,
@@ -496,6 +514,28 @@ function Database:ApplyMigrations(profile)
     -- Per-activity return delays are clamped in the Contexts loop above.
     profile.cameraYawMoveSpeed = Clamp(tonumber(profile.cameraYawMoveSpeed) or defaultYaw, 1, 360)
     profile.cameraPitchMoveSpeed = Clamp(tonumber(profile.cameraPitchMoveSpeed) or defaultPitch, 1, 360)
+
+    -- Shoulder shaping. test_cameraOverShoulder itself accepts a far wider
+    -- range, but past a few units the camera leaves the character entirely, so
+    -- the stored value is kept inside a range that still produces a usable view.
+    profile.actionCamShoulderOffset = Clamp(tonumber(profile.actionCamShoulderOffset) or 1.0, -5, 5)
+    profile.actionCamShoulderSmartFade = NormalizeBoolean(profile.actionCamShoulderSmartFade, PROFILE_DEFAULTS.actionCamShoulderSmartFade)
+    profile.actionCamShoulderModelCompensation = NormalizeBoolean(profile.actionCamShoulderModelCompensation, PROFILE_DEFAULTS.actionCamShoulderModelCompensation)
+    profile.actionCamShoulderFadeEnd = Clamp(tonumber(profile.actionCamShoulderFadeEnd) or 2.0, 0, 25)
+    profile.actionCamShoulderFadeStart = Clamp(tonumber(profile.actionCamShoulderFadeStart) or 5.0, 0, 25)
+    -- An inverted window would flip the offset between 0 and full on a single
+    -- zoom tick. Push the outer edge out rather than silently disabling fading.
+    if profile.actionCamShoulderFadeStart <= profile.actionCamShoulderFadeEnd then
+        profile.actionCamShoulderFadeStart = Clamp(profile.actionCamShoulderFadeEnd + 1, 0, 25)
+    end
+
+    -- Gamepad camera speed is stored as a multiplier of the client's own
+    -- default rather than an absolute value, so it stays meaningful if Blizzard
+    -- retunes the defaults or the scale differs between flavours.
+    profile.gamePadManageCameraSpeed = NormalizeBoolean(profile.gamePadManageCameraSpeed, PROFILE_DEFAULTS.gamePadManageCameraSpeed)
+    profile.gamePadRelaxFaceMovement = NormalizeBoolean(profile.gamePadRelaxFaceMovement, PROFILE_DEFAULTS.gamePadRelaxFaceMovement)
+    profile.gamePadCameraYawMultiplier = Clamp(tonumber(profile.gamePadCameraYawMultiplier) or 1.0, 0.1, 4)
+    profile.gamePadCameraPitchMultiplier = Clamp(tonumber(profile.gamePadCameraPitchMultiplier) or 1.0, 0.1, 4)
 
     local VALID_PRESETS = {
         manual = true,

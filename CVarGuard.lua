@@ -140,14 +140,48 @@ function CVarGuard:IsInternalWrite()
     return IsInternalWrite()
 end
 
+-- The addon's INTENT, published by Functions:UpdateActionCam.
+--
+-- Reading test_cameraOverShoulder back was a feedback loop that could deadlock
+-- the whole ActionCam: CameraKeepCharacterCentered overrides ActionCam (it was
+-- added in 9.0.1 for exactly that purpose), and since 11.0.2
+-- cameraReduceUnexpectedMovement affects test_cameraOverShoulder too. So once
+-- either of those got turned on - which is what happens when the player enables
+-- the gamepad and goes through Blizzard's camera/gamepad settings - the shoulder
+-- offset read back as 0, this guard concluded "shoulder is not active", stopped
+-- blocking keep-centered, restored it to 1, and the shoulder offset could never
+-- come back. Intent is the only signal that does not participate in that loop.
+local shoulderIntent = false
+local dynamicPitchIntent = false
+
 local function IsShoulderActive()
+    if shoulderIntent then return true end
     local v = SafeGetCVar("test_cameraOverShoulder")
     return v ~= nil and (v > 0.0001 or v < -0.0001)
 end
 
 local function IsDynamicPitchActive()
+    if dynamicPitchIntent then return true end
     local v = SafeGetCVar("test_cameraDynamicPitch")
     return v ~= nil and v == 1
+end
+
+-- Returns true when the value actually changed, so callers can skip a refresh.
+function CVarGuard:SetActionCamIntent(shoulderWanted, pitchWanted)
+    local newShoulder = shoulderWanted and true or false
+    local newPitch = pitchWanted and true or false
+
+    if newShoulder == shoulderIntent and newPitch == dynamicPitchIntent then
+        return false
+    end
+
+    shoulderIntent = newShoulder
+    dynamicPitchIntent = newPitch
+    return true
+end
+
+function CVarGuard:GetActionCamIntent()
+    return shoulderIntent, dynamicPitchIntent
 end
 
 local function GetCameraViewDefault()
@@ -286,13 +320,21 @@ function CVarGuard:Refresh(force)
     local blockKeepCentered = self:ShouldBlockKeepCentered()
     local blockReduceUnexpectedMovement = self:ShouldBlockReduceUnexpectedMovement()
 
+    -- This used to return early whenever the blocking state had not changed,
+    -- which meant a CVar that drifted underneath the guard (Blizzard's camera or
+    -- gamepad settings panel, a saved view restore, another addon) was never
+    -- reconciled until something else happened to flip the state. The four
+    -- helpers below already compare against the live value before writing, so
+    -- running them unconditionally costs a couple of CVar reads on a call that
+    -- is throttled to CVAR_GUARD_REFRESH_SECONDS anyway.
     local stateChanged =
         force
         or stateCache.blockKeepCentered ~= blockKeepCentered
         or stateCache.blockReduceUnexpectedMovement ~= blockReduceUnexpectedMovement
 
-    if not stateChanged then
-        return
+    if stateChanged then
+        self:ResetLogFlag("lastRestoreKeepCentered")
+        self:ResetLogFlag("lastRestoreReduceUnexpectedMovement")
     end
 
     stateCache.blockKeepCentered = blockKeepCentered

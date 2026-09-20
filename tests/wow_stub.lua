@@ -45,9 +45,16 @@ function frameProto:CreateFontString() return Permissive() end
 function frameProto:CreateTexture() return Permissive() end
 function frameProto:CreateAnimationGroup() return Permissive() end
 function frameProto:GetName() return nil end
-function frameProto:IsShown() return false end
-function frameProto:IsVisible() return false end
 function frameProto:GetParent() return nil end
+
+-- Shown/hidden is the one piece of frame state modelled for real, because
+-- several code paths use a hidden frame purely as an on/off flag for their own
+-- OnUpdate driver. Nothing else about frames is modelled - see the limitation
+-- note above, which still stands.
+function frameProto:Show() self._shown = true end
+function frameProto:Hide() self._shown = false end
+function frameProto:IsShown() return self._shown == true end
+function frameProto:IsVisible() return self._shown == true end
 
 local frameMeta = {
     __index = function(self, key)
@@ -59,7 +66,7 @@ local frameMeta = {
 }
 
 function stub.CreateFrame()
-    local f = setmetatable({ _events = {}, _scripts = {} }, frameMeta)
+    local f = setmetatable({ _events = {}, _scripts = {}, _shown = false }, frameMeta)
     frames[#frames + 1] = f
     return f
 end
@@ -166,6 +173,81 @@ function stub.InstallAce3()
     end
 
     return { registry = registry, dialog = dialog, config = config, db = aceDB }
+end
+
+-- ------------------------------------------------------------------- CVars
+-- A case-insensitive CVar table with write counting. Real CVar semantics
+-- (secure/locked CVars, combat restrictions, the client's own side effects such
+-- as CameraKeepCharacterCentered overriding ActionCam) are NOT modelled; this
+-- only answers "what did the addon read and write, and how often".
+function stub.InstallCVars(initial)
+    local values = {}
+    local store = { values = values, writes = 0, writeLog = {}, reads = 0, readsByName = {} }
+
+    local function key(name) return tostring(name):lower() end
+
+    function store:Set(name, value)
+        values[key(name)] = tostring(value)
+    end
+
+    function store:Get(name)
+        return values[key(name)]
+    end
+
+    function store:Number(name)
+        return tonumber(values[key(name)])
+    end
+
+    function store:ResetCounters()
+        self.writes = 0
+        self.writeLog = {}
+        self.reads = 0
+        self.readsByName = {}
+    end
+
+    function store:ReadsOf(name)
+        return self.readsByName[key(name)] or 0
+    end
+
+    for name, value in pairs(initial or {}) do
+        store:Set(name, value)
+    end
+
+    local function DoSet(name, value)
+        local k = key(name)
+        -- The client only knows CVars that exist; writing an unknown one is a
+        -- no-op here rather than silently creating it, which is what makes
+        -- HasCVar-gated code paths testable.
+        if values[k] == nil then return false end
+        values[k] = tostring(value)
+        store.writes = store.writes + 1
+        store.writeLog[#store.writeLog + 1] = k .. "=" .. tostring(value)
+        return true
+    end
+
+    local function DoGet(name)
+        local k = key(name)
+        store.reads = store.reads + 1
+        store.readsByName[k] = (store.readsByName[k] or 0) + 1
+        return values[k]
+    end
+
+    _G.GetCVar = function(name) return DoGet(name) end
+    _G.GetCVarDefault = function(name) return store.defaults and store.defaults[key(name)] end
+    _G.SetCVar = function(name, value) return DoSet(name, value) end
+    _G.GetCVarBool = function(name) return (tonumber(values[key(name)]) or 0) ~= 0 end
+    _G.C_CVar = {
+        GetCVar = _G.GetCVar,
+        GetCVarDefault = _G.GetCVarDefault,
+        SetCVar = _G.SetCVar,
+    }
+
+    store.defaults = {}
+    function store:SetDefault(name, value)
+        self.defaults[key(name)] = tostring(value)
+    end
+
+    return store
 end
 
 return stub

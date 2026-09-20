@@ -89,6 +89,7 @@ for _, file in ipairs({
     "Contexts.lua",
     "Database.lua",
     "CVarGuard.lua",
+    "GamePad.lua",
     "CameraStateController.lua",
     "ShoulderCompensation.lua",
     "Functions.lua",

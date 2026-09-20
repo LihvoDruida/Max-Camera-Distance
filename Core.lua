@@ -304,6 +304,16 @@ local watchedCVars = {
     SoftTargetIconGameObject = true,
 }
 
+-- The gamepad module owns these; listing them here is what turns a change made
+-- in Blizzard's own gamepad panel into something the addon can react to.
+local gamePadWatchedLower = {}
+if ns.GamePad and ns.GamePad.WATCHED_CVARS then
+    for _, name in ipairs(ns.GamePad.WATCHED_CVARS) do
+        watchedCVars[name] = true
+        gamePadWatchedLower[name:lower()] = true
+    end
+end
+
 if Compat.IS_FOREVER then
     watchedCVars.volumeFog = true
     watchedCVars.volumeFogInterior = true
@@ -534,10 +544,41 @@ eventHandlers.PLAYER_FLAGS_CHANGED = function(event)
 end
 
 eventHandlers.CVAR_UPDATE = function(event, cvarName, value)
-    if not (ns.Functions and ns.Functions.OnCVarUpdate) then return end
     if type(cvarName) ~= "string" then return end
-    if watchedCVarsLower[cvarName:lower()] then
+
+    local lowered = cvarName:lower()
+
+    if gamePadWatchedLower[lowered] then
+        if ns.GamePad and ns.GamePad.OnCVarUpdate then
+            SafeCall(ns.GamePad.OnCVarUpdate, "GamePad.OnCVarUpdate", ns.GamePad, cvarName)
+        end
+        return
+    end
+
+    if not (ns.Functions and ns.Functions.OnCVarUpdate) then return end
+    if watchedCVarsLower[lowered] then
         SafeCall(ns.Functions.OnCVarUpdate, "OnCVarUpdate", ns.Functions, event, cvarName, value)
+    end
+end
+
+-- GAME_PAD_ACTIVE_CHANGED / CONNECTED / DISCONNECTED / CONFIGS_CHANGED.
+-- Registered from the module's own list so the set cannot drift between files;
+-- SafeRegisterEvent quietly skips any of them on a client that has no gamepad
+-- support at all.
+local function OnGamePadEvent()
+    if ns.GamePad and ns.GamePad.Refresh then
+        SafeCall(ns.GamePad.Refresh, "GamePad.Refresh", ns.GamePad, true)
+    end
+    -- Enabling the gamepad can move CameraKeepCharacterCentered underneath the
+    -- ActionCam, so re-assert the addon's own camera state as well.
+    if ns.Functions and ns.Functions.UpdateActionCam then
+        SafeCall(ns.Functions.UpdateActionCam, "UpdateActionCam", ns.Functions)
+    end
+end
+
+if ns.GamePad and ns.GamePad.EVENTS then
+    for _, eventName in ipairs(ns.GamePad.EVENTS) do
+        eventHandlers[eventName] = OnGamePadEvent
     end
 end
 

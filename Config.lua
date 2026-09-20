@@ -121,6 +121,55 @@ local function ApplyNow()
     end
 end
 
+local function GamePadSupported()
+    return (ns.GamePad and ns.GamePad.IsSupported and ns.GamePad:IsSupported()) and true or false
+end
+
+local function GamePadActive()
+    return (ns.GamePad and ns.GamePad.IsActive and ns.GamePad:IsActive()) and true or false
+end
+
+-- Shows the multiplier next to the absolute number it resolves to, because the
+-- raw scale of the gamepad speed CVars is not something the player can guess.
+local function DescribeGamePadSpeed(axis, baseText)
+    if not (ns.GamePad and ns.GamePad.GetResolvedSpeed) then
+        return baseText
+    end
+
+    local resolved = ns.GamePad:GetResolvedSpeed(axis)
+    local baseline = ns.GamePad.GetSpeedBaseline and ns.GamePad:GetSpeedBaseline(axis) or nil
+    if resolved == nil or baseline == nil then
+        return baseText
+    end
+
+    return string.format("%s\n\n%s %.2f  (%s %.2f)",
+        baseText,
+        L["GAMEPAD_SPEED_RESOLVED"] or "Resolves to:",
+        resolved,
+        L["GAMEPAD_SPEED_CLIENT_DEFAULT"] or "client default",
+        baseline)
+end
+
+local function DescribeGamePadStickProblems()
+    if not (ns.GamePad and ns.GamePad.IsActive and ns.GamePad:IsActive()) then
+        return nil
+    end
+    if not ns.GamePad.GetStickProblems then return nil end
+
+    local problems = ns.GamePad:GetStickProblems()
+    if not problems or #problems == 0 then return nil end
+
+    for _, id in ipairs(problems) do
+        if id == "cameraStickUnassigned" then
+            return L["GAMEPAD_WARN_NO_CAMERA_STICK"]
+                or "|cffff5555No stick is assigned to the gamepad camera (GamePadCameraStick is 0), so the client sends no camera input at all. Assign one in Options > Gamepad.|r"
+        end
+    end
+
+    return L["GAMEPAD_WARN_STICK_COLLISION"]
+        or "|cffffcc00The gamepad camera shares a physical stick with movement or the cursor. Camera input will feel unresponsive until they are separated.|r"
+end
+
 local function EnsureDebugLevelTable(db)
     if not db.debugLevel then
         db.debugLevel = { error = true, warning = true, info = true, debug = false }
@@ -181,6 +230,13 @@ local function SetOption(key, value)
         -- recomputation just to write one CVar.
         if ns.Functions and ns.Functions.ApplyManagedCVars then
             ns.Functions:ApplyManagedCVars()
+        end
+    elseif key == "gamePadManageCameraSpeed" or key == "gamePadCameraYawMultiplier"
+        or key == "gamePadCameraPitchMultiplier" or key == "gamePadRelaxFaceMovement" then
+        -- Gamepad CVars are not part of the zoom state machine, so writing one
+        -- must not drag a full camera recomputation along with it.
+        if ns.GamePad and ns.GamePad.OnOptionChanged then
+            ns.GamePad:OnOptionChanged(key, value)
         end
     elseif shouldApplyNow then
         ApplyNow()
@@ -1622,6 +1678,142 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("actionCamPitch", val) end,
                         order = 5
                     },
+                    shoulderOffset = {
+                        type = "range",
+                        name = L["ACTION_CAM_SHOULDER_OFFSET_NAME"] or "Shoulder Offset",
+                        desc = L["ACTION_CAM_SHOULDER_OFFSET_DESC"] or "How far the camera sits off your character's centre line. Negative values move it to the other shoulder.",
+                        min = -5, max = 5, step = 0.05, bigStep = 0.25,
+                        hidden = function() return not HasCVar("test_cameraOverShoulder") end,
+                        disabled = function()
+                            return not (GetOption("actionCamShoulderInCombat") or GetOption("actionCamShoulderOutOfCombat"))
+                        end,
+                        get = function() return tonumber(GetOption("actionCamShoulderOffset")) or 1.0 end,
+                        set = function(_, val) SetOption("actionCamShoulderOffset", tonumber(val) or 1.0) end,
+                        order = 5.1,
+                        width = 1.6,
+                    },
+                    shoulderOffsetReset = {
+                        type = "execute",
+                        name = L["ACTION_CAM_SHOULDER_RESET"] or "Reset",
+                        desc = L["ACTION_CAM_SHOULDER_RESET_DESC"] or "Restore the shoulder offset to the addon's default of 1.0.",
+                        hidden = function() return not HasCVar("test_cameraOverShoulder") end,
+                        func = function() SetOption("actionCamShoulderOffset", 1.0) end,
+                        order = 5.15,
+                        width = 0.6,
+                    },
+                    shoulderModelCompensation = {
+                        type = "toggle",
+                        name = L["ACTION_CAM_SHOULDER_COMPENSATION_NAME"] or "Compensate for Model Size",
+                        desc = L["ACTION_CAM_SHOULDER_COMPENSATION_DESC"] or "Blizzard scales the shoulder offset by the width of your current model, so the same value looks different on a Tauren, a Gnome and a mount. Leave this on for a consistent offset; turn it off to use the raw CVar value.",
+                        hidden = function() return not HasCVar("test_cameraOverShoulder") end,
+                        get = function() return GetOption("actionCamShoulderModelCompensation") ~= false end,
+                        set = function(_, val) SetOption("actionCamShoulderModelCompensation", val and true or false) end,
+                        order = 5.2,
+                    },
+                    shoulderSmartFade = {
+                        type = "toggle",
+                        name = L["ACTION_CAM_SHOULDER_FADE_NAME"] or "Recentre When Zoomed In",
+                        desc = L["ACTION_CAM_SHOULDER_FADE_DESC"] or "Fades the offset back to centre as you zoom in, so looting and interacting stay aimed at your character. Turn off for a constant offset at every distance.",
+                        hidden = function() return not HasCVar("test_cameraOverShoulder") end,
+                        get = function() return GetOption("actionCamShoulderSmartFade") ~= false end,
+                        set = function(_, val) SetOption("actionCamShoulderSmartFade", val and true or false) end,
+                        order = 5.3,
+                    },
+                    shoulderFadeEnd = {
+                        type = "range",
+                        name = L["ACTION_CAM_SHOULDER_FADE_END_NAME"] or "Fully Centred Below",
+                        desc = L["ACTION_CAM_SHOULDER_FADE_END_DESC"] or "Camera distance in yards at which the offset reaches zero.",
+                        min = 0, max = 25, step = 0.5,
+                        hidden = function() return not HasCVar("test_cameraOverShoulder") end,
+                        disabled = function() return GetOption("actionCamShoulderSmartFade") == false end,
+                        get = function() return tonumber(GetOption("actionCamShoulderFadeEnd")) or 2.0 end,
+                        set = function(_, val) SetOption("actionCamShoulderFadeEnd", tonumber(val) or 2.0) end,
+                        order = 5.4,
+                    },
+                    shoulderFadeStart = {
+                        type = "range",
+                        name = L["ACTION_CAM_SHOULDER_FADE_START_NAME"] or "Full Offset Above",
+                        desc = L["ACTION_CAM_SHOULDER_FADE_START_DESC"] or "Camera distance in yards at which the offset reaches its full value. Must be larger than the centred distance.",
+                        min = 0, max = 25, step = 0.5,
+                        hidden = function() return not HasCVar("test_cameraOverShoulder") end,
+                        disabled = function() return GetOption("actionCamShoulderSmartFade") == false end,
+                        get = function() return tonumber(GetOption("actionCamShoulderFadeStart")) or 5.0 end,
+                        set = function(_, val) SetOption("actionCamShoulderFadeStart", tonumber(val) or 5.0) end,
+                        order = 5.5,
+                    },
+
+                    gamePadHeader = {
+                        type = "header",
+                        name = L["GAMEPAD_HEADER"] or "Gamepad",
+                        order = 6,
+                        hidden = function() return not GamePadSupported() end,
+                    },
+                    gamePadDesc = {
+                        type = "description",
+                        name = function()
+                            if GamePadActive() then
+                                return L["GAMEPAD_DESC_ACTIVE"] or "A gamepad is active. The camera speed sliders above only affect the mouse camera; the gamepad has its own speed CVars, which this section drives."
+                            end
+                            return L["GAMEPAD_DESC_INACTIVE"] or "No gamepad detected. These settings apply as soon as one is enabled (/console GamePadEnable 1)."
+                        end,
+                        order = 6.1,
+                        hidden = function() return not GamePadSupported() end,
+                    },
+                    gamePadManageCameraSpeed = {
+                        type = "toggle",
+                        name = L["GAMEPAD_MANAGE_SPEED_NAME"] or "Manage Gamepad Camera Speed",
+                        desc = L["GAMEPAD_MANAGE_SPEED_DESC"] or "Lets this addon set GamePadCameraYawSpeed and GamePadCameraPitchSpeed. Off by default so the addon never retunes your controller behind your back.",
+                        get = function() return GetOption("gamePadManageCameraSpeed") and true or false end,
+                        set = function(_, val) SetOption("gamePadManageCameraSpeed", val and true or false) end,
+                        order = 6.2,
+                        hidden = function() return not GamePadSupported() end,
+                    },
+                    gamePadYawMultiplier = {
+                        type = "range",
+                        name = L["GAMEPAD_YAW_MULTIPLIER_NAME"] or "Gamepad Horizontal Speed",
+                        desc = function()
+                            return DescribeGamePadSpeed("yaw",
+                                L["GAMEPAD_YAW_MULTIPLIER_DESC"] or "Multiplier applied to the client's own default gamepad yaw speed.")
+                        end,
+                        min = 0.1, max = 4, step = 0.05, bigStep = 0.25,
+                        get = function() return tonumber(GetOption("gamePadCameraYawMultiplier")) or 1.0 end,
+                        set = function(_, val) SetOption("gamePadCameraYawMultiplier", tonumber(val) or 1.0) end,
+                        order = 6.3,
+                        hidden = function() return not GamePadSupported() end,
+                        disabled = function() return not GetOption("gamePadManageCameraSpeed") end,
+                    },
+                    gamePadPitchMultiplier = {
+                        type = "range",
+                        name = L["GAMEPAD_PITCH_MULTIPLIER_NAME"] or "Gamepad Vertical Speed",
+                        desc = function()
+                            return DescribeGamePadSpeed("pitch",
+                                L["GAMEPAD_PITCH_MULTIPLIER_DESC"] or "Multiplier applied to the client's own default gamepad pitch speed.")
+                        end,
+                        min = 0.1, max = 4, step = 0.05, bigStep = 0.25,
+                        get = function() return tonumber(GetOption("gamePadCameraPitchMultiplier")) or 1.0 end,
+                        set = function(_, val) SetOption("gamePadCameraPitchMultiplier", tonumber(val) or 1.0) end,
+                        order = 6.4,
+                        hidden = function() return not GamePadSupported() end,
+                        disabled = function() return not GetOption("gamePadManageCameraSpeed") end,
+                    },
+                    gamePadRelaxFaceMovement = {
+                        type = "toggle",
+                        name = L["GAMEPAD_FACE_MOVEMENT_NAME"] or "Disable Face-Movement with Shoulder Cam",
+                        desc = L["GAMEPAD_FACE_MOVEMENT_DESC"] or "GamePadFaceMovement turns your character to face the stick direction, which fights the over-shoulder offset. Turn this on to suspend it while the shoulder camera is active; the original value is restored afterwards.",
+                        get = function() return GetOption("gamePadRelaxFaceMovement") and true or false end,
+                        set = function(_, val) SetOption("gamePadRelaxFaceMovement", val and true or false) end,
+                        order = 6.5,
+                        hidden = function() return not (GamePadSupported() and HasCVar("GamePadFaceMovement")) end,
+                    },
+                    gamePadStickWarning = {
+                        type = "description",
+                        name = function() return DescribeGamePadStickProblems() end,
+                        order = 6.6,
+                        hidden = function()
+                            return DescribeGamePadStickProblems() == nil
+                        end,
+                    },
+
                     afkHeader = { type = "header", name = L["AFK_MODE_HEADER"], order = 10 },
                     descAFK = { type = "description", name = L["AFK_MODE_DESC_SAFE"], order = 10.5 },
                     enableAFK = {

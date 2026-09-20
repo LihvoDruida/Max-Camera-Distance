@@ -211,7 +211,33 @@ updateFrame:Hide()
 local RUNTIME_SIGNAL_CACHE_SECONDS = 0.05
 local GROUP_COMBAT_CACHE_SECONDS = 0.25
 local CVAR_GUARD_REFRESH_SECONDS = 0.12
-local SHOULDER_UPDATE_INTERVAL = 0.033
+-- Grouped in one table rather than as separate file-level locals on purpose:
+-- Lua 5.1 allows at most 200 locals in a chunk and this file is close to that
+-- ceiling, so every new tuning knob would otherwise cost a slot.
+local SHOULDER = {
+    -- Per-frame polling while the camera is actually moving.
+    UPDATE_INTERVAL = 0.033,
+    -- While the camera is parked - standing in a city, reading quest text,
+    -- waiting for a pull - the offset cannot change, so polling it every frame
+    -- is pure overhead. Back off after IDLE_AFTER seconds of a completely
+    -- static camera and snap back the instant it moves again. 0.10 rather than
+    -- something larger on purpose: the backoff can only ever delay NOTICING
+    -- that movement resumed, and 100 ms after a full second of stillness is not
+    -- perceptible, whereas 250 ms would be.
+    IDLE_INTERVAL = 0.10,
+    IDLE_AFTER = 1.00,
+    ZOOM_EPSILON = 0.01,
+    OFFSET_EPSILON = 0.002,
+    OFFSET_DEFAULT = 1.0,
+    -- test_cameraOverShoulder is clamped to +/-15 by NormalizeManagedCVarValue.
+    -- The option range is deliberately narrower: past a few units the camera is
+    -- outside the character entirely and the view is unusable.
+    OFFSET_MIN = -5.0,
+    OFFSET_MAX = 5.0,
+    FADE_START_DEFAULT = 5.0,
+    FADE_END_DEFAULT = 2.0,
+    FADE_MAX = 25.0,
+}
 local RAID_UNITS, PARTY_UNITS = {}, {}
 for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
 for i = 1, 4 do PARTY_UNITS[i] = "party" .. i end
@@ -2230,40 +2256,79 @@ local function ApplyRaceFirstPersonZoom()
     end
 end
 
-local function GetShoulderOffsetZoomFactor(zoomLevel)
-    local startOffset = 5.0
-    local endOffset = 2.0
-
-    if zoomLevel < endOffset then
-        return 0
-    elseif zoomLevel > startOffset then
+-- Linear cross-fade between "fully centred" at fadeEnd yards and "full
+-- shoulder offset" at fadeStart yards. Both edges are configurable now; they
+-- used to be hardcoded at 2.0 and 5.0.
+local function GetShoulderOffsetZoomFactor(zoomLevel, fadeStart, fadeEnd)
+    if not (fadeStart and fadeEnd) or fadeStart <= fadeEnd then
         return 1
-    else
-        return (zoomLevel - endOffset) / (startOffset - endOffset)
     end
+
+    if zoomLevel <= fadeEnd then
+        return 0
+    elseif zoomLevel >= fadeStart then
+        return 1
+    end
+
+    return (zoomLevel - fadeEnd) / (fadeStart - fadeEnd)
 end
 
+function Functions:GetShoulderSettings(db)
+    db = db or DB()
+    if not db then
+        return SHOULDER.OFFSET_DEFAULT, SHOULDER.FADE_START_DEFAULT, SHOULDER.FADE_END_DEFAULT, true, true
+    end
+
+    local offset = ClampNumber(db.actionCamShoulderOffset, SHOULDER.OFFSET_MIN, SHOULDER.OFFSET_MAX)
+    if offset == nil then offset = SHOULDER.OFFSET_DEFAULT end
+
+    local smartFade = db.actionCamShoulderSmartFade ~= false
+    local compensate = db.actionCamShoulderModelCompensation ~= false
+
+    local fadeEnd = ClampNumber(db.actionCamShoulderFadeEnd, 0, SHOULDER.FADE_MAX) or SHOULDER.FADE_END_DEFAULT
+    local fadeStart = ClampNumber(db.actionCamShoulderFadeStart, 0, SHOULDER.FADE_MAX) or SHOULDER.FADE_START_DEFAULT
+
+    -- An inverted or collapsed window would make the offset flip between 0 and
+    -- full on a single zoom tick. Treat it as "no fade" instead.
+    if fadeStart <= fadeEnd then
+        smartFade = false
+    end
+
+    return offset, fadeStart, fadeEnd, smartFade, compensate
+end
+
+-- Returns two flags: whether the CVar had to be rewritten, and whether the
+-- camera moved at all. The OnUpdate driver below backs its polling off on the
+-- second one, so a completely static camera stops costing a frame slot while a
+-- zoom that happens to leave the offset unchanged still keeps polling hot.
 function Functions:ApplyShoulderOffset(force)
     local db = DB()
-    if not db then return end
+    if not db then return false, false end
 
     if raceFirstPersonApplied or not shoulderHandlerFrame:IsShown() then
         shoulderHandlerFrame.lastZoom = -1
+        shoulderHandlerFrame.lastOffset = nil
         UpdateCVar("test_cameraOverShoulder", 0)
-        return
+        return true, true
     end
 
+    local offset, fadeStart, fadeEnd, smartFade, compensate = self:GetShoulderSettings(db)
+
     local currentZoom = (GetCameraZoom and GetCameraZoom()) or 0
-    if (not force) and math_abs(shoulderHandlerFrame.lastZoom - currentZoom) < 0.01 then
-        return
+    if (not force)
+        and shoulderHandlerFrame.lastZoom >= 0
+        and math_abs(shoulderHandlerFrame.lastZoom - currentZoom) < SHOULDER.ZOOM_EPSILON then
+        return false, false
     end
     shoulderHandlerFrame.lastZoom = currentZoom
 
-    local zoomFactor = GetShoulderOffsetZoomFactor(currentZoom)
-    local baseOffset = 1.0
-    local modelFactor = 1.0
+    local zoomFactor = smartFade and GetShoulderOffsetZoomFactor(currentZoom, fadeStart, fadeEnd) or 1
 
-    if ShoulderCompensation and ShoulderCompensation.GetFactor then
+    local modelFactor = 1.0
+    -- Skipping compensation is not just a preference: it removes the model /
+    -- mount / shapeshift lookups from the hot path entirely for players who want
+    -- the raw CVar value.
+    if compensate and ShoulderCompensation and ShoulderCompensation.GetFactor then
         local okFactor, value = pcall(ShoulderCompensation.GetFactor, ShoulderCompensation)
         if okFactor and tonumber(value) then
             modelFactor = value
@@ -2272,7 +2337,20 @@ function Functions:ApplyShoulderOffset(force)
         end
     end
 
-    UpdateCVar("test_cameraOverShoulder", baseOffset * zoomFactor * modelFactor)
+    local target = offset * zoomFactor * modelFactor
+
+    -- The old code compared ZOOM and then wrote the CVar unconditionally. Past
+    -- the outer fade edge - which is where the camera sits most of the time -
+    -- every bit of zoom jitter therefore produced a full GetCVar/SetCVar pair
+    -- for a value that had not changed. Compare the RESULT instead.
+    local previous = shoulderHandlerFrame.lastOffset
+    if (not force) and previous ~= nil and math_abs(previous - target) < SHOULDER.OFFSET_EPSILON then
+        return false, true
+    end
+
+    shoulderHandlerFrame.lastOffset = target
+    UpdateCVar("test_cameraOverShoulder", target)
+    return true, true
 end
 
 local shoulderRefreshQueued = false
@@ -2326,14 +2404,38 @@ function Functions:RequestShoulderRefresh()
 end
 
 shoulderHandlerFrame.lastZoom = -1
+shoulderHandlerFrame.lastOffset = nil
 shoulderHandlerFrame.elapsed = 0
+shoulderHandlerFrame.interval = SHOULDER.UPDATE_INTERVAL
+shoulderHandlerFrame.idleFor = 0
+
+function shoulderHandlerFrame:ResetPolling()
+    self.elapsed = 0
+    self.idleFor = 0
+    self.interval = SHOULDER.UPDATE_INTERVAL
+end
+
 shoulderHandlerFrame:SetScript("OnUpdate", function(self, elapsed)
     self.elapsed = (self.elapsed or 0) + (elapsed or 0)
-    if self.elapsed < SHOULDER_UPDATE_INTERVAL then
+
+    local interval = self.interval or SHOULDER.UPDATE_INTERVAL
+    if self.elapsed < interval then
         return
     end
     self.elapsed = 0
-    Functions:ApplyShoulderOffset(false)
+
+    local _, moved = Functions:ApplyShoulderOffset(false)
+    if moved then
+        -- The camera moved: go back to per-frame responsiveness immediately.
+        self.idleFor = 0
+        self.interval = SHOULDER.UPDATE_INTERVAL
+        return
+    end
+
+    self.idleFor = (self.idleFor or 0) + interval
+    if self.idleFor >= SHOULDER.IDLE_AFTER then
+        self.interval = SHOULDER.IDLE_INTERVAL
+    end
 end)
 shoulderHandlerFrame:Hide()
 
@@ -2360,9 +2462,25 @@ function Functions:UpdateActionCam()
     local db = DB()
     if not db then return end
 
-    UpdateCVar("test_cameraDynamicPitch", db.actionCamPitch and 1 or 0)
+    local function PublishActionCamIntent(shoulderWanted, pitchWanted)
+        local guard = ns.CVarGuard
+        if not (guard and guard.SetActionCamIntent) then return false end
+        local ok, changed = pcall(guard.SetActionCamIntent, guard, shoulderWanted, pitchWanted)
+        return ok and changed and true or false
+    end
+
+    local pitchWanted = db.actionCamPitch and true or false
+    UpdateCVar("test_cameraDynamicPitch", pitchWanted and 1 or 0)
 
     local dragonRaceFirstPerson = self:ShouldUseDragonRacingFirstPerson(db)
+    local shoulderWanted = (not dragonRaceFirstPerson) and self:ShouldEnableShoulderNow() or false
+
+    -- Tell CVarGuard what the addon WANTS before touching any CVar. The guard
+    -- used to infer this by reading test_cameraOverShoulder back, which deadlocks
+    -- as soon as the client zeroes the offset on our behalf - see the note in
+    -- CVarGuard.lua. Publishing intent first also means the keep-centered block
+    -- is already in force by the time the shoulder value is written below.
+    local intentChanged = PublishActionCamIntent(shoulderWanted, pitchWanted)
 
     if dragonRaceFirstPerson then
         if not raceFirstPersonApplied then
@@ -2370,7 +2488,9 @@ function Functions:UpdateActionCam()
         end
         ApplyRaceFirstPersonZoom()
         shoulderHandlerFrame:Hide()
+        shoulderHandlerFrame:ResetPolling()
         shoulderHandlerFrame.lastZoom = -1
+        shoulderHandlerFrame.lastOffset = nil
         UpdateCVar("test_cameraOverShoulder", 0)
     else
         if raceFirstPersonApplied then
@@ -2378,21 +2498,30 @@ function Functions:UpdateActionCam()
             self:ScheduleStabilizedUpdate({ 0, 0.05, 0.20 }, true)
         end
 
-        if self:ShouldEnableShoulderNow() then
+        if shoulderWanted then
             if SafeGetCVar("CameraKeepCharacterCentered") == 1 then
                 UpdateCVar("CameraKeepCharacterCentered", 0)
                 Functions:logMessage("warning", L["CONFLICT_FIX_MSG"] or "ActionCam: Disabled Keep Character Centered to prevent jitter.")
             end
             shoulderHandlerFrame:Show()
+            shoulderHandlerFrame:ResetPolling()
             self:ApplyShoulderOffset(true)
         else
             shoulderHandlerFrame:Hide()
+            shoulderHandlerFrame:ResetPolling()
             shoulderHandlerFrame.lastZoom = -1
+            shoulderHandlerFrame.lastOffset = nil
             UpdateCVar("test_cameraOverShoulder", 0)
         end
     end
 
-    RequestCVarGuardRefresh(false)
+    -- GamePadFaceMovement only has to be reconsidered when the shoulder intent
+    -- itself flips, not on every camera pass.
+    if intentChanged and ns.GamePad and ns.GamePad.RefreshFaceMovement then
+        pcall(ns.GamePad.RefreshFaceMovement, ns.GamePad)
+    end
+
+    RequestCVarGuardRefresh(intentChanged)
 end
 
 -- =====================================================================
@@ -2795,6 +2924,24 @@ function Functions:PrintRuntimeStatus()
     self:SendMessage(" - CVars: cameraDistanceMaxZoomFactor=" .. FormatCVar("cameraDistanceMaxZoomFactor") .. ", cameraDistanceMax=" .. FormatCVar("cameraDistanceMax") .. ", cameraDistanceMoveSpeed=" .. FormatCVar("cameraDistanceMoveSpeed") .. ", cameraZoomSpeed=" .. FormatCVar("cameraZoomSpeed"))
     self:SendMessage(" - timing: manualWheelSpeed=" .. tostring(db.moveViewDistance or "unknown") .. ", zoomTransitionTime=" .. tostring(db.zoomTransitionTime or "unknown"))
     self:SendMessage(" - CVars: keepCentered=" .. FormatCVar("CameraKeepCharacterCentered") .. ", reduceUnexpectedMovement=" .. FormatCVar("cameraReduceUnexpectedMovement") .. ", shoulder=" .. FormatCVar("test_cameraOverShoulder") .. ", dynamicPitch=" .. FormatCVar("test_cameraDynamicPitch"))
+
+    do
+        local shoulderIntent, pitchIntent = false, false
+        local guard = ns.CVarGuard
+        if guard and guard.GetActionCamIntent then
+            local ok, wantShoulder, wantPitch = pcall(guard.GetActionCamIntent, guard)
+            if ok then
+                shoulderIntent, pitchIntent = wantShoulder, wantPitch
+            end
+        end
+        local offset, fadeStart, fadeEnd, smartFade, compensate = self:GetShoulderSettings(db)
+        self:SendMessage(string.format(" - shoulder: intent=%s pitchIntent=%s offset=%.2f fade=%s(%.1f..%.1f) modelCompensation=%s poll=%.0fms",
+            FormatBool(shoulderIntent), FormatBool(pitchIntent), offset,
+            FormatBool(smartFade), fadeEnd, fadeStart, FormatBool(compensate),
+            (shoulderHandlerFrame.interval or SHOULDER.UPDATE_INTERVAL) * 1000))
+    end
+
+    self:PrintGamePadStatus()
     if IS_FOREVER then
         self:SendMessage(" - Forever fog: volumeFog=" .. FormatCVar("volumeFog") .. ", interior=" .. FormatCVar("volumeFogInterior") .. ", level=" .. FormatCVar("volumeFogLevel"))
         self:SendMessage(" - Forever ground effects: managed=" .. FormatBool(db and db.foreverGroundEffectsOverride) .. ", density=" .. FormatCVar("groundEffectDensity") .. ", distance=" .. FormatCVar("groundEffectDist") .. ", fade=" .. FormatCVar("groundEffectFade"))
@@ -2949,6 +3096,12 @@ function Functions:ApplyManagedCVars()
             UpdateCVar("groundEffectDist", db.groundEffectDist)
             UpdateCVar("groundEffectFade", db.groundEffectFade)
         end
+    end
+
+    -- The gamepad has its own camera speed CVars; cameraYawMoveSpeed and
+    -- cameraPitchMoveSpeed above only ever drive the mouse/keyboard camera.
+    if ns.GamePad and ns.GamePad.Refresh then
+        pcall(ns.GamePad.Refresh, ns.GamePad, false)
     end
 
     RequestCVarGuardRefresh(false)
@@ -3111,6 +3264,15 @@ function Functions:OnCVarUpdate(_, cvarName, value)
     elseif IS_FOREVER and cvarName == "groundEffectFade" then
         db.groundEffectFade = math_floor((ClampNumber(numValue, 0, 600) or 70) + 0.5)
         NotifyConfigChanged()
+    elseif cvarName == "CameraKeepCharacterCentered" then
+        -- This event used to fall straight through and do nothing. Blizzard's
+        -- camera and gamepad settings panels both write this CVar, and it
+        -- overrides ActionCam outright, so it has to reach the guard.
+        local guard = ns.CVarGuard
+        if guard and guard.Refresh then
+            pcall(guard.Refresh, guard, true)
+        end
+        return
     elseif cvarName == "test_cameraDynamicPitch" or cvarName == "test_cameraOverShoulder" then
         Functions:UpdateActionCam()
         return
@@ -3161,6 +3323,49 @@ end
 -- =====================================================================
 -- 15) SLASH
 -- =====================================================================
+function Functions:PrintGamePadStatus()
+    local gamePad = ns.GamePad
+    if not (gamePad and gamePad.GetDiagnostics) then
+        self:SendMessage(" - gamepad: module unavailable")
+        return
+    end
+
+    local info = gamePad:GetDiagnostics()
+    if not info.supported then
+        self:SendMessage(" - gamepad: not supported on this client")
+        return
+    end
+
+    local function Show(value)
+        if value == nil then return "n/a" end
+        return tostring(value)
+    end
+
+    self:SendMessage(" - gamepad: active=" .. FormatBool(info.active)
+        .. " GamePadEnable=" .. Show(info.enableCVar)
+        .. " managingSpeed=" .. FormatBool(info.managingSpeed)
+        .. " relaxFaceMovement=" .. FormatBool(info.relaxFaceMovement))
+    self:SendMessage(" - gamepad sticks: camera=" .. Show(info.cameraStick)
+        .. " move=" .. Show(info.moveStick)
+        .. " cursor=" .. Show(info.cursorStick)
+        .. " faceMovement=" .. Show(info.faceMovement)
+        .. "  (0=none, 1=left, 2=right)")
+    self:SendMessage(" - gamepad camera speed: yaw=" .. Show(info.yawSpeed) .. " (default " .. Show(info.yawDefault) .. ")"
+        .. ", pitch=" .. Show(info.pitchSpeed) .. " (default " .. Show(info.pitchDefault) .. ")")
+
+    if info.problems and #info.problems > 0 then
+        for _, id in ipairs(info.problems) do
+            if id == "cameraStickUnassigned" then
+                self:SendMessage(" - |cffff5555gamepad: no stick is assigned to the camera, so the client sends no camera input at all.|r")
+            elseif id == "cameraStickSharedWithMovement" then
+                self:SendMessage(" - |cffffcc00gamepad: the camera and movement share a physical stick.|r")
+            elseif id == "cameraStickSharedWithCursor" then
+                self:SendMessage(" - |cffffcc00gamepad: the camera and cursor share a physical stick.|r")
+            end
+        end
+    end
+end
+
 function Functions:SlashCmdHandler(msg)
     ResolveOptionalLibs()
 
@@ -3177,7 +3382,7 @@ function Functions:SlashCmdHandler(msg)
     local db = ns.Database.db.profile
 
     if command == "" or command == "help" then
-        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off")
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | gamepad | deps | fastzoom | slowzoom | reset | debug on | debug off")
 
     elseif command == "config" then
         if ns.Config and ns.Config.Open then
@@ -3208,6 +3413,13 @@ function Functions:SlashCmdHandler(msg)
 
     elseif command == "deps" then
         Functions:PrintDependencyStatus()
+
+    elseif command == "gamepad" then
+        if ns.GamePad and ns.GamePad.Refresh then
+            pcall(ns.GamePad.Refresh, ns.GamePad, true)
+        end
+        Functions:SendMessage("GamePad status:")
+        Functions:PrintGamePadStatus()
 
     elseif command == "fastzoom" then
         db.moveViewDistance = 50

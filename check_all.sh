@@ -75,6 +75,7 @@ stage "XML well-formedness"       xml_wellformed
 stage "TOC files current"         python3 tools/generate_tocs.py --check
 stage "Manifest references"       python3 tools/verify_manifest.py --allow-missing-externals
 stage "Probe: late Ace3"          lua5.1 tests/probe_lateace3.lua
+stage "Probe: gamepad/shoulder"   lua5.1 tests/probe_gamepad.lua
 
 echo ""
 if [[ $failures -eq 0 ]]; then

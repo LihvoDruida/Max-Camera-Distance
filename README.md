@@ -18,7 +18,9 @@ Unlike simple scripts, this addon features a **reactive engine** that adapts to 
 ### 🎬 Cinematic ActionCam (New!)
 Transform your WoW experience with modern RPG camera mechanics:
 * **Smart Shoulder Offset:** Moves the camera over your character's shoulder for an immersive view.
-    * *Dynamic Interpolation:* Automatically centers the camera when you zoom in close (for looting/interacting) and shifts to the shoulder as you zoom out.
+    * *Adjustable Intensity:* Set exactly how far off-centre the camera sits (−5 to +5). Negative values move it to the other shoulder.
+    * *Dynamic Interpolation:* Automatically centers the camera when you zoom in close (for looting/interacting) and shifts to the shoulder as you zoom out. Both edges of that window are configurable, and it can be switched off for a constant offset.
+    * *Model Compensation:* Blizzard scales the offset by your model's width, so the same value looks different on a Tauren, a Gnome or a mount. Compensation is on by default and can be disabled to use the raw CVar value.
 * **Dynamic Pitch:** Subtly adjusts the camera angle based on your character's movement.
 * **Jitter Protection:** Automatically disables the conflicting *"Keep Character Centered"* setting to ensure smooth motion.
 
@@ -33,6 +35,13 @@ Turn your screen into a screensaver when you step away:
 * **Cinematic Rotation:** Automatically hides the UI and slowly rotates the camera around your character.
 * **Safe Exit (Anti-Trap):** Pressing **ESC** while the UI is hidden immediately restores the interface and exits AFK mode. No more getting stuck!
 * **Settings Protection:** Prevents the Settings Panel from becoming transparent during AFK.
+
+### 🎮 Gamepad Support
+Native controller support is handled separately from the mouse camera, because the game keeps them on different CVars:
+* **Gamepad Camera Speed:** `GamePadCameraYawSpeed` / `GamePadCameraPitchSpeed` are managed as a multiplier of the client's own default. The addon's mouse-camera sliders have never affected these — that is why they seemed to do nothing with a controller. Off by default.
+* **ActionCam Compatibility:** `CameraKeepCharacterCentered` overrides ActionCam outright, and enabling the gamepad is a common way to end up with it switched on. The addon now tracks its own intent rather than reading the shoulder CVar back, so the shoulder camera can no longer get permanently stuck off.
+* **Face-Movement Conflict:** `GamePadFaceMovement` fights the over-shoulder offset. It can optionally be suspended while the shoulder camera is active and is restored afterwards. Off by default.
+* **Stick Diagnostics:** Warns when no stick is assigned to the camera, or when the camera shares a physical stick with movement or the cursor.
 
 ### ⚙️ System Integration & Optimization
 * **Zero-Lag Core:** Uses **Event Throttling** to process camera logic only once per frame, ensuring 0% FPS drop even in heavy raid combat.
@@ -49,6 +58,8 @@ Turn your screen into a screensaver when you step away:
 * `/mcd config` - Open the configuration panel (GUI).
 * `/mcd autozoom` - Toggle Smart Combat Zoom.
 * `/mcd automount` - Toggle Smart Mount Zoom.
+* `/mcd status` - Print full runtime diagnostics.
+* `/mcd gamepad` - Print gamepad state, stick assignment and camera speeds.
 
 ## ✅ Compatibility
 

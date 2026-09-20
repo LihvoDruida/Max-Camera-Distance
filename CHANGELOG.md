@@ -1,5 +1,33 @@
 # Max Camera Distance — Changelog
 
+## v10.4 — Gamepad support, configurable shoulder offset, ActionCam deadlock fix
+
+### Fixed
+
+- **ActionCam could permanently stop working once `CameraKeepCharacterCentered` was switched on.** `CVarGuard` decided whether to block that CVar by reading `test_cameraOverShoulder` back. Keep-centered overrides ActionCam outright (it was added in 9.0.1 for exactly that), and since 11.0.2 `cameraReduceUnexpectedMovement` affects the shoulder CVar as well — so once either was enabled the shoulder value read back as `0`, the guard concluded the shoulder camera was inactive, stopped blocking keep-centered, restored it, and the shoulder camera could never return. The guard now follows the addon's published *intent* (`CVarGuard:SetActionCamIntent`), which does not take part in that feedback loop. This is the most likely cause of "the camera inputs just don't work once I turn the gamepad on".
+- `CVarGuard:Refresh()` no longer returns early when its blocking state is unchanged, so a CVar moved underneath it (Blizzard's camera or gamepad panel, a saved-view restore, another addon) is reconciled instead of being ignored until something else flips the state.
+- `CVAR_UPDATE` for `CameraKeepCharacterCentered` used to fall through `Functions:OnCVarUpdate` and do nothing at all. It now reaches the guard.
+
+### Added
+
+- **Shoulder offset is configurable.** The base offset was hardcoded to `1.0`; it is now the `actionCamShoulderOffset` setting (range −5…5, negative values move the camera to the other shoulder), with a Reset button.
+- The zoom recentring window is configurable too (previously hardcoded at 2.0 and 5.0 yards), can be switched off entirely for a constant offset, and per-model compensation can be disabled to send the raw CVar value.
+- **Gamepad support (`GamePad.lua`).** Detects the gamepad through `C_GamePad.IsEnabled` / `GetActiveDeviceID` with a `GamePadEnable` CVar fallback, and reacts to `GAME_PAD_ACTIVE_CHANGED`, `GAME_PAD_CONNECTED`, `GAME_PAD_DISCONNECTED` and `GAME_PAD_CONFIGS_CHANGED`.
+- Optional management of `GamePadCameraYawSpeed` / `GamePadCameraPitchSpeed`. Every existing camera speed option in this addon writes `cameraYawMoveSpeed` / `cameraPitchMoveSpeed`, which only drive the mouse camera — which is why those sliders appeared to do nothing with a controller. Stored as a **multiplier** of the client's own default rather than an absolute number, because the scale of these CVars is not reliably documented. Off by default; switching it off hands both CVars back to the client.
+- Optional suspension of `GamePadFaceMovement` while the shoulder camera is active, restoring the player's own value afterwards. Off by default.
+- Diagnostics for the mundane cause of "no camera input": `GamePadCameraStick` set to `0`, or sharing a physical stick with movement or the cursor. Surfaced as a one-shot warning, in the options panel, and in `/mcd status`.
+- `/mcd gamepad` and new `/mcd status` lines covering gamepad state, stick assignment, resolved camera speeds, ActionCam intent and the current shoulder polling rate.
+
+### Changed
+
+- The shoulder `OnUpdate` driver compared *zoom* and then called `UpdateCVar` unconditionally, so any camera jitter past the fade window cost a CVar read every frame for a value that had not changed. It now compares the resulting offset, and backs its polling off from 30 Hz to 10 Hz after a full second of a completely static camera, snapping back the instant the camera moves.
+- Shoulder tuning constants are grouped into one table because `Functions.lua` is close to Lua 5.1's 200-locals-per-chunk ceiling.
+
+### Tests
+
+- New `tests/probe_gamepad.lua` (27 assertions) covering the offset, the fade window, write suppression, the keep-centered deadlock, gamepad speed mirroring, face-movement restore and stick misconfiguration. Verified against negative controls: reverting either the intent fix or the write-suppression fix makes it fail.
+- `tests/wow_stub.lua` gained real shown/hidden frame state and a case-insensitive CVar store with read/write counting.
+
 ## v10.3 — Forever ground-effect default reset controls
 
 - Added a per-setting **Reset** button beside `groundEffectDensity`, `groundEffectDist`, and `groundEffectFade` in the Forever Advanced Environment panel.
