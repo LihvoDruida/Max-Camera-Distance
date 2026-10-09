@@ -3,6 +3,7 @@ local writes = {}
 local cvars = { cameraZoomSpeed = 20 }
 local now = 100
 local zoom = 10
+local movement = 0
 
 _G.C_CVar = {
     GetCVar = function(name) return tostring(cvars[name]) end,
@@ -21,10 +22,10 @@ _G.GetCameraZoom = function() return zoom end
 _G.GetTime = function() return now end
 _G.CameraZoomOut = function(amount) zoom = zoom + amount end
 _G.CameraZoomIn = function(amount) zoom = zoom - amount end
-_G.MoveViewOutStart = function() end
-_G.MoveViewInStart = function() end
-_G.MoveViewInStop = function() end
-_G.MoveViewOutStop = function() end
+_G.MoveViewOutStart = function(speed) movement = speed end
+_G.MoveViewInStart = function(speed) movement = -speed end
+_G.MoveViewInStop = function() movement = 0 end
+_G.MoveViewOutStop = function() movement = 0 end
 _G.MoveViewLeftStop = function() end
 _G.MoveViewRightStop = function() end
 _G.MoveViewUpStop = function() end
@@ -37,7 +38,7 @@ _G.CreateFrame = function()
     }
 end
 
-local libs = {}
+local libs = { ["LibCamera-1.0"] = { external = true } }
 _G.LibStub = {
     NewLibrary = function(_, major)
         libs[major] = libs[major] or {}
@@ -46,8 +47,9 @@ _G.LibStub = {
 }
 
 assert(loadfile("libs/LibCamera/LibCamera.lua"))()
-local cam = libs["LibCamera-1.0"]
+local cam = libs["MaxCameraDistance-LibCamera-1.0"]
 assert(cam, "LibCamera failed to load")
+assert(libs["LibCamera-1.0"].external and not libs["LibCamera-1.0"].SetZoom, "private camera overwrites another addon library")
 
 local callbacks = 0
 cam:SetZoomUsingCVar(10, 0.5, function(cancelled)
@@ -65,4 +67,17 @@ local last = writes[#writes]
 assert(last.name == "cameraZoomSpeed", "unexpected CVar write")
 assert(last.value >= 0.002778 and last.value <= 50, "temporary speed not clamped to live range")
 
-print("probe_libcamera: PASS")
+cam:StopZooming()
+_G.C_CVar.SetCVar = function() return false end
+cam:SetZoomUsingCVar(20, 0.5)
+assert(cam:IsZooming(), "a rejected zoom-speed write must fall back to basic easing")
+for tick = 1, 120 do
+    local elapsed = 1 / 60
+    zoom = zoom + movement * cvars.cameraZoomSpeed * elapsed
+    now = now + elapsed
+    local update = cam.frame:GetScript("OnUpdate")
+    if update then update(cam.frame, elapsed) end
+end
+assert(math.abs(zoom - 20) <= 0.05, "fallback easing does not reach the target")
+assert(not cam:IsZooming(), "fallback easing never releases its update driver")
+print("probe_libcamera: PASS (ranges, no-op, private instance, rejected-write fallback)")

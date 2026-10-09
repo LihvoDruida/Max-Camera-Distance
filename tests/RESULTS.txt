@@ -1,0 +1,189 @@
+
+=== Lua 5.1 syntax
+--- PASS: Lua 5.1 syntax
+
+=== Global leak audit
+--- PASS: Global leak audit
+
+=== XML well-formedness
+--- PASS: XML well-formedness
+
+=== TOC files current
+All .toc files are up to date.
+--- PASS: TOC files current
+
+=== Manifest references
+manifest OK: every referenced file exists
+--- PASS: Manifest references
+
+=== Probe: late Ace3
+PROBE late-Ace3 registration
+  ok   phase 1: addon still initialises a profile without Ace3
+  ok   phase 1: fallback store is flagged as such
+  ok   phase 1: native settings schema is ready without Ace3
+  ok   phase 1: settings written to the fallback survive in SavedVariables
+  ok   phase 2: native options schema remains available
+  ok   phase 2: profile store upgraded off the fallback
+  ok   phase 2: the value set while on the fallback survived the upgrade
+  ok   phase 2: old Blizzard/Ace categories are not created
+  ok   phase 3: Config:Open() no longer raises the AceConfigRegistry error
+  ok   phase 4: re-running init does not duplicate Blizzard categories
+  ok   phase 5: this probe is NOT a Forever client
+  ok   phase 5: the gamepad module reports no support off Forever
+  ok   phase 5: no gamepad keys leak into a non-Forever profile
+  ok   phase 5: the gamepad options group exists in the table
+  ok   phase 5: the gamepad options tab is hidden off Forever
+  ok   phase 5: ActionCam stays in Additional Features on Retail
+  ok   phase 5: Retail shoulder slider is not gated by Forever Gamepad UI
+  ok   phase 5: Forever ActionCam pre-sync does not alter Retail world-entry ordering
+PROBE PASSED
+--- PASS: Probe: late Ace3
+
+=== Probe: gamepad/shoulder
+  ok   startup: UI toggle discovery waits for VARIABLES_LOADED
+  ok   startup: gamepad mode stays inactive before the master CVar can be resolved
+PROBE gamepad + shoulder offset
+  ok   phase 0: ActionCam is moved out of Extra Features on Forever
+  ok   phase 0: ActionCam is the first Gamepad settings section
+  ok   phase 0: Forever ActionCam toggles use full-width rows so labels are not clipped
+  ok   phase 0: Forever shoulder offset exposes the engine's full documented range
+  ok   phase 0: Forever shoulder controls include reset, swap and center actions
+  ok   phase 0: static bindings expose shoulder toggle/swap/center/settings
+  ok   phase 0: gamepad speed multipliers start at client-default 1x
+  ok   phase 0: API-only gamepad values start from built-in defaults
+  ok   phase 0: optional gamepad management starts disabled
+  ok   phase 0: ActionCam controls start from stable addon defaults
+  ok   phase 0: ActionCam is synchronized before gamepad compatibility
+  ok   phase 0: enabling the Forever Gamepad UI arms ActionCam runtime
+  ok   phase 1: ActionCam blockers are cleared before shoulder application
+  ok   phase 1: the shoulder CVar follows the configured offset (1.0)
+  ok   phase 1: raising the offset to 2.75 reaches the CVar
+  ok   phase 1: a negative offset swaps to the other shoulder
+  ok   phase 1: the full documented +15 shoulder range is available
+  ok   phase 1: the full documented -15 shoulder range is available
+  ok   phase 2: fully centred below the inner fade edge
+  ok   phase 2: halfway through the window gives half the offset
+  ok   phase 2: full offset beyond the outer fade edge
+  ok   phase 3: a static camera touches no CVars at all
+  ok   phase 3: zoom jitter past the fade window touches the shoulder CVar at most once
+  ok   phase 3: a zoom that does change the offset still writes once
+  ok   phase 4: the guard knows the addon wants the shoulder camera
+  ok   phase 4: the guard still blocks keep-centered with the CVar reading 0
+  ok   phase 4: keep-centered is forced back off
+  ok   phase 4: the saved keep-centered value is restored afterwards
+  ok   phase 4: Gamepad UI master-off tears down Forever ActionCam
+  ok   phase 5: the gamepad module reports support on Forever
+  ok   phase 5: the Gamepad UI toggle CVar is discovered, not guessed at
+  ok   phase 5: a connected controller with the UI toggle OFF is not active
+  ok   phase 5: enabling the Gamepad UI toggle activates the addon's gamepad mode
+  ok   phase 5: ActionCam diagnostics include non-managed gamepad camera-policy CVars
+  ok   phase 5: pre-commit setup has a live shoulder before master-off
+  ok   phase 5: pre-commit master-off event tears down ActionCam using the event value
+  ok   phase 5: Core reacts to a runtime-discovered UI CVar
+  ok   phase 5: dynamic UI CVar can re-enable gamepad mode
+  ok   phase 5: gamepad speeds are left alone while the option is off
+  ok   phase 5: the yaw multiplier scales the client's own default
+  ok   phase 5: the pitch multiplier scales the client's own default
+  ok   phase 5: the mouse camera CVars are untouched by gamepad settings
+  ok   phase 5: switching the option off hands the CVars back to the client
+  ok   phase 5: legacy sub-1 gamepad multipliers clamp to the Forever minimum
+  ok   phase 6: face-movement is untouched while the option is off
+  ok   phase 6: current angle-based face-movement is suspended with shoulder cam
+  ok   phase 6: the player's face-movement angles are restored, not clobbered
+  ok   phase 7: a correctly assigned camera stick reports no problem
+  ok   phase 7: an unassigned camera stick is reported
+  ok   phase 7: sharing a stick with movement is reported
+  ok   phase 8: the probe really is running as Forever
+  ok   phase 8: the module advertises itself as Forever-scoped
+  ok   phase 8: Forever profiles carry the gamepad keys
+  ok   phase 9: an already-active gamepad does not open the panel
+  ok   phase 9: enabling the gamepad opens the panel once
+  ok   phase 9: it does not open again on the next toggle
+  ok   phase 9: the panel never opens in combat
+  ok   phase 9: the panel never opens while dead
+  ok   phase 9: the panel never opens while ghost
+  ok   phase 9: re-enabling the option re-arms the one-time panel
+  ok   phase 9: the opt-out is respected
+  ok   phase 10: a CVar with a Settings entry counts as owned by the game
+  ok   phase 10: a CVar without one stays available to the addon
+  ok   phase 10: camera-speed ownership is resolved per axis
+  ok   phase 10: the addon writes only the unowned camera axis
+  ok   phase 10: game-owned modern face controls suppress the legacy fallback
+  ok   phase 10: restore paths also leave game-owned CVars untouched
+  ok   phase 11: an API-only CVar is manageable
+  ok   phase 11: nothing is written while the override is off
+  ok   phase 11: enabling the override seeds the client built-in default
+  ok   phase 11: a changed value reaches the CVar
+  ok   phase 11: turning the override off restores the client default
+  ok   phase 12: turning the Gamepad UI off deactivates the addon's gamepad mode
+  ok   phase 12: master-off restores addon-managed CVars to client defaults
+  ok   phase 12: once reconciled, UI-off produces no repeated writes
+  ok   phase 13: Druid travel form is not reported as a physical mount
+  ok   phase 13: physical movement states are reported independently
+  ok   phase 13: gliding API is feature-detected and reported
+  ok   phase 13: dead state is reported independently
+  ok   phase 13: ghost state is reported independently
+  ok   phase 14: synchronous CVAR_UPDATE does not recurse/overflow
+  ok   phase 14: keep-centered still commits to 0
+  ok   phase 14: reduce-unexpected-movement still commits to 0
+  ok   phase 14: reentrant events do not explode write count
+  ok   phase 15: post-event reconcile re-blocks keep-centered
+  ok   phase 15: user keep-centered preference survives the early event
+  ok   phase 16: MCD captures the pre-existing shoulder CVar before taking ownership
+  ok   phase 16: MCD applies its own shoulder while preserving that original
+  ok   phase 16: disabling MCD restores the previous shoulder value
+  ok   phase 16: disabling MCD restores the previous dynamic-pitch value
+  ok   phase 16: blocker CVars are restored even when the external shoulder remains active
+  ok   phase 16: MCD reasserts its active shoulder after an external change
+  ok   phase 16: the latest external shoulder request is restored on release
+  ok   phase 17: setup actually owns temporary ActionCam state before logout
+  ok   phase 17: logout restores pre-existing ActionCam outputs
+  ok   phase 17: logout restores temporary blocker CVars
+  ok   phase 17: logout cleanup does not erase the saved ActionCam preference
+PROBE PASSED
+--- PASS: Probe: gamepad/shoulder
+
+=== Probe: LibCamera ranges
+probe_libcamera: PASS (ranges, no-op, private instance, rejected-write fallback)
+--- PASS: Probe: LibCamera ranges
+
+=== Probe: native settings matrix
+probe_native_settings: PASS retail/fallback (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS retail/embedded (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS ptr/fallback (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS ptr/embedded (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS era/fallback (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS era/embedded (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS tbc/fallback (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS tbc/embedded (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS wrath/fallback (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS wrath/embedded (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS titan/fallback (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS titan/embedded (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS cata/fallback (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS cata/embedded (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS mists/fallback (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS mists/embedded (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS forever/fallback (strict controls, pages, search, profiles, pooling)
+probe_native_settings: PASS forever/embedded (strict controls, pages, search, profiles, pooling)
+--- PASS: Probe: native settings matrix
+
+=== Probe: CVar write policy
+probe_cvar_policy: PASS (rejections, unsupported, read-only, secure, secret)
+--- PASS: Probe: CVar write policy
+
+=== Probe: flavor matrix
+PROBE flavor matrix
+  ok   Forever: separate product identity
+  ok   Forever: modern API family without Retail identity
+  ok   Forever: modern camera cap
+  ok   Forever: version/interface fallback remains available
+  ok   Retail: remains Retail
+  ok   Retail: 12.1+ flag remains Retail-only
+  ok   Classic Era: remains classic, not Forever
+  ok   Classic Era: classic camera model remains unchanged
+  ok   Mists: remains Classic-family
+PROBE PASSED
+--- PASS: Probe: flavor matrix
+
+ALL CHECKS PASSED

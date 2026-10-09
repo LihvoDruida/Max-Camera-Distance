@@ -1,0 +1,36 @@
+{
+  "retrieved_at": "2026-10-09",
+  "libraries": [
+    {
+      "path": "libs/LibStub/LibStub.lua",
+      "source": "https://github.com/WoWUIDev/Ace3/blob/master/LibStub/LibStub.lua",
+      "sha256": "26401bc42c26d1d1b6f7ad9410aa464edcbe4d32d74ebadeeecd8c0110236f7d"
+    },
+    {
+      "path": "libs/CallbackHandler-1.0/CallbackHandler-1.0.lua",
+      "source": "https://github.com/WoWUIDev/Ace3/blob/master/CallbackHandler-1.0/CallbackHandler-1.0.lua",
+      "sha256": "24f7342068e0d1b8d38ee1b8c7ceeea625bea079a01f0222e341660c7b104432"
+    },
+    {
+      "path": "libs/AceDB-3.0/AceDB-3.0.lua",
+      "source": "https://github.com/WoWUIDev/Ace3/blob/master/AceDB-3.0/AceDB-3.0.lua",
+      "sha256": "411ac67ab0eb73d29e89b15d7bf5dc0509617b203709ad47afc375ab4de746d7"
+    },
+    {
+      "path": "libs/LibDataBroker-1.1/LibDataBroker-1.1.lua",
+      "source": "https://github.com/tekkub/libdatabroker-1-1/blob/master/LibDataBroker-1.1.lua",
+      "sha256": "f3d4758f2060215492c9764b1d7dc2a336826d4cd253cd54ff9ff7c6d78f04e2"
+    },
+    {
+      "path": "libs/LibDBIcon-1.0/LibDBIcon-1.0.lua",
+      "source": "https://repos.wowace.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0/LibDBIcon-1.0.lua",
+      "sha256": "85c426947fa50319071b64c7cb845326c44316341713a3847dc8149c1e36716b"
+    },
+    {
+      "path": "libs/LibCamera/LibCamera.lua",
+      "source": "https://github.com/mpstark/LibCamera",
+      "sha256": "0e01af9997041c18c3ea0ef52f09762032bd61e42ae43abd11c64eee6d680b7c"
+    }
+  ],
+  "notes": "LibCamera is based on the supplied source with local CVar policy fixes. Runtime source files are bundled; no download occurs in game."
+}

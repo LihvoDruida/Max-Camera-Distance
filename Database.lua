@@ -793,6 +793,35 @@ local function CreateFallbackDB(defaultsWrapper)
     function fallback:ResetProfile()
         rawDb.profiles[profileKey] = CopyTableSafe(defaultsWrapper.profile or PROFILE_DEFAULTS)
         self.profile = rawDb.profiles[profileKey]
+        Database:OnProfileUpdate("OnProfileReset")
+    end
+
+    function fallback:GetCurrentProfile() return profileKey end
+    function fallback:GetProfiles(result)
+        result = result or {}
+        for key in pairs(rawDb.profiles) do result[#result + 1] = key end
+        return result, #result
+    end
+    function fallback:SetProfile(key)
+        if type(key) ~= "string" or key == "" then return end
+        profileKey = key
+        rawDb.profileKeys[characterKey] = key
+        rawDb.profiles[key] = rawDb.profiles[key] or CopyTableSafe(PROFILE_DEFAULTS)
+        self.profile = rawDb.profiles[key]
+        Database:OnProfileUpdate("OnProfileChanged")
+    end
+    function fallback:CopyProfile(key)
+        if key == profileKey or type(rawDb.profiles[key]) ~= "table" then return end
+        rawDb.profiles[profileKey] = CopyTableSafe(rawDb.profiles[key])
+        self.profile = rawDb.profiles[profileKey]
+        Database:OnProfileUpdate("OnProfileCopied")
+    end
+    function fallback:DeleteProfile(key)
+        if key == profileKey then return end
+        rawDb.profiles[key] = nil
+        for character, value in pairs(rawDb.profileKeys) do
+            if value == key then rawDb.profileKeys[character] = nil end
+        end
     end
 
     return fallback
@@ -818,7 +847,6 @@ function Database:InitDB()
     else
         self.db = CreateFallbackDB(defaultsWrapper)
         self.usingFallbackDB = true
-        print(addonName .. ": AceDB-3.0 is not available yet. Using basic saved-variable storage for now; profile UI is unavailable.")
     end
 
     if not self.db then
@@ -828,6 +856,47 @@ function Database:InitDB()
 
     self:ApplyMigrations(self.db.profile)
     self:RegisterProfileCallbacks()
+end
+
+-- A native profile page uses the same stored profiles as AceDB. No AceGUI or
+-- AceDBOptions is required, including for a standalone/source installation.
+function Database:GetProfileOptions(L)
+    local function values(excludeCurrent)
+        local result, db = {}, Database.db
+        if not db then return result end
+        local current = db:GetCurrentProfile()
+        for _, key in ipairs(db:GetProfiles()) do
+            if not excludeCurrent or key ~= current then result[key] = key end
+        end
+        return result
+    end
+    return {
+        type = "group", name = L["PROFILES"], order = 8,
+        args = {
+            current = { type = "description", order = 1,
+                name = function() return L["UI_CURRENT_PROFILE"] .. ": |cffffd18a" .. Database.db:GetCurrentProfile() .. "|r" end },
+            choose = { type = "select", name = L["UI_SELECT_PROFILE"], order = 2,
+                values = function() return values(false) end,
+                get = function() return Database.db:GetCurrentProfile() end,
+                set = function(_, key) Database.db:SetProfile(key) end },
+            create = { type = "input", name = L["UI_NEW_PROFILE"], order = 3,
+                desc = L["UI_NEW_PROFILE_DESC"], get = function() return "" end,
+                validate = function(_, key) return type(key) == "string" and #key <= 80 and key:match("%S") ~= nil end,
+                set = function(_, key)
+                    key = key:match("^%s*(.-)%s*$")
+                    Database.db:SetProfile(key)
+                end },
+            copy = { type = "select", name = L["UI_COPY_PROFILE"], order = 4, confirm = true,
+                desc = L["UI_COPY_PROFILE_DESC"], values = function() return values(true) end,
+                get = function() return nil end,
+                set = function(_, key) Database.db:CopyProfile(key) end },
+            delete = { type = "select", name = L["UI_DELETE_PROFILE"], order = 5, confirm = true,
+                values = function() return values(true) end, get = function() return nil end,
+                set = function(_, key) Database.db:DeleteProfile(key) end },
+            reset = { type = "execute", name = L["RESET_BUTTON"], order = 6, confirm = true,
+                func = function() Database:ResetCurrentProfile() end },
+        },
+    }
 end
 
 -- Called once at PLAYER_LOGIN, when every addon has finished loading. If AceDB

@@ -332,18 +332,25 @@ function Compat.SafeSetCVar(name, value)
         return false
     end
 
-    if C_CVar and C_CVar.SetCVar then
-        local ok = pcall(C_CVar.SetCVar, name, value)
-        if ok then
-            return true
-        end
+    if type(name) ~= 'string' or Compat.IsSecret(value) then return false end
+    if not Compat.HasCVar(name) then return false end
+    if C_CVar and type(C_CVar.SetCVar) == 'function' then
+        local ok, result = pcall(C_CVar.SetCVar, name, value)
+        -- A rejected modern write is not permission to try the legacy alias.
+        return ok and result == true
     end
-
     if type(SetCVar) == 'function' then
-        local ok = pcall(SetCVar, name, value)
-        if ok then
-            return true
+        local ok, result = pcall(SetCVar, name, value)
+        -- Old native setters have no return; verify those writes by readback.
+        if not ok or result == false then return false end
+        if result == true then return true end
+        local actual = Compat.SafeGetCVar(name)
+        if actual == nil then return false end
+        local expectedNumber, actualNumber = tonumber(value), tonumber(actual)
+        if expectedNumber and actualNumber then
+            return math.abs(expectedNumber - actualNumber) < 0.00001
         end
+        return tostring(actual) == tostring(value)
     end
 
     return false
@@ -410,3 +417,6 @@ function Compat.SafeReload()
         ReloadUI()
     end
 end
+
+-- Shared policy for bundled LibCamera without replacing global camera APIs.
+if _G.MaxCameraDistanceCompat then _G.MaxCameraDistanceCompat.runtime = Compat end

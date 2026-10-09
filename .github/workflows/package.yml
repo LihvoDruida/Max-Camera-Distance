@@ -31,7 +31,7 @@ jobs:
         run: |
           # Отримуємо версію з .toc
           TOC_VERSION=$(grep -oP '^## Version: \K.*' Max_Camera_Distance.toc | cut -d '.' -f1,2)
-          TOC_FALLBACK="v${TOC_VERSION}"
+          TOC_FALLBACK="${TOC_VERSION}"
 
           TAGS=$(git tag -l)
           if [ -z "$TAGS" ]; then

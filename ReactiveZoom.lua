@@ -22,7 +22,7 @@ local ReactiveZoom = ns.ReactiveZoom
 -- spin covers far more distance than the same number of slow notches.
 
 local LibStub = _G.LibStub
-local LibCamera = LibStub and LibStub("LibCamera-1.0", true)
+local LibCamera = LibStub and LibStub("MaxCameraDistance-LibCamera-1.0", true)
 
 local Compat = ns.Compat or {}
 local CONVERSION_RATIO = Compat.CONVERSION_RATIO or 15

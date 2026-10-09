@@ -1,3 +1,22 @@
+# v11.0.0 — 2026-10-09
+
+- Replace AceConfigDialog with a native, reference-inspired dark/gold settings window.
+- Add sidebar, global search, Ukrainian case-insensitive search, scrollable details,
+  numeric slider input and automatic screen fitting.
+- Preserve the complete option schema and camera callbacks; add native profile controls.
+- Require confirmation before profile reset, copy or deletion.
+- Pool visible setting rows, debounce search and defer updates during active input.
+- Bundle the required runtime libraries; remove missing XML references and unused GUI externals.
+- Remove intrusive writes to Blizzard settings widgets.
+- Check actual CVar setter results; prevent fallback through another setter after rejection.
+- Apply shared CVar write policy in LibCamera and fall back to basic smooth zoom on rejected speed writes.
+- Use a private LibStub major for LibCamera to prevent cross-addon substitution.
+- Keep Forever a separate product and keep its gamepad/environment scope.
+- Add Retail beta Interface 120001; retain live/PTR and Classic manifests.
+- Extend tests with native UI contracts across nine client cases and two storage modes,
+  profile confirmations, search, pooling and rejected/secure CVar writes.
+- Fix the CI fallback version's duplicated v prefix.
+
 # Max Camera Distance — Changelog
 
 ## v10.10 — Forever CVar range validation fixes

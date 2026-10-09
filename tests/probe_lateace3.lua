@@ -126,8 +126,8 @@ check("phase 1: addon still initialises a profile without Ace3",
 check("phase 1: fallback store is flagged as such",
     ns.Database and ns.Database.usingFallbackDB == true,
     ns.Database and tostring(ns.Database.usingFallbackDB))
-check("phase 1: options are correctly reported as NOT registered",
-    ns.Config and ns.Config:IsRegistered() == false)
+check("phase 1: native settings schema is ready without Ace3",
+    ns.Config and ns.Config:IsRegistered() == true)
 
 -- The fallback store must still be a real, writable profile so the camera keeps
 -- working on a character with no Ace3 at all.
@@ -141,7 +141,7 @@ check("phase 1: settings written to the fallback survive in SavedVariables",
 local ace = stub.InstallAce3()
 stub.Fire("PLAYER_LOGIN")
 
-check("phase 2: options table reaches AceConfigRegistry",
+check("phase 2: native options schema remains available",
     ns.Config:IsRegistered() == true)
 check("phase 2: profile store upgraded off the fallback",
     ns.Database.usingFallbackDB == false and ns.Database.db.__isAceDB == true,
@@ -149,19 +149,21 @@ check("phase 2: profile store upgraded off the fallback",
 check("phase 2: the value set while on the fallback survived the upgrade",
     ns.Database.db.profile.maxZoomFactor == 33,
     tostring(ns.Database.db.profile.maxZoomFactor))
-check("phase 2: Blizzard options category added exactly once",
-    #ace.dialog.blizCategories == 2,
+check("phase 2: old Blizzard/Ace categories are not created",
+    #ace.dialog.blizCategories == 0,
     "categories=" .. #ace.dialog.blizCategories)
 
 -- ---------------------------------------------- phase 3: opening the window
+local opened = 0
+ns.SettingsWindow = { Open = function() opened = opened + 1; return true end }
 local ok, err = pcall(function() return ns.Config:Open() end)
 check("phase 3: Config:Open() no longer raises the AceConfigRegistry error",
-    ok and #ace.dialog.opened == 1, err)
+    ok and opened == 1 and #ace.dialog.opened == 0, err)
 
 -- ------------------------- phase 4: a second PLAYER_LOGIN must be idempotent
 stub.Fire("PLAYER_LOGIN")
 check("phase 4: re-running init does not duplicate Blizzard categories",
-    #ace.dialog.blizCategories == 2,
+    #ace.dialog.blizCategories == 0,
     "categories=" .. #ace.dialog.blizCategories)
 
 -- ------------------- phase 5: gamepad handling stays out of non-Forever builds
@@ -178,7 +180,7 @@ check("phase 5: no gamepad keys leak into a non-Forever profile",
     tostring(ns.Database.db.profile.gamePadManageCameraSpeed))
 -- Read the options table the addon actually registered, so this cannot pass by
 -- accident if the group is renamed or moved.
-local registered = ace.registry:GetOptionsTable("Max_Camera_Distance")
+local registered = ns.Config.options
 local gamePadGroup = registered and registered.args and registered.args.gamePadSettings
 check("phase 5: the gamepad options group exists in the table",
     gamePadGroup ~= nil)

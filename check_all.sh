@@ -50,7 +50,7 @@ global_leaks() {
         # \S+ between SETGLOBAL and the ';' comment never matched and this audit
         # silently passed on everything. Verified against real luac5.1 output:
         #   SETGLOBAL<TAB>24 -85<TAB>; BadGlobal
-        leaked=$(luac5.1 -l -l "$f" 2>/dev/null \
+        leaked=$(luac5.1 -p -l -l "$f" 2>/dev/null \
             | grep -oP 'SETGLOBAL.*?;\s+\K\S+' \
             | sort -u \
             | grep -vxF "$ALLOWED_GLOBALS" || true)
@@ -90,10 +90,20 @@ stage "Lua 5.1 syntax"            lua_syntax
 stage "Global leak audit"         global_leaks
 stage "XML well-formedness"       xml_wellformed
 stage "TOC files current"         python3 tools/generate_tocs.py --check
-stage "Manifest references"       python3 tools/verify_manifest.py --allow-missing-externals
+stage "Manifest references"       python3 tools/verify_manifest.py
 stage "Probe: late Ace3"          lua51_probe tests/probe_lateace3.lua
 stage "Probe: gamepad/shoulder"   lua51_probe tests/probe_gamepad.lua
 stage "Probe: LibCamera ranges"    lua51_probe tests/probe_libcamera.lua
+native_matrix() {
+    local flavor mode
+    for flavor in retail ptr era tbc wrath titan cata mists forever; do
+        for mode in fallback embedded; do
+            lua51_probe tests/probe_native_settings.lua "$flavor" "$mode" || return $?
+        done
+    done
+}
+stage "Probe: native settings matrix" native_matrix
+stage "Probe: CVar write policy"   lua51_probe tests/probe_cvar_policy.lua
 stage "Probe: flavor matrix"       lua51_probe tests/probe_flavors.lua
 
 echo ""

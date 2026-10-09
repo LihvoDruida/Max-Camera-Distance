@@ -25,13 +25,12 @@ local CameraStateController = ns.CameraStateController
 -- Optional libraries are resolved lazily: a standalone provider addon (or an
 -- addon that embeds Ace3 / LibMountInfo) can finish loading AFTER this file, and
 -- capturing the LibStub result once at load time left them nil forever.
-local LibCamera, LibMountInfo, ACD
+local LibCamera, LibMountInfo
 
 local function ResolveOptionalLibs()
     if not LibStub then return end
-    LibCamera    = LibCamera or LibStub("LibCamera-1.0", true)
+    LibCamera    = LibCamera or LibStub("MaxCameraDistance-LibCamera-1.0", true)
     LibMountInfo = LibMountInfo or LibStub("LibMountInfo-1.1", true) or LibStub("LibMountInfo-1.0", true)
-    ACD          = ACD or LibStub("AceConfigDialog-3.0", true)
 end
 
 ResolveOptionalLibs()
@@ -353,8 +352,7 @@ function Functions:SendMessage(message)
     print("|cff0070deMax Camera Distance|r: " .. tostring(message))
 end
 
--- AceConfigRegistry:NotifyChange walks its callback registry and makes an open
--- AceConfigDialog rebuild the whole options tree. UpdateSmartZoomState called
+-- Config:NotifyChange requests a native UI refresh. UpdateSmartZoomState called
 -- this unconditionally, including on the two "nothing changed, bail out" early
 -- returns - so with the panel open it re-rendered on every queued camera pass.
 --
@@ -923,7 +921,7 @@ function Functions:IsSkyriding()
     if SafeBoolCall(IsMounted) and LibMountInfo and LibMountInfo.IsSkyriding then
         local ok, result = pcall(LibMountInfo.IsSkyriding, LibMountInfo)
         if ok then
-            return result and true or false
+            return Compat.IsTruthy(result)
         end
     end
 
@@ -3189,9 +3187,6 @@ function Functions:GetDependencySnapshot()
         { label = "LibStub", found = HasLib("LibStub"), required = true },
         { label = "LibCamera", found = LibCamera ~= nil, required = true },
         { label = "AceDB", found = HasLib("AceDB-3.0"), optional = true },
-        { label = "AceConfig", found = HasLib("AceConfig-3.0"), optional = true },
-        { label = "AceConfigDialog", found = HasLib("AceConfigDialog-3.0"), optional = true },
-        { label = "AceDBOptions", found = HasLib("AceDBOptions-3.0"), optional = true },
         { label = "AceLocale", found = HasLib("AceLocale-3.0"), optional = true },
         { label = "LibMountInfo", found = LibMountInfo ~= nil, optional = true },
         { label = "LibDataBroker", found = HasLib("LibDataBroker-1.1"), optional = true },
@@ -3202,13 +3197,13 @@ function Functions:GetDependencySnapshot()
         -- below reports "found" while the settings window still refuses to open.
         -- This line is the one that distinguishes those two cases.
         {
-            label = "Options registered",
+            label = "Native settings ready",
             found = (ns.Config and ns.Config.IsRegistered and ns.Config:IsRegistered()) or false,
             required = true,
         },
         {
             label = "Profile storage",
-            found = (ns.Database and ns.Database.db and not ns.Database.usingFallbackDB) or false,
+            found = (ns.Database and ns.Database.db and ns.Database.db.profile ~= nil) or false,
             required = true,
         },
     }
@@ -3818,13 +3813,8 @@ function Functions:SlashCmdHandler(msg)
     elseif command == "config" then
         if ns.Config and ns.Config.Open then
             ns.Config:Open()
-        elseif ACD and ACD.Open then
-            local ok, err = pcall(ACD.Open, ACD, addonName)
-            if not ok then
-                Functions:SendMessage("Error: settings window failed: " .. tostring(err))
-            end
         else
-            Functions:SendMessage("Error: AceConfigDialog not found. Cannot open settings. Use /mcd status and /mcd deps for diagnostics.")
+            Functions:SendMessage("Error: native settings are not ready. Use /mcd status for diagnostics.")
         end
 
     elseif command == "autozoom" then

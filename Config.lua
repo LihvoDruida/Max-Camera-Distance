@@ -19,35 +19,9 @@ local L = setmetatable({}, {
         return key
     end,
 })
--- Ace3 is supplied by whichever addon happens to embed it, and addons load in
--- alphabetical folder order. A provider that sorts after "Max_Camera_Distance"
--- (WeakAuras, Plater, TomTom, Questie ...) is not in LibStub yet while this file
--- runs, so a one-shot lookup here left these nil for the whole session: the
--- options table was never registered, and the only visible symptom was
--- AceConfigDialog:Open() later complaining that the addon "isn't registered
--- with AceConfigRegistry". Because the enabled addon list is stored PER
--- CHARACTER, that made the failure look character-specific. Resolve lazily.
-local AceConfig, AceConfigDialog, AceDBOptions, AceConfigRegistry
-
-local function ResolveConfigLibs()
-    LibStub = LibStub or _G.LibStub
-    if not LibStub then return end
-
-    AceConfig = AceConfig or LibStub("AceConfig-3.0", true)
-    AceConfigDialog = AceConfigDialog or LibStub("AceConfigDialog-3.0", true)
-    AceDBOptions = AceDBOptions or LibStub("AceDBOptions-3.0", true)
-    AceConfigRegistry = AceConfigRegistry or LibStub("AceConfigRegistry-3.0", true)
-end
-
-ResolveConfigLibs()
-
--- AddToBlizOptions must run exactly once. SetupOptions can now be retried, and
--- a second call would add a duplicate "Max Camera Distance" category.
-local blizOptionsAdded = false
-
-function Config:ResolveLibs()
-    ResolveConfigLibs()
-end
+-- The option schema is consumed by our native settings renderer.
+function Config:ResolveLibs() end
+local function ResolveConfigLibs() end
 
 local Compat = ns.Compat or {}
 local IS_RETAIL = Compat.IS_RETAIL and true or false
@@ -72,10 +46,6 @@ end
 
 local function GetDB()
     return (ns.Database and ns.Database.db and ns.Database.db.profile) or nil
-end
-
-local function GetDatabaseObject()
-    return (ns.Database and ns.Database.db) or nil
 end
 
 local function GetLanguageChoices()
@@ -350,49 +320,19 @@ local function ResetForeverGroundEffectOption(cvarName)
 end
 
 function Config:NotifyChange()
-    ResolveConfigLibs()
-    if not (AceConfigRegistry and AceConfigRegistry.NotifyChange) then return end
-    -- NotifyChange throws on an unregistered app name, and this runs from
-    -- profile callbacks that fire before SetupOptions has succeeded.
-    if not Config:IsRegistered() then return end
-    pcall(AceConfigRegistry.NotifyChange, AceConfigRegistry, addonName)
+    if ns.SettingsWindow then ns.SettingsWindow:RequestRefresh() end
 end
 
--- True once the options table is actually in AceConfigRegistry. This is the
--- exact condition AceConfigDialog:Open() tests, so it is the only honest way to
--- report "settings are available".
 function Config:IsRegistered()
-    ResolveConfigLibs()
-    if not AceConfigRegistry then return false end
-
-    if type(AceConfigRegistry.GetOptionsTable) == "function" then
-        local ok, tbl = pcall(AceConfigRegistry.GetOptionsTable, AceConfigRegistry, addonName)
-        if ok then return tbl ~= nil end
-    end
-
-    local tables = rawget(AceConfigRegistry, "tables")
-    return type(tables) == "table" and tables[addonName] ~= nil
+    return self.options ~= nil
 end
 
--- Called from every entry point that opens the settings window. If the options
--- table is missing because Ace3 arrived late, build it now rather than showing
--- the user a raw AceConfigRegistry error.
 function Config:EnsureRegistered()
-    if Config:IsRegistered() then return true end
-
-    if ns.Database and not ns.Database.db and ns.Database.InitDB then
-        local ok, err = pcall(ns.Database.InitDB, ns.Database)
-        if not ok then
-            print(addonName .. ": deferred DB init failed: " .. tostring(err))
-        end
+    if not (ns.Database and ns.Database.db) then
+        if ns.Database and ns.Database.InitDB then ns.Database:InitDB() end
     end
-
-    local ok, err = pcall(Config.SetupOptions, Config)
-    if not ok then
-        print(addonName .. ": deferred options setup failed: " .. tostring(err))
-    end
-
-    return Config:IsRegistered()
+    if not self.options then return self:SetupOptions() end
+    return true
 end
 
 local function BoolText(value)
@@ -899,6 +839,7 @@ function Config:SetupOptions()
                     resetBtn = {
                         order = 3,
                         name = L["RESET_BUTTON"],
+                        confirm = true,
                         desc = L["RESET_BUTTON_DESC"],
                         type = "execute",
                         func = function()
@@ -2333,25 +2274,7 @@ function Config:SetupOptions()
         }
     }
 
-    local dbObject = GetDatabaseObject()
-    if dbObject and AceDBOptions and AceDBOptions.GetOptionsTable then
-        options.args.profiles = AceDBOptions:GetOptionsTable(dbObject)
-        options.args.profiles.order = 8
-        options.args.profiles.name = L["PROFILES"] or "Profiles"
-    else
-        options.args.profiles = {
-            type = "group",
-            name = L["PROFILES"] or "Profiles",
-            args = {
-                info = {
-                    type = "description",
-                    name = L["PROFILES_MISSING_LIB_DESC"] or "AceDBOptions-3.0 was not found, so advanced profile controls are unavailable.",
-                    order = 1,
-                },
-            },
-            order = 8,
-        }
-    end
+    options.args.profiles = ns.Database:GetProfileOptions(L)
 
     -- Generated per-activity rows. Injected here rather than written into the
     -- literal above because the set of activities is data, not layout.
@@ -2380,208 +2303,18 @@ function Config:SetupOptions()
         end
     end
 
-    if not AceConfig then
-        -- Not fatal and not final: PLAYER_LOGIN retries once every addon has
-        -- loaded, so a late Ace3 provider still gets us a settings window.
-        print(addonName .. ": AceConfig-3.0 is not available yet; settings will be built once it loads.")
-        return false
-    end
-
-    local okRegister, errRegister = pcall(AceConfig.RegisterOptionsTable, AceConfig, addonName, options)
-    if not okRegister then
-        print(addonName .. ": AceConfig registration failed: " .. tostring(errRegister))
-        return false
-    end
-
-    if not blizOptionsAdded and AceConfigDialog and AceConfigDialog.AddToBlizOptions then
-        blizOptionsAdded = true
-        local rootCategoryName = L["ADDON_TITLE"] or "Max Camera Distance"
-        pcall(AceConfigDialog.AddToBlizOptions, AceConfigDialog, addonName, rootCategoryName)
-        pcall(AceConfigDialog.AddToBlizOptions, AceConfigDialog, addonName, L["PROFILES"] or "Profiles", rootCategoryName, "profiles")
-    end
-
+    self.options = options
     return true
 end
 
--- Opens the settings window, building the options table first if a late-loading
--- Ace3 meant it was never built.
 function Config:Open()
-    ResolveConfigLibs()
-
-    if not Config:EnsureRegistered() then
-        print(addonName .. ": settings are unavailable because Ace3 (AceConfig-3.0) is not loaded. Run /mcd deps for details.")
-        return false
-    end
-
-    if not (AceConfigDialog and AceConfigDialog.Open) then
-        print(addonName .. ": AceConfigDialog-3.0 not found.")
-        return false
-    end
-
-    local ok, err = pcall(AceConfigDialog.Open, AceConfigDialog, addonName)
-    if not ok then
-        print(addonName .. ": settings window failed: " .. tostring(err))
-        return false
-    end
-
-    return true
+    if not self:EnsureRegistered() then return false end
+    if not ns.SettingsWindow then return false end
+    return ns.SettingsWindow:Open()
 end
 
--- Opens the settings window straight on the Gamepad tab. AceConfigDialog's
--- SelectGroup only works on an already-open window, so the order here matters:
--- open first, then select.
 function Config:OpenGamePadPanel()
-    ResolveConfigLibs()
-
-    if not self:Open() then
-        return false
-    end
-
-    if not (AceConfigDialog and AceConfigDialog.SelectGroup) then
-        -- The window is open on its default tab, which is still better than
-        -- nothing; only the deep link is unavailable.
-        return true
-    end
-
-    local ok = pcall(AceConfigDialog.SelectGroup, AceConfigDialog, addonName, "gamePadSettings")
-    return ok and true or true
-end
-
-local function ApplyHookTooltip(target, titleText, descText, pathText)
-    if not target or not target.SetScript then return end
-
-    target:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(titleText)
-        if descText and descText ~= "" then
-            GameTooltip:AddLine(descText, 1, 1, 1, true)
-        end
-        if pathText and pathText ~= "" then
-            GameTooltip:AddLine(pathText, 1, 0.82, 0, true)
-        end
-        GameTooltip:Show()
-    end)
-
-    target:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-end
-
-local function DisableSettingControl(child, titleText, descText, pathText)
-    if not child then return false end
-
-    local candidates = {
-        child.CheckboxControl and (child.CheckboxControl.Checkbox or child.CheckboxControl),
-        child.Checkbox,
-        child.Control and (child.Control.Checkbox or child.Control),
-        child.SliderWithSteppers,
-        child.Slider,
-        child.Dropdown,
-        child.Button,
-    }
-
-    local target = nil
-    for _, candidate in ipairs(candidates) do
-        if candidate then
-            target = candidate
-            break
-        end
-    end
-
-    if not target then return false end
-
-    if target.SetEnabled then
-        target:SetEnabled(false)
-    elseif target.SetEnabled_ then
-        target:SetEnabled_(false)
-    end
-
-    local tooltipTarget = target.Checkbox or target.Slider or target
-    ApplyHookTooltip(tooltipTarget, titleText, descText, pathText)
-    if child ~= tooltipTarget then
-        if child.EnableMouse then
-            child:EnableMouse(true)
-        end
-        ApplyHookTooltip(child, titleText, descText, pathText)
-    end
+    if not self:Open() then return false end
+    ns.SettingsWindow:SelectPage("gamePadSettings")
     return true
-end
-
-local function IsSilhouetteSettingLabel(text)
-    if type(text) ~= "string" or text == "" then return false end
-
-    local exact1 = L["HOOK_SILHOUETTE_LABEL_OBSTRUCTED"] or "Show Silhouette when Obstructed"
-    local exact2 = L["HOOK_SILHOUETTE_LABEL_OBSCURED"] or "Show Silhouette when Obscured"
-    if text == exact1 or text == exact2 then
-        return true
-    end
-
-    local lowered = string.lower(text)
-    return lowered:find("silhouette", 1, true) ~= nil
-        and (lowered:find("obstruct", 1, true) ~= nil or lowered:find("obscur", 1, true) ~= nil)
-end
-
--- =====================================================================
--- BLIZZARD SETTINGS HOOK (Retail only, Dragonflight+ UI)
--- =====================================================================
--- This used to run at file-load time. If SettingsPanel was not built yet the
--- whole hook was skipped for the rest of the session, so it is now deferred and
--- retried until it succeeds.
-local blizzardSettingsHookInstalled = false
-
-local function InstallBlizzardSettingsHook()
-    if blizzardSettingsHookInstalled then return true end
-
-    if not (USES_MODERN_API
-        and SettingsPanel and SettingsPanel.Container and SettingsPanel.Container.SettingsList
-        and SettingsPanel.Container.SettingsList.ScrollBox
-        and hooksecurefunc) then
-        return false
-    end
-
-    blizzardSettingsHookInstalled = true
-    local MOUSE_LOOK_SPEED = _G.MOUSE_LOOK_SPEED
-    local CONTROLS_LABEL = _G.CONTROLS_LABEL
-    local COMBAT_LABEL = _G.COMBAT_LABEL or "Combat"
-
-    hooksecurefunc(SettingsPanel.Container.SettingsList.ScrollBox, "Update", function(self)
-        local header = SettingsPanel.Container.SettingsList.Header
-        if not header or not header.Title or not header.Title.GetText then return end
-
-        local headerText = header.Title:GetText()
-        local scrollTarget = SettingsPanel.Container.SettingsList.ScrollBox.ScrollTarget
-        if not scrollTarget or not scrollTarget.GetChildren then return end
-
-        local children = { scrollTarget:GetChildren() }
-        for _, child in ipairs(children) do
-            local childText = child and child.Text and child.Text.GetText and child.Text:GetText()
-            if childText then
-                if headerText == CONTROLS_LABEL and childText == MOUSE_LOOK_SPEED then
-                    if DisableSettingControl(child, L["HOOK_DISABLED_BY_ADDON"], L["HOOK_MOUSE_SPEED_DESC"], L["HOOK_MOUSE_SPEED_PATH"]) then
-                        break
-                    end
-                elseif headerText == COMBAT_LABEL and IsSilhouetteSettingLabel(childText) then
-                    if DisableSettingControl(child, L["HOOK_DISABLED_BY_ADDON"], L["HOOK_SILHOUETTE_DESC"], L["HOOK_SILHOUETTE_PATH"]) then
-                        break
-                    end
-                end
-            end
-        end
-    end)
-
-    return true
-end
-
--- Try immediately, then retry on the events that can create SettingsPanel.
-if not InstallBlizzardSettingsHook() and USES_MODERN_API then
-    local hookFrame = CreateFrame("Frame")
-    hookFrame:RegisterEvent("PLAYER_LOGIN")
-    hookFrame:RegisterEvent("ADDON_LOADED")
-    hookFrame:SetScript("OnEvent", function(self, event, loadedAddon)
-        if event == "ADDON_LOADED" and loadedAddon ~= "Blizzard_Settings" then return end
-        if InstallBlizzardSettingsHook() then
-            self:UnregisterAllEvents()
-            self:SetScript("OnEvent", nil)
-        end
-    end)
 end

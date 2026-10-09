@@ -257,7 +257,7 @@ local GamePad = ns.GamePad
 print("PROBE gamepad + shoulder offset")
 
 -- -------------------------------- phase 0: Forever UI placement + defaults
-local registeredOptions = ace.registry:GetOptionsTable("Max_Camera_Distance")
+local registeredOptions = ns.Config.options
 local extraArgs = registeredOptions and registeredOptions.args and registeredOptions.args.extraFeatures and registeredOptions.args.extraFeatures.args
 local padArgs = registeredOptions and registeredOptions.args and registeredOptions.args.gamePadSettings and registeredOptions.args.gamePadSettings.args
 check("phase 0: ActionCam is moved out of Extra Features on Forever",

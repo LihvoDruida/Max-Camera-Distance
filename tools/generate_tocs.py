@@ -21,7 +21,7 @@ SOURCE = ROOT / f"{ADDON}.toc"
 
 # Mainline has no patch-specific TOC suffix, so one source TOC intentionally
 # lists the supported live/PTR interface values for the same client flavour.
-MAINLINE_INTERFACE = "120007, 120100, 120105"
+MAINLINE_INTERFACE = "120001, 120007, 120100, 120105"
 
 # suffix -> configuration
 # Interface numbers track Warcraft Wiki's current documented client builds.

@@ -41,13 +41,12 @@ local pcall = pcall
 -- Minimap libs
 -- Resolved lazily: a provider addon can finish loading after this file, in which
 -- case a one-shot LibStub lookup at load time would leave these nil forever.
-local LDB, LDBIcon, ACD
+local LDB, LDBIcon
 
 local function ResolveOptionalLibs()
     if not LibStub then return end
     LDB = LDB or LibStub("LibDataBroker-1.1", true)
     LDBIcon = LDBIcon or LibStub("LibDBIcon-1.0", true)
-    ACD = ACD or LibStub("AceConfigDialog-3.0", true)
 end
 
 ResolveOptionalLibs()
@@ -261,15 +260,7 @@ local function InitMinimapButton()
                 return
             end
 
-            ResolveOptionalLibs()
-            if ACD and ACD.Open then
-                local ok, err = pcall(ACD.Open, ACD, addonName)
-                if not ok then
-                    print(addonName .. ": settings window failed: " .. tostring(err))
-                end
-            else
-                print(addonName .. ": AceConfigDialog not found.")
-            end
+
         end,
 
         OnTooltipShow = function(tooltip)
