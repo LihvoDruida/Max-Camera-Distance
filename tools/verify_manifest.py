@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
-"""Verify that every file referenced by the addon's XML manifests exists.
+"""Validate WoW XML load references, with separate source/release policies.
 
-A <Script>/<Include> pointing at a missing file does not stop WoW from loading
-the addon. It logs a line nobody reads and carries on with a library silently
-absent, which is exactly how "Max_Camera_Distance isn't registered with
-AceConfigRegistry" reached users: the options table was never built because
-AceConfig-3.0 was never loaded.
+In a source checkout, ``libs/`` may be populated by the release pipeline *after*
+this check. The default source check therefore validates every other reference,
+including nested XML manifests, but deliberately defers all ``libs/`` paths.
 
-All runtime libraries are included in source control. Run the strict check
-both on the source checkout and on the packaged artifact. The legacy
---allow-missing-externals option remains available for older source trees;
-the current release workflow does not use it.
+Use ``--strict-libs`` on the completed addon tree. A missing runtime library in
+an actual release is ALWAYS an error; tools/verify_package.py enforces this too.
 
 Usage:
-    python3 tools/verify_manifest.py [--root .] [--allow-missing-externals]
+    python3 tools/verify_manifest.py [--root .] [--strict-libs]
 """
 
 from __future__ import annotations
@@ -25,9 +21,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT_MANIFEST = "manifest.xml"
-EXTERNAL_PREFIX = "libs/"
-
-# <Ui xmlns="..."> means every tag comes back namespaced; match on the local name.
+LIBS_DIRECTORY = "libs"
 LOCAL_NAME = re.compile(r"\{.*\}")
 
 
@@ -35,90 +29,83 @@ def local(tag: str) -> str:
     return LOCAL_NAME.sub("", tag)
 
 
-def strip_no_lib(text: str) -> str:
-    """The packager may remove @no-lib-strip@ blocks; we always keep them."""
-    return text
+def collect(
+    manifest: Path,
+    root: Path,
+    seen: set[Path],
+    problems: list[str],
+    *,
+    skip_libs: bool = False,
+) -> None:
+    """Follow XML Include/Script entries, optionally deferring vendor libraries.
 
-
-def collect(manifest: Path, root: Path, seen: set[Path], problems: list[str]) -> None:
+    Skipping applies to the *whole* libs tree (even if files are present), so
+    source checks do not change depending on which dependencies happen to have
+    been downloaded locally. Paths outside the addon root are never allowed.
+    """
+    manifest = manifest.resolve()
+    root = root.resolve()
     if manifest in seen:
         return
     seen.add(manifest)
 
     try:
         tree = ET.parse(manifest)
-    except ET.ParseError as exc:
-        problems.append(f"{manifest.relative_to(root)}: malformed XML ({exc})")
+    except (ET.ParseError, OSError) as exc:
+        problems.append(f"{manifest.relative_to(root)}: cannot parse XML ({exc})")
         return
-
-    base = manifest.parent
 
     for node in tree.getroot().iter():
         name = local(node.tag)
         if name not in ("Script", "Include"):
             continue
-
         raw = node.get("file")
         if not raw:
             problems.append(f"{manifest.relative_to(root)}: <{name}> without a file attribute")
             continue
 
-        target = base / Path(raw.replace("\\", "/"))
+        target = (manifest.parent / raw.replace("\\", "/")).resolve()
         try:
-            rel = target.resolve().relative_to(root.resolve())
+            rel = target.relative_to(root)
         except ValueError:
             problems.append(f"{manifest.relative_to(root)}: '{raw}' escapes the addon folder")
             continue
 
+        if skip_libs and rel.parts and rel.parts[0] == LIBS_DIRECTORY:
+            continue
         if not target.is_file():
             problems.append(f"{manifest.relative_to(root)}: missing {rel}")
             continue
-
         if name == "Include":
-            collect(target, root, seen, problems)
-
-
-def is_external(problem: str) -> bool:
-    return f"missing {EXTERNAL_PREFIX}" in problem
+            collect(target, root, seen, problems, skip_libs=skip_libs)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=".")
-    parser.add_argument("--allow-missing-externals", action="store_true")
+    parser.add_argument("--strict-libs", action="store_true", help="Require all libs/ references (use for built release)")
+    # Compatibility for CI workflows written before the source/release split.
+    parser.add_argument("--allow-missing-externals", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
     manifest = root / ROOT_MANIFEST
-
     if not manifest.is_file():
         print(f"error: {ROOT_MANIFEST} not found in {root}", file=sys.stderr)
         return 1
 
     problems: list[str] = []
-    collect(manifest, root, set(), problems)
-
-    fatal = [p for p in problems if not (args.allow_missing_externals and is_external(p))]
-    warnings = [p for p in problems if p not in fatal]
-
-    for warning in warnings:
-        print(f"warning: {warning} (external, not fetched yet)")
-
-    if fatal:
-        for problem in fatal:
+    collect(manifest, root, set(), problems, skip_libs=not args.strict_libs)
+    if problems:
+        for problem in problems:
             print(f"error: {problem}", file=sys.stderr)
-        print(
-            f"\n{len(fatal)} manifest reference(s) could not be resolved. "
-            "A library that is referenced but absent loads as nil and produces "
-            "a silent, character-dependent failure at runtime.",
-            file=sys.stderr,
-        )
+        print(f"{len(problems)} manifest reference(s) could not be resolved", file=sys.stderr)
         return 1
 
-    if warnings:
-        print(f"manifest OK: {len(warnings)} external reference(s) skipped, everything else resolved")
+    if args.strict_libs:
+        print("manifest OK (release): every referenced file exists, including libs/")
     else:
-        print("manifest OK: every referenced file exists")
+        print("manifest OK (source): all non-libs references resolved; libs/ deferred to package verification")
     return 0
 
 

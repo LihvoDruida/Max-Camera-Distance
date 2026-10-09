@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
-"""Check shipped code against tested source and the actual release ZIP."""
+"""Validate the actual release directory + ZIP, including external libraries.
+
+The source tree is allowed to lack vendor libraries that get populated later.
+Everything referenced at runtime is required inside the package. Pinned hashes
+in DEPENDENCIES.json protect libraries absent from the source checkout; whenever
+a source copy exists, packaged code must also match it exactly (up to CRLF).
+"""
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import sys
 import xml.etree.ElementTree as ET
 import zipfile
@@ -18,32 +26,72 @@ def normalized(data: bytes) -> bytes:
 
 def verify(root: Path, source: Path, archive: Path) -> list[str]:
     problems: list[str] = []
-    seen: set[Path] = set()
+    release_seen: set[Path] = set()
     manifest = root / "manifest.xml"
     if not manifest.is_file():
         return ["packaged manifest.xml is missing"]
-    collect(manifest, root, seen, problems)
+
+    # No deferrals here: a release that cannot load its libraries is broken.
+    collect(manifest, root, release_seen, problems)
     if problems:
         return problems
 
-    # Check every loaded XML/Lua file, not just whether a filename exists.
-    expected: set[Path] = {Path("manifest.xml")}
+    # Collect source-owned references only. Vendor libraries need not exist in
+    # source, but if a vendor file does exist, we compare it with the release.
     source_seen: set[Path] = set()
-    collect(source / "manifest.xml", source, source_seen, problems)
+    collect(source / "manifest.xml", source, source_seen, problems, skip_libs=True)
     if problems:
         return problems
-    for xml in source_seen:
-        expected.add(xml.relative_to(source))
+    expected: set[Path] = {Path("manifest.xml")}
+    for xml in release_seen:
+        rel_xml = xml.relative_to(root)
+        expected.add(rel_xml)
         for node in ET.parse(xml).getroot().iter():
             if local(node.tag) in ("Include", "Script"):
-                target = xml.parent / node.get("file", "").replace("\\", "/")
-                expected.add(target.relative_to(source))
+                raw = node.get("file")
+                if raw:
+                    expected.add((xml.parent / raw.replace("\\", "/")).resolve().relative_to(root))
+
     for rel in sorted(expected):
         shipped = root / rel
+        original = source / rel
         if not shipped.is_file():
             problems.append(f"packaged file missing: {rel}")
-        elif normalized(shipped.read_bytes()) != normalized((source / rel).read_bytes()):
+        elif original.is_file() and normalized(shipped.read_bytes()) != normalized(original.read_bytes()):
             problems.append(f"packaged code differs from tested source: {rel}")
+        elif not original.is_file() and (not rel.parts or rel.parts[0] != "libs"):
+            problems.append(f"non-vendor file missing from tested source: {rel}")
+
+    # Hash-verification remains meaningful even in a clean checkout without
+    # libs/. Without this, packaging could fetch a different upstream revision.
+    dependencies_file = source / "DEPENDENCIES.json"
+    if not dependencies_file.is_file():
+        problems.append("DEPENDENCIES.json is missing: cannot verify external libraries")
+    else:
+        try:
+            deps = json.loads(dependencies_file.read_text(encoding="utf-8"))
+            entries = deps["libraries"]
+            pinned: set[Path] = set()
+            for entry in entries:
+                rel = Path(entry["path"])
+                if rel.is_absolute() or ".." in rel.parts or rel.parts[0] != "libs":
+                    problems.append(f"invalid dependency path: {rel}")
+                    continue
+                pinned.add(rel)
+                shipped = root / rel
+                if not shipped.is_file():
+                    problems.append(f"pinned library missing from package: {rel}")
+                    continue
+                actual = hashlib.sha256(normalized(shipped.read_bytes())).hexdigest()
+                if actual != entry["sha256"]:
+                    problems.append(f"library SHA-256 mismatch: {rel}")
+            runtime_libs = {p for p in expected if p.parts and p.parts[0] == "libs" and p.suffix == ".lua"}
+            for rel in sorted(runtime_libs - pinned):
+                problems.append(f"runtime library has no pinned checksum: {rel}")
+            for rel in sorted(pinned - runtime_libs):
+                problems.append(f"pinned library not loaded by XML manifest: {rel}")
+        except (ValueError, KeyError, TypeError, IndexError) as exc:
+            problems.append(f"invalid DEPENDENCIES.json: {exc}")
 
     try:
         with zipfile.ZipFile(archive) as z:
@@ -78,7 +126,7 @@ def main() -> int:
         print(f"error: {problem}", file=sys.stderr)
     if problems:
         return 1
-    print("package OK: load chain, tested runtime code and release ZIP match")
+    print("package OK: complete load chain, pinned libraries, tested code and release ZIP match")
     return 0
 
 

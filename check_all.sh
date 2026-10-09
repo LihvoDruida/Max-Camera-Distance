@@ -90,7 +90,10 @@ stage "Lua 5.1 syntax"            lua_syntax
 stage "Global leak audit"         global_leaks
 stage "XML well-formedness"       xml_wellformed
 stage "TOC files current"         python3 tools/generate_tocs.py --check
-stage "Manifest references"       python3 tools/verify_manifest.py
+stage "Manifest references (source, libs deferred)" python3 tools/verify_manifest.py
+stage "Manifest policy regression" python3 tests/probe_manifest.py
+stage "Library fetch regression" python3 tests/probe_fetch_libraries.py
+stage "Pinned vendor dependencies" python3 tools/fetch_libraries.py
 stage "Probe: release package"    python3 tests/probe_package.py
 stage "Probe: late Ace3"          lua51_probe tests/probe_lateace3.lua
 stage "Probe: gamepad/shoulder"   lua51_probe tests/probe_gamepad.lua

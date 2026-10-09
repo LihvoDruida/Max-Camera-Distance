@@ -48,10 +48,20 @@ jobs:
       - name: Verify .toc files are current
         run: python3 tools/generate_tocs.py --check
 
-      # Runtime libraries are tracked in libs/, so a fresh checkout must have
-      # the complete load chain before any tests or packaging run.
-      - name: Verify XML manifests (source tree)
+      # Vendor libraries may be supplied during packaging. Validate the addon
+      # source without failing on libs/ files not present at checkout time.
+      # The release package is checked STRICTLY after packaging below.
+      - name: Verify XML manifests (source, libs deferred)
         run: python3 tools/verify_manifest.py
+
+      # Complete libs/ only *after* the checkout/source check. CI verifies all
+      # downloaded or vendored code against DEPENDENCIES.json before tests.
+      # The private patched LibCamera must be committed; it cannot be fetched
+      # from an unrelated upstream revision.
+      - name: Restore pinned libraries and verify complete manifest
+        run: |
+          python3 tools/fetch_libraries.py
+          python3 tools/verify_manifest.py --strict-libs
 
       - name: Install Lua 5.1 (probes and bytecode audit)
         run: sudo apt-get update && sudo apt-get install -y lua5.1
@@ -99,6 +109,7 @@ jobs:
         env:
           PACKAGE_ARCHIVE: ${{ steps.package.outputs.archive_path }}
         run: |
+          python3 tools/verify_manifest.py --root .release/Max_Camera_Distance --strict-libs
           python3 tools/verify_package.py --root .release/Max_Camera_Distance --archive "$PACKAGE_ARCHIVE"
           (cd .release/Max_Camera_Distance && lua5.1 "$GITHUB_WORKSPACE/tests/probe_libcamera.lua")
 
