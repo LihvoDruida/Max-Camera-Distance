@@ -37,6 +37,22 @@ _G.SetCVar = function(name, value) cvars[name] = tostring(value); return true en
 _G.InCombatLockdown = function() return false end
 _G.ReloadUI = function() end
 _G.C_AddOns = { GetAddOnMetadata = function() return "v11.0.0" end }
+local registrations, categoryPanel = 0, nil
+local function exposeSettings()
+    if arg[3] == "legacy" then
+        _G.InterfaceOptions_AddCategory = function(panel) registrations = registrations + 1; categoryPanel = panel end
+    else
+        _G.Settings = {
+            RegisterCanvasLayoutCategory = function(panel, name)
+                categoryPanel = panel
+                assert(name == "Max Camera Distance")
+                return { GetID = function() return 123 end }
+            end,
+            RegisterAddOnCategory = function() registrations = registrations + 1 end,
+        }
+    end
+end
+if arg[4] ~= "late" then exposeSettings() end
 local ns = {}
 local function load(path) assert(loadfile(path))("Max_Camera_Distance", ns) end
 if arg[2] == "embedded" then
@@ -44,7 +60,7 @@ if arg[2] == "embedded" then
         "libs/CallbackHandler-1.0/CallbackHandler-1.0.lua", "libs/AceDB-3.0/AceDB-3.0.lua" }) do load(path) end
 end
 for _, path in ipairs({ "Compatibility.lua", "locale/enUS.lua", "locale/ukUA.lua", "locale/zhCN.lua", "Locales.lua", "Compat.lua",
-    "Contexts.lua", "Database.lua", "Config.lua", "SettingsWindow.lua" }) do load(path) end
+    "Contexts.lua", "Database.lua", "Config.lua", "SettingsWindow.lua", "SettingsIntegration.lua" }) do load(path) end
 ns.Database:InitDB()
 assert(ns.Config:SetupOptions())
 assert(ns.Config:Open(), "standalone native UI does not open")
@@ -102,6 +118,37 @@ local choose = { option = p.choose, info = { "profiles", "choose" }, name = "Cho
 ui:ShowChoices(choose)
 assert(ui.choices:IsShown() and #ui.choices.buttons >= 2)
 ui:CloseChoices()
+
+-- The game AddOns category embeds the complete renderer, without AceGUI.
+local integration = ns.SettingsIntegration
+if arg[4] == "late" then
+    assert(not integration.registered and registrations == 0)
+    exposeSettings()
+    stub.Script(integration.events, "OnEvent", "ADDON_LOADED", "Blizzard_Settings")
+end
+assert(integration.registered and registrations == 1 and categoryPanel == integration.panel)
+for i = 1, 3 do integration:Register() end
+assert(registrations == 1, "game category registered twice")
+local host = integration.panel
+host:SetSize(760, 590); host:Show()
+assert(ui.embeddedHost == host and ui.window:GetParent() == host and ui.window:IsShown())
+assert(ui.window.scale * ui.window:GetWidth() <= host:GetWidth())
+assert(ui.window.scale * ui.window:GetHeight() <= host:GetHeight())
+assert(not ui.closeButton:IsShown() and not ui.doneButton:IsShown())
+assert(#UISpecialFrames == 0, "embedded renderer captures Escape from the game settings window")
+ui:SelectPage("generalSettings")
+assert(#ui.rows > 0, "embedded settings only show a launcher")
+assert(ui.body:GetHeight() == 350 and ui.inspector:GetWidth() == 538)
+host:Hide(); assert(not ui.window:IsShown())
+ui:Open()
+assert(ui.window:GetParent() == UIParent and not ui.embeddedHost)
+assert(ui.window:GetWidth() == 1060 and ui.scroll:GetHeight() == 467)
+assert(ui.doneButton:IsShown() and #UISpecialFrames == 1)
+local embeddedCount = #stub.objects
+for i = 1, 3 do
+    host:Show(); host:Hide(); ui:Open()
+end
+assert(#stub.objects == embeddedCount, "switching embedded/standalone duplicates controls")
 
 -- Rows are layout frames: only actual controls receive clicks/highlights.
 for _, pool in pairs(ui.pools) do

@@ -104,6 +104,8 @@ native_matrix() {
     done
 }
 stage "Probe: native settings matrix" native_matrix
+stage "Probe: delayed modern settings registration" lua51_probe tests/probe_native_settings.lua retail fallback modern late
+stage "Probe: delayed legacy settings registration" lua51_probe tests/probe_native_settings.lua forever fallback legacy late
 stage "Probe: CVar write policy"   lua51_probe tests/probe_cvar_policy.lua
 stage "Probe: flavor matrix"       lua51_probe tests/probe_flavors.lua
 

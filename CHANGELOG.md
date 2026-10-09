@@ -1,3 +1,11 @@
+# v11.0.3
+
+- Register Max Camera Distance in the game AddOns settings list via Settings or InterfaceOptions.
+- Embed the full native settings UI; use compact layout with explanations below the controls.
+- Keep standalone /mcd config and safely reuse the same controls when changing presentation.
+- Retry category registration when the game settings APIs load later.
+- Test modern/legacy registration, delayed availability, resize, Escape ownership and presentation switching.
+
 # v11.0.2
 
 - Remove duplicate row click/highlight areas; buttons and checkboxes own their input.

@@ -186,22 +186,5 @@ probe_native_settings: PASS forever/embedded (strict controls, pages, search, pr
 probe_native_settings: PASS forever/embedded (strict controls, pages, search, profiles, pooling)
 --- PASS: Probe: native settings matrix
 
-=== Probe: CVar write policy
-probe_cvar_policy: PASS (rejections, unsupported, read-only, secure, secret)
---- PASS: Probe: CVar write policy
-
-=== Probe: flavor matrix
-PROBE flavor matrix
-  ok   Forever: separate product identity
-  ok   Forever: modern API family without Retail identity
-  ok   Forever: modern camera cap
-  ok   Forever: version/interface fallback remains available
-  ok   Retail: remains Retail
-  ok   Retail: 12.1+ flag remains Retail-only
-  ok   Classic Era: remains classic, not Forever
-  ok   Classic Era: classic camera model remains unchanged
-  ok   Mists: remains Classic-family
-PROBE PASSED
---- PASS: Probe: flavor matrix
-
-ALL CHECKS PASSED
+=== Probe: delayed modern settings registration
+probe_native_settings: PASS retail/fallback (strict controls, pages, search, profiles, pooling)

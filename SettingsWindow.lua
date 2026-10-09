@@ -277,7 +277,7 @@ function UI:ShowChoices(row, anchor)
     popup:ClearAllPoints()
     -- Fixed in the inspector column: even a bottom-of-list control cannot put
     -- the choices below the screen, and the current control stays visible.
-    popup:SetPoint("TOPRIGHT", self.window, "TOPRIGHT", -16, -98)
+    popup:SetPoint("TOPRIGHT", self.body, "TOPRIGHT", -16, -52)
     local values = self:Evaluate(row.option, "values", row.info, {})
     local keys = {}
     for key in pairs(values) do keys[#keys + 1] = key end
@@ -528,8 +528,44 @@ function UI:UpdateStatus()
 end
 
 function UI:FitScreen()
-    local width, height = UIParent:GetWidth(), UIParent:GetHeight()
-    self.window:SetScale(min(1, (width - 24) / 1060, (height - 24) / 670))
+    local host = self.embeddedHost or UIParent
+    local width, height = host:GetWidth(), host:GetHeight()
+    if width <= 0 or height <= 0 then return end
+    local margin = self.embeddedHost and 0 or 24
+    self.window:SetScale(max(0.1, min(1, (width - margin) / self.window:GetWidth(), (height - margin) / 670)))
+end
+
+function UI:SetStandaloneEscape(enabled)
+    if not UISpecialFrames then return end
+    local name = self.window:GetName()
+    for i = #UISpecialFrames, 1, -1 do
+        if UISpecialFrames[i] == name then table.remove(UISpecialFrames, i) end
+    end
+    if enabled then table.insert(UISpecialFrames, name) end
+end
+
+function UI:ConfigureLayout(embedded)
+    self.window:SetSize(embedded and 790 or 1060, 670)
+    self.body:SetHeight(embedded and 350 or 533)
+    self.scroll:SetHeight(embedded and 284 or 467)
+    self.scrollbar:SetHeight(embedded and 279 or 462)
+    self.inspector:ClearAllPoints()
+    if embedded then
+        self.inspector:SetPoint("TOPLEFT", 225, -438)
+        self.inspector:SetSize(538, 171)
+    else
+        self.inspector:SetPoint("TOPLEFT", 776, -76)
+        self.inspector:SetSize(266, 533)
+    end
+    local width = embedded and 506 or 234
+    self.detailScroll:SetSize(width, embedded and 135 or 496)
+    self.detailChild:SetWidth(width - 2)
+    self.detailTitle:SetWidth(width - 2); self.detailText:SetWidth(width - 2)
+    self.profile:ClearAllPoints(); self.profile:SetPoint("TOPRIGHT", embedded and -20 or -60, -25)
+    self.profile:SetWidth(embedded and 300 or 430)
+    self.status:SetWidth(embedded and 740 or 810)
+    self.closeButton:SetShown(not embedded); self.doneButton:SetShown(not embedded)
+    self:ShowDetails(nil)
 end
 
 function UI:Create()
@@ -540,14 +576,14 @@ function UI:Create()
     local titleBar = CreateFrame("Frame", nil, w)
     titleBar:SetPoint("TOPLEFT", 0, 0); titleBar:SetPoint("TOPRIGHT", 0, 0); titleBar:SetHeight(68)
     titleBar:EnableMouse(true); titleBar:RegisterForDrag("LeftButton")
-    titleBar:SetScript("OnDragStart", function() w:StartMoving() end)
+    titleBar:SetScript("OnDragStart", function() if not self.embeddedHost then w:StartMoving() end end)
     titleBar:SetScript("OnDragStop", function() w:StopMovingOrSizing() end)
     if UISpecialFrames then table.insert(UISpecialFrames, w:GetName()) end
     local icon = w:CreateTexture(nil, "ARTWORK"); icon:SetSize(32, 32)
     icon:SetPoint("TOPLEFT", 20, -17); icon:SetTexture("Interface\\AddOns\\" .. addonName .. "\\assets\\icon")
     local title = label(w, "Max Camera Distance", 21, GOLD); title:SetPoint("TOPLEFT", 62, -19)
     local version = label(w, Compat.GetAddonVersion(), 12); version:SetPoint("TOPLEFT", 63, -45)
-    local close = button(w, "X", 28, 28); close:SetPoint("TOPRIGHT", -15, -15)
+    local close = button(w, "X", 28, 28); self.closeButton = close; close:SetPoint("TOPRIGHT", -15, -15)
     close:SetScript("OnClick", function() w:Hide() end)
     self.profile = label(w, "", 12); self.profile:SetPoint("TOPRIGHT", -60, -25); self.profile:SetWidth(430); self.profile:SetJustifyH("RIGHT")
     self.search = edit(w, 194); self.search:SetPoint("TOPLEFT", 18, -76)
@@ -565,7 +601,7 @@ function UI:Create()
     end)
     self.nav:SetScript("OnMouseWheel", function(f, d) f:SetVerticalScroll(max(0, min(f:GetVerticalScrollRange(), f:GetVerticalScroll() - d * 40))) end)
     self.navButtons, self.pools = {}, {}
-    local body = frame("Frame", nil, w); body:SetPoint("TOPLEFT", 225, -76); body:SetSize(538, 533); backdrop(body)
+    local body = frame("Frame", nil, w); self.body = body; body:SetPoint("TOPLEFT", 225, -76); body:SetSize(538, 533); backdrop(body)
     self.pageTitle = label(body, "", 17, GOLD); self.pageTitle:SetPoint("TOPLEFT", 18, -16); self.pageTitle:SetWidth(496)
     self.scroll = CreateFrame("ScrollFrame", nil, body)
     self.scroll:SetPoint("TOPLEFT", 10, -52); self.scroll:SetSize(507, 467)
@@ -586,7 +622,7 @@ function UI:Create()
         if math.abs(self.scroll:GetVerticalScroll() - value) > 0.1 then self.scroll:SetVerticalScroll(value) end
     end)
     self.empty = label(body, L.UI_NO_RESULTS, 14); self.empty:SetPoint("TOPLEFT", 24, -73); self.empty:SetWidth(480)
-    local inspector = frame("Frame", nil, w); inspector:SetPoint("TOPLEFT", 776, -76); inspector:SetSize(266, 533); backdrop(inspector)
+    local inspector = frame("Frame", nil, w); self.inspector = inspector; inspector:SetPoint("TOPLEFT", 776, -76); inspector:SetSize(266, 533); backdrop(inspector)
     self.detailScroll = CreateFrame("ScrollFrame", nil, inspector); self.detailScroll:SetPoint("TOPLEFT", 16, -18); self.detailScroll:SetSize(234, 496)
     self.detailChild = CreateFrame("Frame", nil, self.detailScroll); self.detailChild:SetSize(232, 500); self.detailScroll:SetScrollChild(self.detailChild)
     self.detailTitle = label(self.detailChild, "", 16, GOLD); self.detailTitle:SetPoint("TOPLEFT", 0, 0); self.detailTitle:SetWidth(232)
@@ -594,7 +630,7 @@ function UI:Create()
     self.detailScroll:EnableMouseWheel(true)
     self.detailScroll:SetScript("OnMouseWheel", function(f, d) f:SetVerticalScroll(max(0, min(f:GetVerticalScrollRange(), f:GetVerticalScroll() - d * 50))) end)
     self.status = label(w, "", 11); self.status:SetPoint("BOTTOMLEFT", 22, 27); self.status:SetWidth(810)
-    local done = button(w, L.UI_CLOSE, 172, 30); done:SetPoint("BOTTOMRIGHT", -19, 18)
+    local done = button(w, L.UI_CLOSE, 172, 30); self.doneButton = done; done:SetPoint("BOTTOMRIGHT", -19, 18)
     done:SetScript("OnClick", function() w:Hide() end)
     w:SetScript("OnHide", function()
         self.interacting = false
@@ -629,8 +665,27 @@ function UI:Create()
     w:Hide()
 end
 
+function UI:OpenEmbedded(host)
+    if not self.window then self:Create() end
+    self.window:Hide()
+    self.embeddedHost = host
+    self.window:SetParent(host); self.window:ClearAllPoints(); self.window:SetPoint("CENTER", host, "CENTER")
+    self.window:SetFrameStrata(host:GetFrameStrata())
+    self.window:SetFrameLevel(host:GetFrameLevel() + 1)
+    self:SetStandaloneEscape(false); self:ConfigureLayout(true)
+    self.window:Show(); self:FitScreen()
+    self.pageKey = self.pageKey or "overview"
+    self:Rebuild(false); self:UpdateStatus()
+    return true
+end
+
 function UI:Open()
     if not self.window then self:Create() end
+    self.window:Hide()
+    self.embeddedHost = nil
+    self.window:SetParent(UIParent); self.window:ClearAllPoints(); self.window:SetPoint("CENTER")
+    self.window:SetFrameStrata("DIALOG")
+    self:SetStandaloneEscape(true); self:ConfigureLayout(false)
     self.window:Show(); self:FitScreen()
     self.pageKey = self.pageKey or "overview"
     self:Rebuild(false); self:UpdateStatus()

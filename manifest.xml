@@ -17,5 +17,6 @@
     <Script file="ReactiveZoom.lua"/>
     <Script file="Config.lua"/>
     <Script file="SettingsWindow.lua"/>
+    <Script file="SettingsIntegration.lua"/>
     <Script file="Core.lua"/>
 </Ui>

@@ -20,6 +20,10 @@ function methods:SetScript(key, fn) self.scripts[key] = fn end
 function methods:GetScript(key) return self.scripts[key] end
 function methods:GetName() return self.name end
 function methods:GetParent() return self.parent end
+function methods:SetParent(parent) self.parent = parent end
+function methods:SetFrameStrata(value) self.strata = value end
+function methods:GetFrameStrata() return self.strata or "MEDIUM" end
+function methods:UnregisterEvent() end
 function methods:SetSize(w, h) self.width, self.height = w, h end
 function methods:SetWidth(w) self.width = w end
 function methods:SetHeight(h) self.height = h end
@@ -90,7 +94,7 @@ for _, name in ipairs({ "SetBackdrop", "SetBackdropColor", "SetBackdropBorderCol
     "SetJustifyV", "SetTextInsets", "SetAutoFocus", "SetMaxLetters",
     "EnableMouseWheel", "SetNormalTexture", "SetPushedTexture", "SetCheckedTexture",
     "SetOrientation", "SetThumbTexture", "SetObeyStepOnDrag", "SetAlpha", "SetColorTexture", "SetTexture",
-    "SetMovable", "SetClampedToScreen", "RegisterForDrag", "StartMoving", "StopMovingOrSizing", "SetFrameStrata" }) do
+    "SetMovable", "SetClampedToScreen", "RegisterForDrag", "StartMoving", "StopMovingOrSizing" }) do
     methods[name] = function() end
 end
 function stub.CreateFrame(kind, name, parent, template) return object(kind, name, parent, template) end
