@@ -7,9 +7,10 @@ absent, which is exactly how "Max_Camera_Distance isn't registered with
 AceConfigRegistry" reached users: the options table was never built because
 AceConfig-3.0 was never loaded.
 
-Run this AFTER the packager has fetched .pkgmeta externals (so libs/ is
-populated). Before that point the external folders legitimately do not exist,
-so --allow-missing-externals downgrades those specific paths to warnings.
+All runtime libraries are included in source control. Run the strict check
+both on the source checkout and on the packaged artifact. The legacy
+--allow-missing-externals option remains available for older source trees;
+the current release workflow does not use it.
 
 Usage:
     python3 tools/verify_manifest.py [--root .] [--allow-missing-externals]

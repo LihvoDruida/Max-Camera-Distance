@@ -16,6 +16,10 @@ All .toc files are up to date.
 manifest OK: every referenced file exists
 --- PASS: Manifest references
 
+=== Probe: release package
+probe_package: PASS (missing libraries, stale private camera, CRLF, stale ZIP, extra files)
+--- PASS: Probe: release package
+
 === Probe: late Ace3
 PROBE late-Ace3 registration
   ok   phase 1: addon still initialises a profile without Ace3

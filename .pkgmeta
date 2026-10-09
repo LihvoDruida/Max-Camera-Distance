@@ -45,7 +45,4 @@ externals:
   libs/LibDBIcon-1.0:
     url: https://repos.wowace.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0
     tag: latest
-
-  libs/LibMountInfo:
-    url: https://github.com/LudiusMaximus/LibMountInfo
-    tag: latest  
+ 

@@ -4,3 +4,5 @@
 *.exe
 luac.out
 *.out
+/.release/
+__pycache__/

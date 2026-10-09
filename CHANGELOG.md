@@ -1,3 +1,11 @@
+# v11.1.1
+
+- Keep all runtime libraries in source control; stop replacing tested copies with latest externals.
+- Verify source manifests strictly before running probes in CI.
+- Build without uploading, then check packaged manifests, code and ZIP contents before publication.
+- Preserve the full patch version when resolving release metadata.
+- Add missing-library, stale-LibCamera and stale-ZIP packaging regressions.
+
 # v11.1.0
 
 - Group combat activity preset, manual distance and return delay together.

@@ -1,7 +1,8 @@
+-- Private LibStub major: other camera addons keep their own LibCamera instance.
 ---------------
 -- LIBCAMERA --
 ---------------
-local MAJOR, MINOR = "LibCamera-1.0", 4;
+local MAJOR, MINOR = "MaxCameraDistance-LibCamera-1.0", 4;
 local LibCamera = LibStub:NewLibrary(MAJOR, MINOR);
 
 if (not LibCamera) then
@@ -105,13 +106,15 @@ local function safeGetCVarNumber(name, fallback)
 end
 
 local function safeSetCVar(name, value)
+    local compat = _G.MaxCameraDistanceCompat and _G.MaxCameraDistanceCompat.runtime;
+    if compat and compat.SafeSetCVar then return compat.SafeSetCVar(name, value); end
     if (C_CVar and C_CVar.SetCVar) then
-        local ok = pcall(C_CVar.SetCVar, name, value);
-        if (ok) then return true; end
+        local ok, result = pcall(C_CVar.SetCVar, name, value);
+        return ok and result ~= false;
     end
     if (type(SetCVar) == "function") then
-        local ok = pcall(SetCVar, name, value);
-        if (ok) then return true; end
+        local ok, result = pcall(SetCVar, name, value);
+        return ok and result ~= false;
     end
     return false;
 end
@@ -383,7 +386,11 @@ function LibCamera:SetZoomUsingCVar(endValue, duration, callback)
 
     -- set the zoom cvar to what will get us to the endValue in the duration
     -- while staying inside the client-validated range.
-    safeSetCVar("cameraZoomSpeed", speed);
+    if not safeSetCVar("cameraZoomSpeed", speed) then
+        oldSpeed = nil;
+        -- Read-only/secure CVars still allow the basic camera API transition.
+        return self:SetZoom(endValue, duration, nil, callback);
+    end
 
     local triggeredZoom = false;
 

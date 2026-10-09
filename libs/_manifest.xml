@@ -5,5 +5,4 @@
     <Script file="LibDataBroker-1.1\LibDataBroker-1.1.lua"/>
     <Script file="LibDBIcon-1.0\LibDBIcon-1.0.lua"/>
     <Script file="LibCamera\LibCamera.lua"/>
-    <Script file="LibMountInfo\LibMountInfo.lua"/>
 </Ui>

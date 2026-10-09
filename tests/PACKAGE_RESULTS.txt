@@ -1,0 +1,9 @@
+Clean Git checkout: ALL CHECKS PASSED
+All libs files tracked by Git: PASS
+Workflow build/verify/upload ordering: PASS
+Actual BigWigs packager (upload disabled): PASS
+Packaged load chain, source code and ZIP: PASS
+LibCamera probe from packaged folder: PASS
+Verified-folder reuse (upload disabled): PASS
+Rebuilt ZIP verification: PASS
+No remote publishing performed.
