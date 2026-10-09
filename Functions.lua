@@ -958,7 +958,7 @@ end
 
 function Functions:GetActiveMountID()
     local mounted = SafeBoolCall(IsMounted)
-    if not USES_MODERN_API or not mounted or not C_MountJournal or not C_MountJournal.GetMountIDs or not C_MountJournal.GetMountInfoByID then
+    if not mounted or not C_MountJournal or not C_MountJournal.GetMountIDs or not C_MountJournal.GetMountInfoByID then
         activeMountCache.mounted = mounted
         activeMountCache.mountID = nil
         activeMountCache.mountTypeID = nil

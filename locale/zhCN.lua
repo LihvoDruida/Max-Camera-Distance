@@ -521,3 +521,10 @@ L["UI_SELECT"] = "选择…"
 L["UI_CREATE"] = "创建 / 打开"
 L["UI_CLOSE"] = "关闭"
 L["UI_DISTANCE"] = "距离"
+
+L["UI_ACTIVITY_PRESET"] = "距离预设"
+L["UI_RETURN_DELAY"] = "恢复延迟（秒）"
+L["UI_FOREVER_GRAPHICS"] = "Forever 图形"
+
+L["UI_YARDS"] = "码"
+L["CONTEXT_SCENARIO_CLASSIC"] = "场景战役"

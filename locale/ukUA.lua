@@ -597,3 +597,10 @@ L["UI_SELECT"] = "Вибрати…"
 L["UI_CREATE"] = "Створити"
 L["UI_CLOSE"] = "Закрити"
 L["UI_DISTANCE"] = "Дистанція"
+
+L["UI_ACTIVITY_PRESET"] = "Пресет дистанції"
+L["UI_RETURN_DELAY"] = "Затримка повернення (секунди)"
+L["UI_FOREVER_GRAPHICS"] = "Графіка Forever"
+
+L["UI_YARDS"] = "ярди"
+L["CONTEXT_SCENARIO_CLASSIC"] = "Сценарії"

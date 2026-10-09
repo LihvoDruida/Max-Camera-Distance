@@ -110,7 +110,7 @@ for _, file in ipairs({
     "ShoulderCompensation.lua",
     "Functions.lua",
     "ReactiveZoom.lua",
-    "Config.lua",
+    "OptionsLayout.lua", "Config.lua",
     "Core.lua",
 }) do
     LoadFile(file)
@@ -188,9 +188,9 @@ check("phase 5: the gamepad options tab is hidden off Forever",
     gamePadGroup ~= nil and type(gamePadGroup.hidden) == "function" and gamePadGroup.hidden() == true,
     gamePadGroup and tostring(gamePadGroup.hidden) or "no group")
 
-local extraFeatures = registered and registered.args and registered.args.extraFeatures
+local extraFeatures = registered and registered.args and registered.args.actionCamSettings
 local retailActionCam = extraFeatures and extraFeatures.args and extraFeatures.args.actionCamHeader
-check("phase 5: ActionCam stays in Additional Features on Retail",
+check("phase 5: ActionCam has its own settings page on Retail",
     retailActionCam ~= nil and type(retailActionCam.hidden) == "function" and retailActionCam.hidden() == false,
     retailActionCam and tostring(retailActionCam.hidden and retailActionCam.hidden()) or "no ActionCam")
 local retailShoulder = extraFeatures and extraFeatures.args and extraFeatures.args.shoulderOffset

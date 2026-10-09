@@ -165,6 +165,8 @@ function Contexts:IsSupported(context)
     local def = self.DEFINITIONS[context]
     if not def then return false end
     if def.retailOnly and not Compat.IS_RETAIL then return false end
+    if context == "arena" and Compat.IS_CLASSIC_ERA then return false end
+    if context == "scenario" and not Compat.SupportsScenarioZone() then return false end
     return true
 end
 
@@ -189,7 +191,7 @@ local function SafeInstanceInfo()
         end
     end
 
-    return IsTruthy(inInstance), instanceType, difficultyID
+    return IsTruthy(inInstance), Plain(instanceType), difficultyID
 end
 
 -- Difficulty 8 is Mythic Keystone. C_ChallengeMode.IsChallengeModeActive is the
@@ -272,11 +274,16 @@ function Contexts:Resolve(db)
     -- bosses present themselves, and that used to resolve to the raid context.
     -- Changing it here would silently move world-boss users onto their open
     -- world distance, so it stays.
-    if IsTruthy(IsInRaid and IsInRaid()) then
+    local function safeBool(fn)
+        if type(fn) ~= "function" then return false end
+        local ok, value = pcall(fn)
+        return ok and IsTruthy(value)
+    end
+    if safeBool(IsInRaid) then
         return "raid"
     end
 
-    if IsTruthy(IsInGroup and IsInGroup()) then
+    if safeBool(IsInGroup) then
         return "dungeon"
     end
 

@@ -71,7 +71,7 @@ local function CopyTableSafe(src)
 end
 
 local function Clamp(num, minv, maxv)
-    if num == nil then return minv end
+    if num == nil or num ~= num then return minv end
     if num < minv then return minv end
     if num > maxv then return maxv end
     return num
@@ -413,6 +413,25 @@ end
 function Database:ApplyMigrations(profile)
     if not profile then return end
 
+    -- Capture legacy activity values before filling defaults (including AceDB
+    -- metatable defaults). Otherwise every new activity already looks present.
+    if Contexts and Contexts.DEFINITIONS then
+        local legacyGroup = rawget(profile, "groupCombatZoomFactor")
+        for _, def in pairs(Contexts.DEFINITIONS) do
+            if def.legacyDistanceKey and rawget(profile, def.distanceKey) == nil then
+                local value = rawget(profile, def.legacyDistanceKey) or legacyGroup
+                if value ~= nil then profile[def.distanceKey] = value end
+            end
+            if def.legacyPresetKey and rawget(profile, def.presetKey) == nil then
+                local value = rawget(profile, def.legacyPresetKey)
+                if value ~= nil then profile[def.presetKey] = value end
+            end
+            if def.legacyDelayKey and rawget(profile, def.delayKey) == nil then
+                local value = rawget(profile, def.legacyDelayKey)
+                if value ~= nil then profile[def.delayKey] = value end
+            end
+        end
+    end
     local legacyShoulder = profile.actionCamShoulder
     local missingShoulderInCombat = (profile.actionCamShoulderInCombat == nil)
     local missingShoulderOutOfCombat = (profile.actionCamShoulderOutOfCombat == nil)
@@ -432,11 +451,11 @@ function Database:ApplyMigrations(profile)
         end
     end
 
-    if profile.debugLevel == nil then
+    if type(profile.debugLevel) ~= "table" then
         profile.debugLevel = CopyTableSafe(Database.DEFAULT_DEBUG_LEVEL)
     end
 
-    if profile.minimap == nil then
+    if type(profile.minimap) ~= "table" then
         profile.minimap = { hide = false }
     elseif profile.minimap.hide == nil then
         profile.minimap.hide = false
@@ -605,7 +624,8 @@ function Database:ApplyMigrations(profile)
     }
     if type(profile.mountZoomMode) ~= "string" or not VALID_MOUNT_ZOOM_MODES[profile.mountZoomMode] then
         profile.mountZoomMode = PROFILE_DEFAULTS.mountZoomMode
-    elseif not IS_RETAIL and profile.mountZoomMode == "skyriding" then
+    elseif (not IS_RETAIL and profile.mountZoomMode == "skyriding")
+        or (Compat.IS_CLASSIC_ERA and profile.mountZoomMode == "flying") then
         -- A profile copied from Retail should not leave mount zoom permanently
         -- disabled on Forever/Classic through an unavailable Skyriding-only mode.
         profile.mountZoomMode = PROFILE_DEFAULTS.mountZoomMode

@@ -206,7 +206,7 @@ local function GamePadActionCamDisabled()
 end
 
 local function EnsureDebugLevelTable(db)
-    if not db.debugLevel then
+    if type(db.debugLevel) ~= "table" then
         db.debugLevel = { error = true, warning = true, info = true, debug = false }
     end
 end
@@ -358,6 +358,7 @@ local function ContextLabel(context)
         return tostring(context or "-")
     end
     local def = Contexts:Get(context)
+    if context == "scenario" and not IS_RETAIL then return L["CONTEXT_SCENARIO_CLASSIC"] end
     return L[def.labelKey] or def.defaultLabel or context
 end
 
@@ -745,7 +746,7 @@ local function InjectContextOptions(args, baseOrder, mode, maxDistance)
             local distanceKey = def.distanceKey
             args["ctxSlider_" .. id] = {
                 type = "range",
-                name = label .. " (Yards)",
+                name = label .. " (" .. L["UI_YARDS"] .. ")",
                 desc = function()
                     return BuildRangeDesc(L[def.labelKey .. "_DESC"], distanceKey)
                 end,
@@ -917,7 +918,7 @@ function Config:SetupOptions()
                     },
                     maxZoomFactor = {
                         type = "range",
-                        name = (L["MAX_ZOOM_FACTOR"] or "Max Zoom") .. " (Yards)",
+                        name = (L["MAX_ZOOM_FACTOR"] or "Max Zoom") .. " (" .. L["UI_YARDS"] .. ")",
                         desc = function() return BuildRangeDesc(L["MAX_ZOOM_FACTOR_DESC"], "maxZoomFactor") end,
                         min = 1.0,
                         max = maxDistance,
@@ -1050,6 +1051,7 @@ function Config:SetupOptions()
                         order = 38,
                     },
                     yawSpeed = {
+                        hidden = function() return not HasCVar("cameraYawMoveSpeed") end,
                         type = "range",
                         name = L["YAW_MOVE_SPEED"],
                         desc = L["YAW_MOVE_SPEED_DESC"],
@@ -1061,6 +1063,7 @@ function Config:SetupOptions()
                         order = 40,
                     },
                     pitchSpeed = {
+                        hidden = function() return not HasCVar("cameraPitchMoveSpeed") end,
                         type = "range",
                         name = L["PITCH_MOVE_SPEED"],
                         desc = L["PITCH_MOVE_SPEED_DESC"],
@@ -1269,7 +1272,7 @@ function Config:SetupOptions()
                     },
                     combatMinZoom = {
                         type = "range",
-                        name = (L["MIN_COMBAT_ZOOM_FACTOR"] or "Normal Distance") .. " (Yards)",
+                        name = (L["MIN_COMBAT_ZOOM_FACTOR"] or "Normal Distance") .. " (" .. L["UI_YARDS"] .. ")",
                         desc = function() return BuildRangeDesc(L["MIN_COMBAT_ZOOM_FACTOR_DESC"], "minZoomFactor") end,
                         min = 1.0,
                         max = maxDistance,
@@ -1296,9 +1299,9 @@ function Config:SetupOptions()
                         values = function()
                             local values = {
                                 all = L["MOUNT_ZOOM_MODE_ALL"] or "All mounts and travel forms",
-                                flying = L["MOUNT_ZOOM_MODE_FLYING"] or "Flying mounts only",
                                 forms = L["MOUNT_ZOOM_MODE_FORMS"] or "Travel forms only",
                             }
+                            if Compat.SupportsFlyingMountMode() then values.flying = L["MOUNT_ZOOM_MODE_FLYING"] end
                             if IS_RETAIL then
                                 values.skyriding = L["MOUNT_ZOOM_MODE_SKYRIDING"] or "Skyriding only"
                             end
@@ -1323,7 +1326,7 @@ function Config:SetupOptions()
                     },
                     mountZoomFactor = {
                         type = "range",
-                        name = (L["MOUNT_ZOOM_FACTOR"] or "Mount Zoom") .. " (Yards)",
+                        name = (L["MOUNT_ZOOM_FACTOR"] or "Mount Zoom") .. " (" .. L["UI_YARDS"] .. ")",
                         desc = function() return BuildRangeDesc(L["MOUNT_ZOOM_FACTOR_DESC"], "mountZoomFactor") end,
                         min = 1.0,
                         max = maxDistance,
@@ -1395,6 +1398,7 @@ function Config:SetupOptions()
                         order = 2,
                     },
                     reduceMovement = {
+                        hidden = function() return not HasCVar("cameraReduceUnexpectedMovement") end,
                         type = "toggle",
                         name = L["REDUCE_UNEXPECTED_MOVEMENT"],
                         desc = L["REDUCE_UNEXPECTED_MOVEMENT_DESC"],
@@ -2303,6 +2307,7 @@ function Config:SetupOptions()
         end
     end
 
+    if ns.OptionsLayout then ns.OptionsLayout:Apply(options) end
     self.options = options
     return true
 end

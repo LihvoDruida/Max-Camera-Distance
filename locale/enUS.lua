@@ -565,3 +565,10 @@ L["UI_SELECT"] = "Select…"
 L["UI_CREATE"] = "Create / open"
 L["UI_CLOSE"] = "Close"
 L["UI_DISTANCE"] = "Distance"
+
+L["UI_ACTIVITY_PRESET"] = "Distance preset"
+L["UI_RETURN_DELAY"] = "Return delay (seconds)"
+L["UI_FOREVER_GRAPHICS"] = "Forever graphics"
+
+L["UI_YARDS"] = "yards"
+L["CONTEXT_SCENARIO_CLASSIC"] = "Scenarios"

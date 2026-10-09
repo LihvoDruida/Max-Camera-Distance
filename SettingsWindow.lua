@@ -279,14 +279,25 @@ function UI:ShowChoices(row, anchor)
     -- the choices below the screen, and the current control stays visible.
     popup:SetPoint("TOPRIGHT", self.body, "TOPRIGHT", -16, -52)
     local values = self:Evaluate(row.option, "values", row.info, {})
-    local keys = {}
-    for key in pairs(values) do keys[#keys + 1] = key end
-    table.sort(keys, function(a, b) return fold(values[a]) < fold(values[b]) end)
+    local keys, used, remainder = {}, {}, {}
+    local sorting = self:Evaluate(row.option, "sorting", row.info, {})
+    if type(sorting) == "table" then
+        for _, key in ipairs(sorting) do
+            if values[key] ~= nil and not used[key] then keys[#keys + 1] = key; used[key] = true end
+        end
+    end
+    for key in pairs(values) do if not used[key] then remainder[#remainder + 1] = key end end
+    table.sort(remainder, function(a, b)
+        local x, y = fold(values[a]), fold(values[b])
+        return x == y and tostring(a) < tostring(b) or x < y
+    end)
+    for _, key in ipairs(remainder) do keys[#keys + 1] = key end
     for i, key in ipairs(keys) do
         local selectedKey = key
         local b = popup.buttons[i]
         if not b then b = button(popup.child, "", 230, 29); popup.buttons[i] = b end
         b:ClearAllPoints(); b:SetPoint("TOPLEFT", 0, -(i - 1) * 31)
+        b.choiceKey = selectedKey
         b.text:SetText(values[selectedKey]); b.text:SetJustifyH("LEFT")
         b:SetScript("OnClick", function() self:CloseChoices(); self:Apply(row, selectedKey) end)
         b:Show()
@@ -332,7 +343,7 @@ function UI:CreateRow(kind)
         slider.high = label(f, "", 10, GOLD); slider.high:SetPoint("BOTTOMRIGHT", -130, 0)
         local number = edit(f, 91); number:SetPoint("BOTTOMRIGHT", -14, 9)
         number:SetScript("OnEditFocusGained", function() UI.interacting = true end)
-        number:SetScript("OnEditFocusLost", function() UI.interacting = false end)
+        number:SetScript("OnEditFocusLost", function() UI.interacting = false; UI:RequestRefresh() end)
         f.slider, f.number = slider, number
         local function normal(value)
             local o = f.row.option
@@ -353,6 +364,7 @@ function UI:CreateRow(kind)
         slider:SetScript("OnMouseUp", function()
             UI.interacting = false
             if f.pendingValue then commit(f.pendingValue); f.pendingValue = nil end
+            UI:RequestRefresh()
         end)
         slider:EnableMouseWheel(true)
         slider:SetScript("OnMouseWheel", function(_, delta) commit(slider:GetValue() + delta * (f.row.option.step or 1)) end)
@@ -376,7 +388,7 @@ function UI:CreateRow(kind)
     elseif kind == "input" then
         f.input = edit(f, 362); f.input:SetPoint("BOTTOMLEFT", 12, 6)
         f.input:SetScript("OnEditFocusGained", function() UI.interacting = true end)
-        f.input:SetScript("OnEditFocusLost", function() UI.interacting = false end)
+        f.input:SetScript("OnEditFocusLost", function() UI.interacting = false; UI:RequestRefresh() end)
         f.control = button(f, L.UI_CREATE, 112, 28); f.control:SetPoint("BOTTOMRIGHT", -12, 6)
         local function commit() UI:Apply(f.row, f.input:GetText()); f.input:ClearFocus() end
         f.control:SetScript("OnClick", commit); f.input:SetScript("OnEnterPressed", commit)
@@ -395,7 +407,7 @@ function UI:CreateRow(kind)
 end
 
 function UI:BindRow(f, row)
-    f.row, f.syncing = row, true
+    f.row, f.syncing, f.pendingValue = row, true, nil
     f.title:SetText(row.name)
     f:SetAlpha(row.disabled and 0.45 or 1)
     f:EnableMouse(false)
@@ -441,7 +453,7 @@ function UI:ClipControl(control, scroll, enabled)
 end
 
 function UI:RenderVisible()
-    if not self.rows then return end
+    if not self.rows or self.interacting then return end
     for _, pool in pairs(self.pools) do
         for _, f in ipairs(pool) do f:Hide() end
     end
@@ -653,7 +665,12 @@ function UI:Create()
             local reset = self.searchDelay ~= nil; self.searchDelay = nil; self:Rebuild(reset)
         end
         self.searchHint:SetShown(self.search:GetText() == "")
-        if statusTick >= 1 then statusTick = 0; self:UpdateStatus() end
+        if statusTick >= 1 then
+            statusTick = 0; self:UpdateStatus()
+            -- Diagnostic names depend on camera state. Rebuild only this page,
+            -- through the normal interaction/debounce guard, while it is open.
+            if self.pageKey == "debugSettings" then self:RequestRefresh() end
+        end
     end)
     w:RegisterEvent("DISPLAY_SIZE_CHANGED"); w:RegisterEvent("UI_SCALE_CHANGED")
     w:RegisterEvent("PLAYER_REGEN_DISABLED"); w:RegisterEvent("PLAYER_REGEN_ENABLED")

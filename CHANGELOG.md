@@ -1,3 +1,17 @@
+# v11.1.0
+
+- Group combat activity preset, manual distance and return delay together.
+- Separate wheel zoom, mounts, ActionCam, AFK and Forever graphics pages.
+- Respect schema dropdown sorting, including language and zoom curves.
+- Prevent pooled slider rebinding during a drag; refresh live diagnostics while open.
+- Detect flying mounts through Mount Journal APIs on Classic as well as Retail/Forever.
+- Hide inappropriate Era/scenario activities and unsupported camera CVars.
+- Detect visual utility support by CVar presence; identify Titan Reforged separately.
+- Migrate legacy Party/PvP activity values before filling profile defaults.
+- Normalize malformed profile tables and NaN distances safely.
+- Complete native-window French/German strings and localize distance units.
+- Add activity, mount, grouping, ordering, drag and profile migration regressions.
+
 # v11.0.3
 
 - Register Max Camera Distance in the game AddOns settings list via Settings or InterfaceOptions.

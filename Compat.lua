@@ -57,6 +57,7 @@ Compat.IS_RETAIL = (not Compat.IS_FOREVER) and ((Compat.PROJECT_ID == WOW_PROJEC
 Compat.USES_MODERN_API = Compat.IS_RETAIL or Compat.IS_FOREVER
 Compat.IS_MOP_CLASSIC = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 50000 and Compat.INTERFACE < 60000)
 Compat.IS_CATA_CLASSIC = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 40000 and Compat.INTERFACE < 50000)
+Compat.IS_TITAN_REFORGED = (not Compat.IS_FOREVER) and Compat.VERSION:match('^3%.80%.') ~= nil
 Compat.IS_WRATH_CLASSIC = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 30000 and Compat.INTERFACE < 40000)
 Compat.IS_TBC_ANNIVERSARY = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 20000 and Compat.INTERFACE < 30000)
 Compat.IS_CLASSIC_ERA = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 10000 and Compat.INTERFACE < 20000)
@@ -81,6 +82,8 @@ elseif Compat.IS_MOP_CLASSIC then
     Compat.CLIENT_TAG = 'Mists Classic'
 elseif Compat.IS_CATA_CLASSIC then
     Compat.CLIENT_TAG = 'Cataclysm Classic'
+elseif Compat.IS_TITAN_REFORGED then
+    Compat.CLIENT_TAG = 'Titan Reforged'
 elseif Compat.IS_WRATH_CLASSIC then
     Compat.CLIENT_TAG = 'Wrath Classic'
 elseif Compat.IS_TBC_ANNIVERSARY then
@@ -383,15 +386,23 @@ function Compat.InvalidateCVarCaches()
 end
 
 function Compat.SupportsFSRSharpen()
-    return Compat.USES_MODERN_API and Compat.HasCVar('resampleAlwaysSharpen')
+    return Compat.HasCVar('resampleAlwaysSharpen')
 end
 
 function Compat.SupportsSoftTargetIcons()
-    return Compat.USES_MODERN_API and Compat.HasCVar('SoftTargetIconGameObject')
+    return Compat.HasCVar('SoftTargetIconGameObject')
 end
 
 function Compat.SupportsActionCam()
     return Compat.HasCVar('test_cameraOverShoulder') or Compat.HasCVar('test_cameraDynamicPitch')
+end
+
+function Compat.SupportsFlyingMountMode()
+    local journal = _G.C_MountJournal
+    return not Compat.IS_CLASSIC_ERA and type(journal) == "table"
+        and type(journal.GetMountIDs) == "function"
+        and type(journal.GetMountInfoByID) == "function"
+        and type(journal.GetMountInfoExtraByID) == "function"
 end
 
 function Compat.SupportsScenarioZone()

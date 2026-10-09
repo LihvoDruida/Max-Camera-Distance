@@ -36,6 +36,7 @@ _G.GetCVarDefault = GetCVar
 _G.SetCVar = function(name, value) cvars[name] = tostring(value); return true end
 _G.InCombatLockdown = function() return false end
 _G.ReloadUI = function() end
+_G.C_MountJournal = { GetMountIDs = function() return {} end, GetMountInfoByID = function() end, GetMountInfoExtraByID = function() end }
 _G.C_AddOns = { GetAddOnMetadata = function() return "v11.0.0" end }
 local registrations, categoryPanel = 0, nil
 local function exposeSettings()
@@ -59,8 +60,8 @@ if arg[2] == "embedded" then
     for _, path in ipairs({ "Compatibility.lua", "libs/LibStub/LibStub.lua",
         "libs/CallbackHandler-1.0/CallbackHandler-1.0.lua", "libs/AceDB-3.0/AceDB-3.0.lua" }) do load(path) end
 end
-for _, path in ipairs({ "Compatibility.lua", "locale/enUS.lua", "locale/ukUA.lua", "locale/zhCN.lua", "Locales.lua", "Compat.lua",
-    "Contexts.lua", "Database.lua", "Config.lua", "SettingsWindow.lua", "SettingsIntegration.lua" }) do load(path) end
+for _, path in ipairs({ "Compatibility.lua", "locale/enUS.lua", "locale/ukUA.lua", "locale/zhCN.lua", "locale/deDE.lua", "locale/frFR.lua", "Locales.lua", "Compat.lua",
+    "Contexts.lua", "Database.lua", "OptionsLayout.lua", "Config.lua", "SettingsWindow.lua", "SettingsIntegration.lua" }) do load(path) end
 ns.Database:InitDB()
 assert(ns.Config:SetupOptions())
 assert(ns.Config:Open(), "standalone native UI does not open")
@@ -68,6 +69,25 @@ local ui = ns.SettingsWindow
 assert(#ui:GetPages() >= 7, "visible pages were lost")
 assert(LibStub("AceConfigDialog-3.0", true) == nil, "test must not borrow AceGUI")
 assert(ui.window:GetName() == UISpecialFrames[1])
+
+assert(not ns.Config.options.args.presetSettings, "old preset page still duplicates activities")
+assert(ns.Config.options.args.mountSettings.args.mountZoomPreset, "mount preset separated from mount settings")
+assert(ns.Config.options.args.zoomSettings.args.reactiveZoom, "wheel settings not grouped")
+assert(ns.Config.options.args.afkSettings.args.enableAFK, "AFK settings missing")
+local groups = ns.Config.options.args.smartSettings.args
+for _, id in ipairs(ns.Contexts.ORDER) do
+    local def = ns.Contexts.DEFINITIONS[id]
+    local group = groups["activities_" .. def.kind]
+    local activity = group and group.args[id]
+    assert((activity ~= nil) == ns.Contexts:IsSupported(id), "wrong client activity " .. id)
+    if activity then
+        assert(activity.args["ctxPreset_" .. id] and activity.args["ctxSlider_" .. id]
+            and activity.args["ctxDelay_" .. id], "activity controls split across pages")
+    end
+end
+local modes = ns.Config.options.args.mountSettings.args.mountZoomMode.values()
+assert((modes.flying ~= nil) == (arg[1] ~= "era"), "Era exposes flying-only mount mode")
+assert((modes.skyriding ~= nil) == ns.Compat.IS_RETAIL)
 
 -- Every page and all scrollbar positions exercise actual row creation/binding.
 for _, page in ipairs(ui:GetPages()) do
@@ -119,6 +139,35 @@ ui:ShowChoices(choose)
 assert(ui.choices:IsShown() and #ui.choices.buttons >= 2)
 ui:CloseChoices()
 
+-- Defined choice ordering beats translated alphabetic order.
+local sorted = { option = { type = "select", values = { a = "Z", b = "A", c = "C" },
+    sorting = function() return { "a", "a", "missing", "b" } end }, info = {}, name = "Ordering", desc = "" }
+ui:ShowChoices(sorted)
+assert(ui.choices.buttons[1].choiceKey == "a" and ui.choices.buttons[2].choiceKey == "b"
+    and ui.choices.buttons[3].choiceKey == "c")
+ui:CloseChoices()
+-- Scrolling during a drag must not rebind the slider to a different setting.
+ui:SelectPage("zoomSettings")
+local dragging
+for _, f in ipairs(ui.pools.range) do if f:IsShown() and not f.row.disabled then dragging = f; break end end
+assert(dragging)
+local originalRow = dragging.row
+stub.Script(dragging.slider, "OnMouseDown")
+dragging.slider:SetValue(originalRow.option.max)
+ui.scroll:SetVerticalScroll(180)
+assert(dragging.row == originalRow, "dragged slider writes to a recycled option")
+stub.Script(dragging.slider, "OnMouseUp")
+assert(originalRow.option.get(originalRow.info) == originalRow.option.max)
+-- The diagnostic snapshot changes while the page remains open.
+local liveValue = "Before"
+ns.Config.options.args.debugSettings.args.statusSnapshot.name = function() return liveValue end
+ui:SelectPage("debugSettings")
+liveValue = "After"
+stub.Script(ui.window, "OnUpdate", 1.1); stub.Script(ui.window, "OnUpdate", 0.1)
+local liveUpdated = false
+for _, row in ipairs(ui.rows) do if row.name == "After" then liveUpdated = true end end
+assert(liveUpdated, "diagnostic snapshot stays stale until reopening")
+
 -- The game AddOns category embeds the complete renderer, without AceGUI.
 local integration = ns.SettingsIntegration
 if arg[4] == "late" then
@@ -162,7 +211,7 @@ end
 for _, o in ipairs(stub.objects) do
     if o.kind == "FontString" then assert(o.fontFamily, "font alphabet fallback was discarded") end
 end
-for _, locale in ipairs({ "ukUA", "zhCN" }) do
+for _, locale in ipairs({ "ukUA", "zhCN", "deDE", "frFR" }) do
     for key in pairs(ns.LocaleData.enUS) do
         if key:match("^UI_") then assert(ns.LocaleData[locale][key], locale .. " lacks " .. key) end
     end
