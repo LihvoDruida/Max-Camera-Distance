@@ -12,6 +12,8 @@ local cases = {
     cata = { "4.4.2", 40402, 14 }, mists = { "5.5.4", 50504, 19 },
     forever = { "1.60.1", 16001, 1 },
 }
+_G.BackdropTemplateMixin = arg[3] ~= "legacy" and {} or nil
+stub.legacyFonts = arg[3] == "legacy"
 local selected = cases[arg[1] or "retail"]
 assert(selected, "unknown test flavor")
 _G.GetBuildInfo = function() return selected[1], "69933", "2026", selected[2] end
@@ -41,7 +43,7 @@ if arg[2] == "embedded" then
     for _, path in ipairs({ "Compatibility.lua", "libs/LibStub/LibStub.lua",
         "libs/CallbackHandler-1.0/CallbackHandler-1.0.lua", "libs/AceDB-3.0/AceDB-3.0.lua" }) do load(path) end
 end
-for _, path in ipairs({ "Compatibility.lua", "locale/enUS.lua", "locale/ukUA.lua", "Locales.lua", "Compat.lua",
+for _, path in ipairs({ "Compatibility.lua", "locale/enUS.lua", "locale/ukUA.lua", "locale/zhCN.lua", "Locales.lua", "Compat.lua",
     "Contexts.lua", "Database.lua", "Config.lua", "SettingsWindow.lua" }) do load(path) end
 ns.Database:InitDB()
 assert(ns.Config:SetupOptions())
@@ -100,6 +102,45 @@ local choose = { option = p.choose, info = { "profiles", "choose" }, name = "Cho
 ui:ShowChoices(choose)
 assert(ui.choices:IsShown() and #ui.choices.buttons >= 2)
 ui:CloseChoices()
+
+-- Rows are layout frames: only actual controls receive clicks/highlights.
+for _, pool in pairs(ui.pools) do
+    for _, rowFrame in ipairs(pool) do
+        assert(not rowFrame.highlightTexture, "layout row still has a duplicate highlight")
+        assert(not rowFrame.mouseEnabled, "layout row intercepts clicks")
+        assert(not rowFrame:GetScript("OnClick"), "layout row duplicates a control action")
+    end
+end
+-- Keep the game FontFamily; SetFont(file) would flatten alphabet fallback.
+for _, o in ipairs(stub.objects) do
+    if o.kind == "FontString" then assert(o.fontFamily, "font alphabet fallback was discarded") end
+end
+for _, locale in ipairs({ "ukUA", "zhCN" }) do
+    for key in pairs(ns.LocaleData.enUS) do
+        if key:match("^UI_") then assert(ns.LocaleData[locale][key], locale .. " lacks " .. key) end
+    end
+    ns.Database.db.profile.language = locale
+    ns.Config.options = nil; ns.Config:SetupOptions()
+    assert(ns.Locale:Get("UI_OVERVIEW") == ns.LocaleData[locale].UI_OVERVIEW)
+    ui:SelectPage("overview")
+    assert(ui.pageTitle:GetText() == ns.LocaleData[locale].UI_OVERVIEW)
+end
+local control = stub.CreateFrame("Button")
+ui.scroll.testTop, ui.scroll.testBottom = 100, 20
+control.testTop, control.testBottom = 110, 80
+ui:ClipControl(control, ui.scroll, true)
+assert(control.hitInsets[3] == 10 and control.mouseEnabled, "top partial row input not clipped")
+control.testTop, control.testBottom = 40, 10
+ui:ClipControl(control, ui.scroll, true)
+assert(control.hitInsets[4] == 10 and control.mouseEnabled, "bottom partial row input not clipped")
+control.testTop, control.testBottom = 130, 110
+ui:ClipControl(control, ui.scroll, true)
+assert(not control.mouseEnabled, "offscreen control still clickable")
+control.testTop, control.testBottom = 80, 60
+ui:ClipControl(control, ui.scroll, true)
+assert(control.mouseEnabled and control.hitInsets[3] == 0 and control.hitInsets[4] == 0,
+    "pooled control retains old clipping after scrolling")
+ui.scroll.testTop, ui.scroll.testBottom = nil, nil
 
 -- Small screens keep the entire window inside the available UI rectangle.
 UIParent:SetSize(900, 600); ui:FitScreen()

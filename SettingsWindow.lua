@@ -23,9 +23,14 @@ local function backdrop(f, color)
 end
 local function label(parent, text, size, color)
     local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    -- Keep the client's font (including its Cyrillic/CJK glyphs).
-    local font, _, flags = fs:GetFont()
-    fs:SetFont(font, size or 13, flags)
+    -- SetFont(file) discards the FontFamily alphabet fallbacks. Keep the
+    -- inherited game font object so Cyrillic and Chinese work on English clients.
+    if type(fs.SetFontHeight) == "function" then
+        fs:SetFontHeight(size or 13)
+    else
+        fs:SetFontObject((size or 13) >= 16 and "GameFontNormalLarge" or
+            ((size or 13) <= 12 and "GameFontNormalSmall" or "GameFontNormal"))
+    end
     fs:SetTextColor(unpack(color or TEXT))
     fs:SetJustifyH("LEFT")
     fs:SetText(text or "")
@@ -249,7 +254,7 @@ function UI:ShowChoices(row, anchor)
         popup:SetSize(250, 320); backdrop(popup)
         popup:SetFrameLevel(self.window:GetFrameLevel() + 30)
         popup:EnableMouse(true)
-        local close = button(popup, "×", 25, 25); close:SetPoint("TOPRIGHT", -7, -7)
+        local close = button(popup, "X", 25, 25); close:SetPoint("TOPRIGHT", -7, -7)
         close:SetScript("OnClick", function() self:CloseChoices() end)
         popup.title = label(popup, L.UI_SELECT, 14, GOLD)
         popup.title:SetPoint("TOPLEFT", 13, -14); popup.title:SetWidth(196)
@@ -258,6 +263,9 @@ function UI:ShowChoices(row, anchor)
         popup.child = CreateFrame("Frame", nil, popup.scroll)
         popup.child:SetWidth(230); popup.scroll:SetScrollChild(popup.child)
         popup.buttons = {}
+        popup.scroll:SetScript("OnVerticalScroll", function()
+            for _, b in ipairs(popup.buttons) do if b:IsShown() then UI:ClipControl(b, popup.scroll, true) end end
+        end)
         popup.scroll:EnableMouseWheel(true)
         popup.scroll:SetScript("OnMouseWheel", function(f, delta)
             f:SetVerticalScroll(max(0, min(f:GetVerticalScrollRange(), f:GetVerticalScroll() - delta * 48)))
@@ -286,17 +294,17 @@ function UI:ShowChoices(row, anchor)
     for i = #keys + 1, #popup.buttons do popup.buttons[i]:Hide() end
     popup.child:SetHeight(max(1, #keys * 31)); popup.scroll:SetVerticalScroll(0)
     popup:Show()
+    for _, b in ipairs(popup.buttons) do if b:IsShown() then self:ClipControl(b, popup.scroll, true) end end
 end
 
 function UI:CreateRow(kind)
-    local f = frame("Button", nil, self.content)
+    local f = frame("Frame", nil, self.content)
     f.kind = kind
-    f:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+    f:EnableMouse(false)
     f.title = label(f, "", 13)
     f.title:SetPoint("TOPLEFT", 12, -11)
     f.title:SetWidth(485)
     f.title:SetJustifyV("TOP")
-    f:SetScript("OnEnter", function(self) UI:ShowDetails(self.row) end)
     if kind == "toggle" or kind == "multiselect" then
         local check = CreateFrame("CheckButton", nil, f)
         check:SetSize(25, 25); check:SetPoint("LEFT", 10, 0)
@@ -311,10 +319,10 @@ function UI:CreateRow(kind)
             local checked = not UI:Evaluate(row.option, "get", row.info, false, row.choice)
             if row.choice then UI:Apply(row, row.choice, checked) else UI:Apply(row, checked) end
         end
-        check:SetScript("OnClick", apply); f:SetScript("OnClick", apply)
+        check:SetScript("OnClick", apply)
         check:SetScript("OnEnter", function() UI:ShowDetails(f.row) end)
     elseif kind == "range" then
-        local slider = CreateFrame("Slider", nil, f)
+        local slider = frame("Slider", nil, f)
         slider:SetOrientation("HORIZONTAL"); slider:SetSize(376, 18)
         slider:SetPoint("BOTTOMLEFT", 13, 13)
         backdrop(slider, { 0.015, 0.012, 0.01, 1 })
@@ -358,6 +366,11 @@ function UI:CreateRow(kind)
     elseif kind == "select" then
         f.control = button(f, "", 483, 29); f.control:SetPoint("BOTTOMLEFT", 12, 6)
         f.control.text:SetJustifyH("LEFT")
+        f.control.text:ClearAllPoints()
+        f.control.text:SetPoint("LEFT", 10, 0); f.control.text:SetPoint("RIGHT", -32, 0)
+        local arrow = f.control:CreateTexture(nil, "ARTWORK")
+        arrow:SetSize(20, 20); arrow:SetPoint("RIGHT", -6, 0)
+        arrow:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
         f.control:SetScript("OnClick", function(self) UI:ShowDetails(f.row); UI:ShowChoices(f.row, self) end)
         f.control:SetScript("OnEnter", function() UI:ShowDetails(f.row) end)
     elseif kind == "input" then
@@ -385,7 +398,7 @@ function UI:BindRow(f, row)
     f.row, f.syncing = row, true
     f.title:SetText(row.name)
     f:SetAlpha(row.disabled and 0.45 or 1)
-    f:EnableMouse(true)
+    f:EnableMouse(false)
     local o = row.option
     if f.check then
         f.check:SetChecked(self:Evaluate(o, "get", row.info, false, row.choice))
@@ -402,7 +415,7 @@ function UI:BindRow(f, row)
     elseif o.type == "select" then
         local values = self:Evaluate(o, "values", row.info, {})
         local selected = self:Evaluate(o, "get", row.info, nil)
-        f.control.text:SetText((values[selected] or L.UI_SELECT) .. "  ▾")
+        f.control.text:SetText(values[selected] or L.UI_SELECT)
         f.control:SetEnabled(not row.disabled and next(values) ~= nil)
     elseif o.type == "input" then
         f.input:SetText(self:Evaluate(o, "get", row.info, ""))
@@ -412,6 +425,19 @@ function UI:BindRow(f, row)
         f.control.text:SetText(row.name); f.control:SetEnabled(not row.disabled)
     end
     f.syncing = false
+end
+
+-- ScrollFrame rendering clips its child, but input bounds must also be clipped.
+function UI:ClipControl(control, scroll, enabled)
+    if not control then return end
+    local top, bottom = control:GetTop(), control:GetBottom()
+    local viewTop, viewBottom = scroll:GetTop(), scroll:GetBottom()
+    if top and bottom and viewTop and viewBottom then
+        control:SetHitRectInsets(0, 0, max(0, top - viewTop), max(0, viewBottom - bottom))
+        enabled = enabled and bottom < viewTop and top > viewBottom
+    end
+    if type(control.IsEnabled) == "function" then enabled = enabled and control:IsEnabled() end
+    control:EnableMouse(enabled and true or false)
 end
 
 function UI:RenderVisible()
@@ -430,6 +456,9 @@ function UI:RenderVisible()
             if not f then f = self:CreateRow(kind); pool[counts[kind]] = f end
             f:ClearAllPoints(); f:SetPoint("TOPLEFT", 0, -row.y); f:SetSize(507, row.height - 3)
             self:BindRow(f, row); f:Show()
+            for _, key in ipairs({ "check", "slider", "number", "control", "input" }) do
+                self:ClipControl(f[key], self.scroll, not row.disabled)
+            end
         end
     end
 end
@@ -448,6 +477,7 @@ function UI:Rebuild(resetScroll)
         b.text:SetText(page.name); b.text:SetJustifyH("LEFT")
         b:SetBackdropColor(self.pageKey == page.key and 0.23 or 0.08, 0.14, 0.08, 0.8)
         b:SetScript("OnClick", function() self:SelectPage(item.key) end); b:Show()
+        self:ClipControl(b, self.nav, true)
     end
     for i = #self.pages + 1, #self.navButtons do self.navButtons[i]:Hide() end
     self.navChild:SetHeight(max(1, #self.pages * 40))
@@ -507,15 +537,17 @@ function UI:Create()
     self.window = w; w:SetSize(1060, 670); w:SetPoint("CENTER")
     w:SetFrameStrata("DIALOG"); backdrop(w)
     w:EnableMouse(true); w:SetMovable(true); w:SetClampedToScreen(true)
-    w:RegisterForDrag("LeftButton")
-    w:SetScript("OnDragStart", function(self) self:StartMoving() end)
-    w:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+    local titleBar = CreateFrame("Frame", nil, w)
+    titleBar:SetPoint("TOPLEFT", 0, 0); titleBar:SetPoint("TOPRIGHT", 0, 0); titleBar:SetHeight(68)
+    titleBar:EnableMouse(true); titleBar:RegisterForDrag("LeftButton")
+    titleBar:SetScript("OnDragStart", function() w:StartMoving() end)
+    titleBar:SetScript("OnDragStop", function() w:StopMovingOrSizing() end)
     if UISpecialFrames then table.insert(UISpecialFrames, w:GetName()) end
     local icon = w:CreateTexture(nil, "ARTWORK"); icon:SetSize(32, 32)
     icon:SetPoint("TOPLEFT", 20, -17); icon:SetTexture("Interface\\AddOns\\" .. addonName .. "\\assets\\icon")
     local title = label(w, "Max Camera Distance", 21, GOLD); title:SetPoint("TOPLEFT", 62, -19)
     local version = label(w, Compat.GetAddonVersion(), 12); version:SetPoint("TOPLEFT", 63, -45)
-    local close = button(w, "×", 28, 28); close:SetPoint("TOPRIGHT", -15, -15)
+    local close = button(w, "X", 28, 28); close:SetPoint("TOPRIGHT", -15, -15)
     close:SetScript("OnClick", function() w:Hide() end)
     self.profile = label(w, "", 12); self.profile:SetPoint("TOPRIGHT", -60, -25); self.profile:SetWidth(430); self.profile:SetJustifyH("RIGHT")
     self.search = edit(w, 194); self.search:SetPoint("TOPLEFT", 18, -76)
@@ -528,6 +560,9 @@ function UI:Create()
     self.nav:SetPoint("TOPLEFT", 19, -117); self.nav:SetSize(194, 490)
     self.navChild = CreateFrame("Frame", nil, self.nav); self.navChild:SetSize(191, 1); self.nav:SetScrollChild(self.navChild)
     self.nav:EnableMouseWheel(true)
+    self.nav:SetScript("OnVerticalScroll", function()
+        for _, b in ipairs(self.navButtons) do if b:IsShown() then self:ClipControl(b, self.nav, true) end end
+    end)
     self.nav:SetScript("OnMouseWheel", function(f, d) f:SetVerticalScroll(max(0, min(f:GetVerticalScrollRange(), f:GetVerticalScroll() - d * 40))) end)
     self.navButtons, self.pools = {}, {}
     local body = frame("Frame", nil, w); body:SetPoint("TOPLEFT", 225, -76); body:SetSize(538, 533); backdrop(body)

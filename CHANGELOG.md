@@ -1,3 +1,18 @@
+# v11.0.2
+
+- Remove duplicate row click/highlight areas; buttons and checkboxes own their input.
+- Clip input bounds of partially visible settings, navigation and popup controls.
+- Restrict window dragging to the title bar.
+- Preserve game FontFamily alphabet fallbacks instead of selecting one font file.
+- Replace Unicode dropdown/close symbols with a game arrow texture and ASCII X.
+- Add Chinese translations for every native settings window string.
+- Test FontFamily preservation, Ukrainian/Chinese UI keys and clipped input bounds.
+
+# v11.0.1
+
+- Fix missing Slider backdrop methods by inheriting BackdropTemplate.
+- Test native settings with template-only backdrop methods and legacy APIs.
+
 # v11.0.0 — 2026-10-09
 
 - Replace AceConfigDialog with a native, reference-inspired dark/gold settings window.

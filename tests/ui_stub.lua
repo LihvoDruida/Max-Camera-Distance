@@ -3,11 +3,13 @@
 -- This models control state/callbacks, not WoW graphics, protection or taint.
 local stub = { objects = {} }
 local methods = {}
-local function object(kind, name, parent)
+local function object(kind, name, parent, template)
     local o = { kind = kind, name = name, parent = parent, scripts = {}, shown = true,
-        width = 100, height = 30, enabled = true, text = "", value = 0, level = 1, size = 13, scroll = 0 }
+        width = 100, height = 30, enabled = true, mouseEnabled = true, fontFamily = true, text = "", value = 0, level = 1, size = 13, scroll = 0 }
     stub.objects[#stub.objects + 1] = o
     return setmetatable(o, { __index = function(_, key)
+        if key == "SetFontHeight" and stub.legacyFonts then return nil end
+        if key:match("^SetBackdrop") and _G.BackdropTemplateMixin and template ~= "BackdropTemplate" then return nil end
         if methods[key] then return methods[key] end
         if tostring(key):match("^[A-Z]") then error("Unknown UI method " .. tostring(key) .. " on " .. kind) end
         return nil
@@ -35,7 +37,14 @@ function methods:SetText(value)
     call(self, "OnTextChanged", false)
 end
 function methods:GetText() return self.text end
-function methods:SetFont(_, size) self.size = size end
+function methods:SetFont(_, size) self.size = size; self.fontFamily = false end
+function methods:SetFontHeight(size) self.size = size end
+function methods:SetHighlightTexture(value) self.highlightTexture = value end
+function methods:SetFontObject(value) self.fontObject = value; self.fontFamily = true end
+function methods:EnableMouse(value) self.mouseEnabled = value end
+function methods:GetTop() return self.testTop end
+function methods:GetBottom() return self.testBottom end
+function methods:SetHitRectInsets(...) self.hitInsets = { ... } end
 function methods:GetFont() return "client-font.ttf", self.size, "" end
 function methods:GetStringHeight()
     local text = self.text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
@@ -78,13 +87,13 @@ function methods:RegisterEvent() end
 -- These methods have no behavior needed by the test. They are explicit so a
 -- misspelled/unsupported method can never silently turn into a no-op.
 for _, name in ipairs({ "SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "SetTextColor", "SetJustifyH",
-    "SetJustifyV", "SetHighlightTexture", "SetFontObject", "SetTextInsets", "SetAutoFocus", "SetMaxLetters",
-    "EnableMouse", "EnableMouseWheel", "SetNormalTexture", "SetPushedTexture", "SetCheckedTexture",
+    "SetJustifyV", "SetTextInsets", "SetAutoFocus", "SetMaxLetters",
+    "EnableMouseWheel", "SetNormalTexture", "SetPushedTexture", "SetCheckedTexture",
     "SetOrientation", "SetThumbTexture", "SetObeyStepOnDrag", "SetAlpha", "SetColorTexture", "SetTexture",
     "SetMovable", "SetClampedToScreen", "RegisterForDrag", "StartMoving", "StopMovingOrSizing", "SetFrameStrata" }) do
     methods[name] = function() end
 end
-function stub.CreateFrame(kind, name, parent) return object(kind, name, parent) end
+function stub.CreateFrame(kind, name, parent, template) return object(kind, name, parent, template) end
 function stub.Click(o) if o.enabled then call(o, "OnClick") end end
 function stub.Script(o, name, ...) return call(o, name, ...) end
 return stub

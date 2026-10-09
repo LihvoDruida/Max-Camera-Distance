@@ -99,6 +99,7 @@ native_matrix() {
     for flavor in retail ptr era tbc wrath titan cata mists forever; do
         for mode in fallback embedded; do
             lua51_probe tests/probe_native_settings.lua "$flavor" "$mode" || return $?
+            lua51_probe tests/probe_native_settings.lua "$flavor" "$mode" legacy || return $?
         done
     done
 }
