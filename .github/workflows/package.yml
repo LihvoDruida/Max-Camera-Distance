@@ -48,20 +48,9 @@ jobs:
       - name: Verify .toc files are current
         run: python3 tools/generate_tocs.py --check
 
-      # Vendor libraries may be supplied during packaging. Validate the addon
-      # source without failing on libs/ files not present at checkout time.
-      # The release package is checked STRICTLY after packaging below.
-      - name: Verify XML manifests (source, libs deferred)
-        run: python3 tools/verify_manifest.py
-
-      # Complete libs/ only *after* the checkout/source check. CI verifies all
-      # downloaded or vendored code against DEPENDENCIES.json before tests.
-      # The private patched LibCamera must be committed; it cannot be fetched
-      # from an unrelated upstream revision.
-      - name: Restore pinned libraries and verify complete manifest
-        run: |
-          python3 tools/fetch_libraries.py
-          python3 tools/verify_manifest.py --strict-libs
+      # .pkgmeta externals are NOT in source. Only verify source-owned files here.
+      - name: Verify XML manifests (source, externals fetched during package)
+        run: python3 tools/verify_manifest.py --allow-missing-externals
 
       - name: Install Lua 5.1 (probes and bytecode audit)
         run: sudo apt-get update && sudo apt-get install -y lua5.1
@@ -70,7 +59,7 @@ jobs:
       # and it does not survive a checkout made on Windows, a zip round-trip, or
       # a file added without `git update-index --chmod=+x`. Depending on it made
       # the gate fail with exit 126 (Permission denied) rather than running.
-      - name: Run full pre-release gate
+      - name: Run source-only regression gate
         run: bash ./check_all.sh
 
       - name: Print Debug Info
@@ -105,13 +94,28 @@ jobs:
         with:
           args: -d
 
-      - name: Verify packaged files and ZIP
-        env:
-          PACKAGE_ARCHIVE: ${{ steps.package.outputs.archive_path }}
+      - name: Verify packaged files and ZIP (strict, includes downloaded externals)
+        shell: bash
         run: |
-          python3 tools/verify_manifest.py --root .release/Max_Camera_Distance --strict-libs
-          python3 tools/verify_package.py --root .release/Max_Camera_Distance --archive "$PACKAGE_ARCHIVE"
+          set -euo pipefail
+          # BigWigsMods/packager@v2 does not provide archive_path here.
+          # Discover the ONE archive that -d actually produced; do not use an
+          # empty output that resolves to the repository directory.
+          shopt -s nullglob
+          archives=(.release/Max_Camera_Distance-*.zip)
+          if (( ${#archives[@]} != 1 )); then
+            printf 'Expected exactly one Max_Camera_Distance ZIP, found %s\n' "${#archives[@]}" >&2
+            printf 'Candidates: %s\n' "${archives[*]:-(none)}" >&2
+            exit 1
+          fi
+          python3 tools/verify_manifest.py --root .release/Max_Camera_Distance
+          python3 tools/verify_package.py --root .release/Max_Camera_Distance --archive "${archives[0]}"
           (cd .release/Max_Camera_Distance && lua5.1 "$GITHUB_WORKSPACE/tests/probe_libcamera.lua")
+
+      - name: Run full regression gate against the downloaded libraries
+        env:
+          MCD_PACKAGED_ROOT: ${{ github.workspace }}/.release/Max_Camera_Distance
+        run: bash ./check_all.sh
 
       # Keep and reuse the verified tree. No copying or external checkout can
       # replace runtime files between validation and publication.

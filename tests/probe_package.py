@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Packaging regressions from the missing-library CI failure."""
+"""Offline tests for BigWigs-provided externals and archive integrity."""
+from __future__ import annotations
+
 import shutil
 import sys
 import tempfile
@@ -7,67 +9,84 @@ import zipfile
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(SOURCE / "tools"))
-from verify_package import verify
+sys.path.insert(0, str(SOURCE / 'tools'))
+from verify_package import declared_externals, verify
 
 
-with tempfile.TemporaryDirectory(prefix="mcd-package-") as temp:
-    root = Path(temp) / "Max_Camera_Distance"
-    shutil.copytree(SOURCE, root, ignore=shutil.ignore_patterns(
-        ".git", ".release", "__pycache__"))
-    archive = Path(temp) / "release.zip"
+def check_message(issues: list[str], needle: str) -> None:
+    assert any(needle in issue for issue in issues), f'expected {needle!r}, got {issues}'
 
-    def rebuild_zip():
-        with zipfile.ZipFile(archive, "w") as z:
-            for p in sorted(root.rglob("*")):
-                if p.is_file():
-                    z.write(p, str(p.relative_to(root.parent)))
 
-    rebuild_zip()
-    assert verify(root, SOURCE, archive) == [], "valid package rejected"
+with tempfile.TemporaryDirectory(prefix='mcd-package-') as tmp:
+    base = Path(tmp)
+    release = base / 'Max_Camera_Distance'
+    shutil.copytree(SOURCE, release, ignore=shutil.ignore_patterns(
+        '.git', '.release', '__pycache__'))
+    archive = base / 'Max_Camera_Distance-vTEST.zip'
+    externals = declared_externals(SOURCE)
+    assert len(externals) == 5, f'expected five externally downloaded libraries, got {externals}'
 
-    # Production packagers can populate libs/ after the source checkout. A
-    # complete release must still pass when those externals were not tracked
-    # in the input source; pinned hashes replace source-file comparisons.
-    stripped = Path(temp) / "source-without-externals"
-    shutil.copytree(SOURCE, stripped, ignore=shutil.ignore_patterns(
-        ".git", ".release", "__pycache__"))
-    for name in ("LibStub/LibStub.lua", "CallbackHandler-1.0/CallbackHandler-1.0.lua",
-                 "AceDB-3.0/AceDB-3.0.lua", "LibDataBroker-1.1/LibDataBroker-1.1.lua",
-                 "LibDBIcon-1.0/LibDBIcon-1.0.lua"):
-        (stripped / "libs" / name).unlink()
-    assert verify(root, stripped, archive) == [], "valid package rejected after deferred download"
-    libdb = root / "libs/LibDBIcon-1.0/LibDBIcon-1.0.lua"
-    old_libdb = libdb.read_bytes()
-    libdb.write_bytes(old_libdb + b"\n-- unpinned change\n")
-    rebuild_zip()
-    assert any("SHA-256 mismatch" in p for p in verify(root, stripped, archive)),         "tampered external library was accepted with no source copy"
-    libdb.write_bytes(old_libdb)
-    rebuild_zip()
-    libstub = root / "libs/LibStub/LibStub.lua"
-    original = libstub.read_bytes()
-    libstub.unlink()
-    assert any("missing libs/LibStub" in p for p in verify(root, SOURCE, archive))
-    libstub.write_bytes(original)
+    # BigWigs fetches arbitrary upstream bytes into the *release* folder.
+    # The source tree is never populated in this test.
+    for ext in externals:
+        file = release / ext / (ext.name + '.lua')
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b'-- retrieved by the release packager\n')
 
-    camera = root / "libs/LibCamera/LibCamera.lua"
+    def package() -> None:
+        with zipfile.ZipFile(archive, 'w') as z:
+            for file in sorted(release.rglob('*')):
+                if file.is_file():
+                    z.write(file, file.relative_to(base).as_posix())
+
+    package()
+    assert verify(release, SOURCE, archive) == [], 'valid .pkgmeta externally populated package rejected'
+
+    # Local vendor copies may be from a different branch/tag and must not be
+    # treated as the source of truth for files BigWigs downloads.
+    local_vendor_source = base / 'source-with-stale-vendor'
+    shutil.copytree(SOURCE, local_vendor_source, ignore=shutil.ignore_patterns(
+        '.git', '.release', '__pycache__'))
+    stale_file = local_vendor_source / 'libs/LibStub/LibStub.lua'
+    stale_file.parent.mkdir(parents=True, exist_ok=True)
+    stale_file.write_bytes(b'-- unrelated earlier upstream revision\n')
+    assert verify(release, local_vendor_source, archive) == [], 'package incorrectly compared packager externals to stale checkout'
+
+    # Different, nonempty packager-fetched library content is acceptable, but
+    # must always be identical to the bytes in the actual resulting ZIP.
+    actual_vendor = release / 'libs/AceDB-3.0/AceDB-3.0.lua'
+    actual_vendor.write_bytes(b'-- a newer upstream tag of AceDB\n')
+    package()
+    assert verify(release, SOURCE, archive) == [], 'valid new tag of external rejected'
+
+    vendor = release / 'libs/LibStub/LibStub.lua'
+    original = vendor.read_bytes()
+    vendor.unlink()
+    check_message(verify(release, SOURCE, archive), 'missing libs/LibStub')
+    vendor.write_bytes(b'')
+    package()
+    check_message(verify(release, SOURCE, archive), 'empty: libs/LibStub')
+    vendor.write_bytes(original)
+
+    camera = release / 'libs/LibCamera/LibCamera.lua'
     camera_original = camera.read_bytes()
-    camera.write_bytes(camera_original.replace(b"MaxCameraDistance-LibCamera-1.0", b"LibCamera-1.0"))
-    rebuild_zip()
-    assert any("differs from tested source: libs/LibCamera" in p
-               for p in verify(root, SOURCE, archive)), "stale camera accepted"
+    camera.write_bytes(camera_original + b'\n-- injected change\n')
+    package()
+    check_message(verify(release, SOURCE, archive), 'differs from tested source: libs/LibCamera')
+    camera.write_bytes(camera_original.replace(b'\n', b'\r\n'))
+    package()
+    assert verify(release, SOURCE, archive) == [], 'CRLF-normalized source-owned code rejected'
     camera.write_bytes(camera_original)
-    rebuild_zip()
-    libstub.write_bytes(original.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
-    rebuild_zip()
-    assert verify(root, SOURCE, archive) == [], "CRLF package rejected"
-    camera.write_bytes(camera_original + b"\n-- stale ZIP regression\n")
-    assert any("release ZIP differs" in p for p in verify(root, SOURCE, archive))
-    camera.write_bytes(camera_original)
-    rebuild_zip()
-    with zipfile.ZipFile(archive, "a") as z:
-        z.writestr("Max_Camera_Distance/libs/LibMountInfo/LibMountInfo.lua", "stale")
-    assert any("unexpected file" in p for p in verify(root, SOURCE, archive))
-    assert verify(root, SOURCE, Path(temp) / "missing.zip"), "missing ZIP accepted"
 
-print("probe_package: PASS (deferred libs, SHA-256, missing libs, stale camera, CRLF, ZIP integrity)")
+    package()
+    vendor.write_bytes(b'-- changed after packaging\n')
+    check_message(verify(release, SOURCE, archive), 'release ZIP differs')
+    vendor.write_bytes(original)
+    package()
+    with zipfile.ZipFile(archive, 'a') as z:
+        z.writestr('Max_Camera_Distance/extra/unauthorized.lua', '-- unexpected')
+    check_message(verify(release, SOURCE, archive), 'unexpected file')
+    check_message(verify(release, SOURCE, base), 'not a ZIP file')
+    check_message(verify(release, SOURCE, base / 'missing.zip'), 'not a ZIP file')
+
+print('probe_package: PASS (externals, stale source, updated tags, missing/empty, private camera, ZIP, CRLF)')

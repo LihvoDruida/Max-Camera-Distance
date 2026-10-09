@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
-"""Validate WoW XML load references, with separate source/release policies.
+"""Validate XML load order. Missing .pkgmeta externals are allowed ONLY in source.
 
-In a source checkout, ``libs/`` may be populated by the release pipeline *after*
-this check. The default source check therefore validates every other reference,
-including nested XML manifests, but deliberately defers all ``libs/`` paths.
+Source:  python3 tools/verify_manifest.py --allow-missing-externals
+Release: python3 tools/verify_manifest.py --root .release/Max_Camera_Distance
 
-Use ``--strict-libs`` on the completed addon tree. A missing runtime library in
-an actual release is ALWAYS an error; tools/verify_package.py enforces this too.
-
-Usage:
-    python3 tools/verify_manifest.py [--root .] [--strict-libs]
+The BigWigs packager fetches .pkgmeta externals into the release folder.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -20,94 +14,113 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-ROOT_MANIFEST = "manifest.xml"
-LIBS_DIRECTORY = "libs"
-LOCAL_NAME = re.compile(r"\{.*\}")
+ROOT_MANIFEST = 'manifest.xml'
+LOCAL_NAME = re.compile(r'\{.*\}')
 
 
 def local(tag: str) -> str:
-    return LOCAL_NAME.sub("", tag)
+    return LOCAL_NAME.sub('', tag)
 
 
-def collect(
-    manifest: Path,
-    root: Path,
-    seen: set[Path],
-    problems: list[str],
-    *,
-    skip_libs: bool = False,
-) -> None:
-    """Follow XML Include/Script entries, optionally deferring vendor libraries.
+def external_dirs(root: Path) -> set[Path]:
+    """Read external destination directories in .pkgmeta without PyYAML.
 
-    Skipping applies to the *whole* libs tree (even if files are present), so
-    source checks do not change depending on which dependencies happen to have
-    been downloaded locally. Paths outside the addon root are never allowed.
+    Only two-space-indented keys under the top-level `externals:` map count.
+    This is deliberately narrower than ignoring everything under libs/.
     """
-    manifest = manifest.resolve()
+    pkgmeta = root / '.pkgmeta'
+    if not pkgmeta.is_file():
+        return set()
+    result: set[Path] = set()
+    in_externals = False
+    for line in pkgmeta.read_text(encoding='utf-8-sig').splitlines():
+        if not line.strip() or line.lstrip().startswith('#'):
+            continue
+        if not line.startswith((' ', '\t')):
+            in_externals = line.strip() == 'externals:'
+            continue
+        if in_externals:
+            match = re.match(r'^  ([\w./-]+):\s*$', line)
+            if match:
+                candidate = Path(match.group(1))
+                # Reject traversal and externals outside addon libs.
+                if len(candidate.parts) == 2 and candidate.parts[0] == 'libs' and candidate.parts[1] not in ('.', '..'):
+                    result.add(candidate)
+    return result
+
+
+def is_external_file(rel: Path, dirs: set[Path]) -> bool:
+    return any(parent == rel or parent in rel.parents for parent in dirs)
+
+
+def collect(manifest: Path, root: Path, seen: set[Path], problems: list[str],
+            *, allow_missing_externals: bool = False, externals: set[Path] | None = None,
+            warnings: list[str] | None = None) -> None:
     root = root.resolve()
+    manifest = manifest.resolve()
+    if externals is None:
+        externals = external_dirs(root) if allow_missing_externals else set()
     if manifest in seen:
         return
     seen.add(manifest)
-
     try:
         tree = ET.parse(manifest)
-    except (ET.ParseError, OSError) as exc:
-        problems.append(f"{manifest.relative_to(root)}: cannot parse XML ({exc})")
+    except (OSError, ET.ParseError) as exc:
+        problems.append(f'{manifest.relative_to(root)}: cannot read XML ({exc})')
         return
 
     for node in tree.getroot().iter():
         name = local(node.tag)
-        if name not in ("Script", "Include"):
+        if name not in ('Script', 'Include'):
             continue
-        raw = node.get("file")
+        raw = node.get('file')
         if not raw:
-            problems.append(f"{manifest.relative_to(root)}: <{name}> without a file attribute")
+            problems.append(f'{manifest.relative_to(root)}: <{name}> without a file attribute')
             continue
-
-        target = (manifest.parent / raw.replace("\\", "/")).resolve()
+        target = (manifest.parent / raw.replace('\\', '/')).resolve()
         try:
             rel = target.relative_to(root)
         except ValueError:
-            problems.append(f"{manifest.relative_to(root)}: '{raw}' escapes the addon folder")
-            continue
-
-        if skip_libs and rel.parts and rel.parts[0] == LIBS_DIRECTORY:
+            problems.append(f'{manifest.relative_to(root)}: {raw!r} escapes the addon folder')
             continue
         if not target.is_file():
-            problems.append(f"{manifest.relative_to(root)}: missing {rel}")
+            problem = f'{manifest.relative_to(root)}: missing {rel.as_posix()}'
+            if allow_missing_externals and name == 'Script' and is_external_file(rel, externals):
+                if warnings is not None:
+                    warnings.append(problem)
+            else:
+                problems.append(problem)
             continue
-        if name == "Include":
-            collect(target, root, seen, problems, skip_libs=skip_libs)
+        if name == 'Include':
+            collect(target, root, seen, problems,
+                    allow_missing_externals=allow_missing_externals,
+                    externals=externals, warnings=warnings)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", default=".")
-    parser.add_argument("--strict-libs", action="store_true", help="Require all libs/ references (use for built release)")
-    # Compatibility for CI workflows written before the source/release split.
-    parser.add_argument("--allow-missing-externals", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument('--root', default='.')
+    parser.add_argument('--allow-missing-externals', action='store_true')
     args = parser.parse_args()
-
     root = Path(args.root).resolve()
-    manifest = root / ROOT_MANIFEST
-    if not manifest.is_file():
-        print(f"error: {ROOT_MANIFEST} not found in {root}", file=sys.stderr)
+    if not (root / ROOT_MANIFEST).is_file():
+        print(f'error: {ROOT_MANIFEST} not found in {root}', file=sys.stderr)
         return 1
-
     problems: list[str] = []
-    collect(manifest, root, set(), problems, skip_libs=not args.strict_libs)
+    warnings: list[str] = []
+    collect(root / ROOT_MANIFEST, root, set(), problems,
+            allow_missing_externals=args.allow_missing_externals, warnings=warnings)
+    for warning in warnings:
+        print(f'warning: {warning} (fetched by packager later)')
+    for problem in problems:
+        print(f'error: {problem}', file=sys.stderr)
     if problems:
-        for problem in problems:
-            print(f"error: {problem}", file=sys.stderr)
-        print(f"{len(problems)} manifest reference(s) could not be resolved", file=sys.stderr)
+        print(f'manifest FAIL: {len(problems)} invalid/missing reference(s)', file=sys.stderr)
         return 1
-
-    if args.strict_libs:
-        print("manifest OK (release): every referenced file exists, including libs/")
-    else:
-        print("manifest OK (source): all non-libs references resolved; libs/ deferred to package verification")
+    print(f'manifest OK: {len(warnings)} declared external(s) pending' if warnings
+          else 'manifest OK: every referenced file exists')
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())

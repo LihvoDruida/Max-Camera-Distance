@@ -57,8 +57,14 @@ if arg[4] ~= "late" then exposeSettings() end
 local ns = {}
 local function load(path) assert(loadfile(path))("Max_Camera_Distance", ns) end
 if arg[2] == "embedded" then
-    for _, path in ipairs({ "Compatibility.lua", "libs/LibStub/LibStub.lua",
-        "libs/CallbackHandler-1.0/CallbackHandler-1.0.lua", "libs/AceDB-3.0/AceDB-3.0.lua" }) do load(path) end
+    -- Externals exist only in the built release directory, not in source.
+    local packageRoot = os.getenv("MCD_PACKAGED_ROOT")
+    assert(packageRoot and #packageRoot > 0, "embedded test requires MCD_PACKAGED_ROOT")
+    load("Compatibility.lua")
+    for _, path in ipairs({ "libs/LibStub/LibStub.lua",
+        "libs/CallbackHandler-1.0/CallbackHandler-1.0.lua", "libs/AceDB-3.0/AceDB-3.0.lua" }) do
+        load(packageRoot .. "/" .. path)
+    end
 end
 for _, path in ipairs({ "Compatibility.lua", "locale/enUS.lua", "locale/ukUA.lua", "locale/zhCN.lua", "locale/deDE.lua", "locale/frFR.lua", "Locales.lua", "Compat.lua",
     "Contexts.lua", "Database.lua", "OptionsLayout.lua", "Config.lua", "SettingsWindow.lua", "SettingsIntegration.lua" }) do load(path) end

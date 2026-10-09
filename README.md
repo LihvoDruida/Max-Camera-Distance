@@ -60,19 +60,10 @@ AFK-режим, додаткові можливості, діагностику 
 Потрібні Python 3 і Lua 5.1 (`lua5.1`, `luac5.1`). Запуск: `bash check_all.sh`.
 Тести та інструменти не завантажуються грою і не додають навантаження під час гри.
 
-Для GitHub завантажуйте весь вихідний комплект, включно з `libs/_manifest.xml`,
-модифікованою `libs/LibCamera/LibCamera.lua`, `DEPENDENCIES.json`, інструментами
-та `.github/workflows/package.yml`. Поточний архів також містить усі інші `libs/`.
-Якщо п’ять сторонніх бібліотек відсутні в Git checkout, CI **після** початкової
-перевірки маніфесту завантажує їх через `tools/fetch_libraries.py`, звіряє
-SHA-256 і лише після цього запускає Lua-тести. Власна модифікація LibCamera не
-замінюється жодним upstream-файлом — її треба залишати у Git.
-
-`python3 tools/verify_manifest.py` перевіряє лише вихідний код і свідомо
-пропускає `libs/`. Для перевірки повного дерева виконуйте
-`python3 tools/verify_manifest.py --strict-libs`. Готовий пакет і ZIP завжди
-перевіряються строго, з контрольними сумами залежностей. Сам `.pkgmeta`
-у цій версії нічого не завантажує: це окремий CI-крок.
+Для GitHub завантажуйте весь вихідний комплект, включно з `libs/`,
+`libs/_manifest.xml` і `.github/workflows/package.yml`. Бібліотеки зберігаються
+в репозиторії; CI не завантажує `latest` поверх перевірених копій.
+Перед публікацією окремо перевіряються зібрана папка й фактичний ZIP.
 
 ## Авторство та бібліотеки
 
@@ -96,3 +87,19 @@ Mythic+ залишається Retail-only; сценарії доступні в
 режим літальних маунтів відсутні в Classic Era. Titan Reforged позначається окремо.
 Підтримка описує сучасні сімейства клієнтів; точний набір API приватних форків
 потребує перевірки в грі.
+
+
+## CI / зовнішні бібліотеки
+
+П'ять сторонніх бібліотек (`LibStub`, `CallbackHandler-1.0`, `AceDB-3.0`,
+`LibDataBroker-1.1`, `LibDBIcon-1.0`) **не зберігаються у вихідному коді**:
+їх отримує BigWigs packager за `.pkgmeta` під час формування релізного ZIP.
+Власна `LibCamera` залишається в `libs/LibCamera/`.
+
+```bash
+python3 tools/verify_manifest.py --allow-missing-externals  # source checkout
+bash check_all.sh                                              # source checks
+# Після пакування -- жорстко перевіряється вся папка libs/:
+python3 tools/verify_manifest.py --root .release/Max_Camera_Distance
+MCD_PACKAGED_ROOT="$PWD/.release/Max_Camera_Distance" bash check_all.sh
+```

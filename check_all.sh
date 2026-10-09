@@ -31,7 +31,7 @@ lua_syntax() {
     local rc=0
     while IFS= read -r -d '' f; do
         luac5.1 -p "$f" || rc=1
-    done < <(find . -name '*.lua' -not -path './.git/*' -print0)
+    done < <(find . -name '*.lua' -not -path './.git/*' -not -path './.release/*' -print0)
     return $rc
 }
 
@@ -59,7 +59,7 @@ global_leaks() {
             echo "$leaked" | sed 's/^/  /'
             rc=1
         fi
-    done < <(find . -name '*.lua' -not -path './libs/*' -not -path './tests/*' -print0)
+    done < <(find . -name '*.lua' -not -path './libs/*' -not -path './tests/*' -not -path './.release/*' -not -path './.git/*' -print0)
     return $rc
 }
 
@@ -90,10 +90,8 @@ stage "Lua 5.1 syntax"            lua_syntax
 stage "Global leak audit"         global_leaks
 stage "XML well-formedness"       xml_wellformed
 stage "TOC files current"         python3 tools/generate_tocs.py --check
-stage "Manifest references (source, libs deferred)" python3 tools/verify_manifest.py
+stage "Manifest references (source)" python3 tools/verify_manifest.py --allow-missing-externals
 stage "Manifest policy regression" python3 tests/probe_manifest.py
-stage "Library fetch regression" python3 tests/probe_fetch_libraries.py
-stage "Pinned vendor dependencies" python3 tools/fetch_libraries.py
 stage "Probe: release package"    python3 tests/probe_package.py
 stage "Probe: late Ace3"          lua51_probe tests/probe_lateace3.lua
 stage "Probe: gamepad/shoulder"   lua51_probe tests/probe_gamepad.lua
@@ -102,8 +100,10 @@ native_matrix() {
     local flavor mode
     for flavor in retail ptr era tbc wrath titan cata mists forever; do
         for mode in fallback embedded; do
-            lua51_probe tests/probe_native_settings.lua "$flavor" "$mode" || return $?
-            lua51_probe tests/probe_native_settings.lua "$flavor" "$mode" legacy || return $?
+            if [[ "$mode" == "fallback" || -n "${MCD_PACKAGED_ROOT:-}" ]]; then
+                lua51_probe tests/probe_native_settings.lua "$flavor" "$mode" || return $?
+                lua51_probe tests/probe_native_settings.lua "$flavor" "$mode" legacy || return $?
+            fi
         done
     done
 }
@@ -113,6 +113,20 @@ stage "Probe: delayed legacy settings registration" lua51_probe tests/probe_nati
 stage "Probe: CVar write policy"   lua51_probe tests/probe_cvar_policy.lua
 stage "Probe: activity and mount capabilities" lua51_probe tests/probe_context_mounts.lua
 stage "Probe: flavor matrix"       lua51_probe tests/probe_flavors.lua
+
+# Only after the BigWigs packager has downloaded .pkgmeta externals do we
+# require and test the actual bundled copies. Nothing is copied into source.
+if [[ -n "${MCD_PACKAGED_ROOT:-}" ]]; then
+    stage "Packaged manifest references" python3 tools/verify_manifest.py --root "$MCD_PACKAGED_ROOT"
+    packaged_lua_syntax() {
+        local f rc=0
+        while IFS= read -r -d '' f; do
+            luac5.1 -p "$f" || rc=1
+        done < <(find "$MCD_PACKAGED_ROOT" -name '*.lua' -type f -print0)
+        return "$rc"
+    }
+    stage "Packaged Lua syntax" packaged_lua_syntax
+fi
 
 echo ""
 if [[ $failures -eq 0 ]]; then

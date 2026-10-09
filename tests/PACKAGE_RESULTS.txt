@@ -1,9 +1,9 @@
-Clean Git checkout: ALL CHECKS PASSED
-All libs files tracked by Git: PASS
-Workflow build/verify/upload ordering: PASS
-Actual BigWigs packager (upload disabled): PASS
-Packaged load chain, source code and ZIP: PASS
-LibCamera probe from packaged folder: PASS
-Verified-folder reuse (upload disabled): PASS
-Rebuilt ZIP verification: PASS
-No remote publishing performed.
+Source manifest validation: python3 tools/verify_manifest.py --allow-missing-externals
+Expected: five .pkgmeta externals pending and no errors.
+Source package regression: python3 tests/probe_package.py
+Expected: PASS, including missing and empty build externals, stale local LibCamera,
+           newline normalization, stale ZIP and unexpected ZIP files.
+After real packaging: python3 tools/verify_package.py --root .release/Max_Camera_Distance --archive <actual archive>
+Expected: strict runtime manifest and full ZIP integrity PASS.
+Full Lua tests: bash check_all.sh (source), then MCD_PACKAGED_ROOT=... bash check_all.sh (post packaging).
+This text is a test recipe, not a claim that remote CI or live WoW checks passed.
