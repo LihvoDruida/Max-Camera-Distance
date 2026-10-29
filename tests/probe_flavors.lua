@@ -57,6 +57,15 @@ check("Classic Era: remains classic, not Forever", era.IS_CLASSIC_ERA and era.IS
 check("Classic Era: classic camera model remains unchanged", era.MAX_CAMERA_YARDS == 50 and era.CONVERSION_RATIO == 12.5,
     tostring(era.MAX_CAMERA_YARDS) .. "/" .. tostring(era.CONVERSION_RATIO))
 
+local tbc255 = loadCase("TBC Anniversary 2.5.5", "2.5.5", 68101, 20505, 2, false)
+check("TBC 2.5.5: recognizes Anniversary and Classic zoom model",
+    tbc255.IS_TBC_ANNIVERSARY and tbc255.IS_CLASSIC and tbc255.MAX_CAMERA_YARDS == 50
+    and tbc255.CONVERSION_RATIO == 12.5, tbc255.CLIENT_TAG)
+local tbc256 = loadCase("TBC Anniversary 2.5.6", "2.5.6", 70006, 20506, 2, false)
+check("TBC 2.5.6: recognizes Anniversary and Classic zoom model",
+    tbc256.IS_TBC_ANNIVERSARY and tbc256.IS_CLASSIC and tbc256.MAX_CAMERA_YARDS == 50
+    and tbc256.CONVERSION_RATIO == 12.5, tbc256.CLIENT_TAG)
+
 local mists = loadCase("Mists", "5.5.4", 70000, 50504, 5, false)
 check("Mists: remains Classic-family", mists.IS_MOP_CLASSIC and mists.IS_CLASSIC and not mists.IS_FOREVER,
     mists.CLIENT_TAG)

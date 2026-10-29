@@ -3880,6 +3880,9 @@ function Functions:SlashCmdHandler(msg)
     elseif command == "reset" then
         local ok = ns.Database and ns.Database.ResetCurrentProfile and ns.Database:ResetCurrentProfile()
         if ok then
+            if ns.ReactiveZoom and ns.ReactiveZoom.Refresh then
+                ns.ReactiveZoom:Refresh()
+            end
             Functions:AdjustCamera(true)
             Functions:SendMessage(L["SETTINGS_RESET"] or "Profile has been reset to default values.")
         else

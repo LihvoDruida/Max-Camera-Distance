@@ -43,11 +43,13 @@ local function GetCVarNumber(name)
     return ok and tonumber(value) or nil
 end
 
--- Originals, captured once. Never call the global from inside the replacement
--- or the hook recurses.
-local OriginalCameraZoomIn = _G.CameraZoomIn
-local OriginalCameraZoomOut = _G.CameraZoomOut
-
+-- Capture the native (or preceding addon's) handlers when installing, not at
+-- file-load time. Disabled Reactive Zoom must never take over Blizzard's zoom.
+-- Keep our wrapper references so disabling can release only globals we own.
+local OriginalCameraZoomIn
+local OriginalCameraZoomOut
+local ZoomInWrapper
+local ZoomOutWrapper
 local installed = false
 local reactiveZoomTarget = nil
 
@@ -325,46 +327,77 @@ end)
 -- =====================================================================
 -- Install / uninstall
 -- =====================================================================
--- The globals are replaced rather than hooksecurefunc'd because the point is to
--- SUPPRESS Blizzard's own stepping and substitute our own. hooksecurefunc would
--- run ours in addition to theirs and the camera would move twice.
+-- Only replace the zoom functions while Reactive Zoom is enabled. In
+-- particular, do NOT wrap WoW's native controls for the default (off) profile.
+-- Hooking unconditionally used to leave a wrapper active for everyone.
+-- Explicitly preserve CameraZoomIn()/CameraZoomOut()'s optional default step
+-- of 1 (passing nil to the original is valid as well).
 function ReactiveZoom:Install()
-    if installed then return end
-    if type(OriginalCameraZoomIn) ~= "function" or type(OriginalCameraZoomOut) ~= "function" then
+    if installed or not self:IsEnabled() then return end
+
+    local zoomIn, zoomOut = _G.CameraZoomIn, _G.CameraZoomOut
+    if type(zoomIn) ~= "function" or type(zoomOut) ~= "function" then
         return
     end
 
-    _G.CameraZoomIn = function(increments, ...)
-        increments = tonumber(increments) or 0
-        if increments == 0 then return end
+    -- Another camera addon may have been loaded since our Lua file ran.
+    OriginalCameraZoomIn, OriginalCameraZoomOut = zoomIn, zoomOut
 
-        if not ReactiveZoom:IsEnabled() or increments ~= 1 then
-            -- increments ~= 1 means this came from LibCamera or another addon,
-            -- not from a wheel notch. Never re-enter the reactive path there.
+    ZoomInWrapper = function(increments, ...)
+        if not ReactiveZoom:IsEnabled() then
             return OriginalCameraZoomIn(increments, ...)
         end
-
-        HandleWheel(true, increments)
+        -- The native APIs accept an omitted increment and default it to 1.
+        -- The old wrapper silently converted nil to 0, freezing such calls.
+        local amount = increments == nil and 1 or tonumber(increments)
+        if amount ~= 1 then
+            return OriginalCameraZoomIn(increments, ...)
+        end
+        return HandleWheel(true, amount)
     end
 
-    _G.CameraZoomOut = function(increments, ...)
-        increments = tonumber(increments) or 0
-        if increments == 0 then return end
-
-        if not ReactiveZoom:IsEnabled() or increments ~= 1 then
+    ZoomOutWrapper = function(increments, ...)
+        if not ReactiveZoom:IsEnabled() then
             return OriginalCameraZoomOut(increments, ...)
         end
-
-        HandleWheel(false, increments)
+        local amount = increments == nil and 1 or tonumber(increments)
+        if amount ~= 1 then
+            return OriginalCameraZoomOut(increments, ...)
+        end
+        return HandleWheel(false, amount)
     end
 
+    _G.CameraZoomIn = ZoomInWrapper
+    _G.CameraZoomOut = ZoomOutWrapper
     installed = true
+end
+
+function ReactiveZoom:Uninstall()
+    self:ResetTarget()
+    if not installed then return end
+
+    -- Stop an in-flight easing before the native handlers regain control.
+    if LibCamera and type(LibCamera.StopZooming) == "function" then
+        pcall(LibCamera.StopZooming, LibCamera)
+    end
+
+    -- Do not overwrite a camera function subsequently installed by another
+    -- addon. If it wraps ours, our inactive wrapper still passes through.
+    if _G.CameraZoomIn == ZoomInWrapper then
+        _G.CameraZoomIn = OriginalCameraZoomIn
+    end
+    if _G.CameraZoomOut == ZoomOutWrapper then
+        _G.CameraZoomOut = OriginalCameraZoomOut
+    end
+    installed = false
 end
 
 function ReactiveZoom:Refresh()
     self:ResetTarget()
     if self:IsEnabled() then
         self:Install()
+    else
+        self:Uninstall()
     end
 end
 

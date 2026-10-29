@@ -96,6 +96,7 @@ stage "Probe: release package"    python3 tests/probe_package.py
 stage "Probe: late Ace3"          lua51_probe tests/probe_lateace3.lua
 stage "Probe: gamepad/shoulder"   lua51_probe tests/probe_gamepad.lua
 stage "Probe: LibCamera ranges"    lua51_probe tests/probe_libcamera.lua
+stage "Probe: native/reactive zoom" lua51_probe tests/probe_reactive_zoom.lua
 native_matrix() {
     local flavor mode
     for flavor in retail ptr era tbc wrath titan cata mists forever; do

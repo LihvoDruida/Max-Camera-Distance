@@ -42,7 +42,7 @@ FLAVOURS = {
         "expansion": "Classic Era",
     },
     "TBC": {
-        "interface": "20506",
+        "interface": "20505, 20506",
         "flavor": "tbc",
         "expansion": "TBC Anniversary",
     },
