@@ -75,6 +75,47 @@ local ui = ns.SettingsWindow
 assert(#ui:GetPages() >= 7, "visible pages were lost")
 assert(LibStub("AceConfigDialog-3.0", true) == nil, "test must not borrow AceGUI")
 assert(ui.window:GetName() == UISpecialFrames[1])
+-- The landing page must be a usable quick-settings dashboard, not empty.
+local quickRows = ui:CollectRows("overview", "")
+assert(#quickRows >= 7, "overview has no actionable controls")
+local quickKeys, quickCount = {}, 0
+for _, row in ipairs(quickRows) do
+    if row.info and row.info[2] then
+        quickKeys[row.info[2]] = true; quickCount = quickCount + 1
+        assert(row.option.type ~= "group", "overview renders nested group as a control")
+    end
+end
+assert(quickKeys.maxZoomFactor and quickKeys.reactiveZoom and quickKeys.autoCombatZoom
+    and quickKeys.autoMountZoom and quickKeys.minimapButton,
+    "quick dashboard lost a primary camera control")
+assert(ui.resultCount:GetText():match(tostring(quickCount)), "quick-setting count incorrect")
+-- Search can be cleared without switching pages or leaving focus behind.
+ui.search:SetText("zoom")
+ui:Rebuild(true)
+assert(ui.resultCount:IsShown() and ui.pageTitle:GetText() == ns.Locale:Get("UI_SEARCH_RESULTS"))
+assert(#ui.rows > 0 and #ui:CollectRows("overview", "no-match-xyz-2026") == 0, "search filter ineffective")
+stub.Click(ui.clearSearch)
+assert(ui.search:GetText() == "" and ui.pageTitle:GetText() == ns.Locale:Get("UI_OVERVIEW"),
+    "clear-search button failed to restore overview")
+assert(#ui.rows == #quickRows, "clear-search did not recover dashboard")
+-- A visible row must not re-read its getter on every scroll/render pass.
+ui:SelectPage("zoomSettings")
+local readProbe
+for _, row in ipairs(ui.rows) do
+    if row.option.type == "range" and not row.disabled then readProbe = row; break end
+end
+assert(readProbe)
+local originalGet = readProbe.option.get
+local readCount = 0
+readProbe.option.get = function(...)
+    readCount = readCount + 1
+    return originalGet(...)
+end
+ui:Rebuild(false)
+local afterBind = readCount
+ui:RenderVisible(); ui:RenderVisible()
+assert(readCount == afterBind, "visible scrolling unnecessarily rebinds unchanged controls")
+readProbe.option.get = originalGet
 
 assert(not ns.Config.options.args.presetSettings, "old preset page still duplicates activities")
 assert(ns.Config.options.args.mountSettings.args.mountZoomPreset, "mount preset separated from mount settings")
@@ -164,6 +205,32 @@ ui.scroll:SetVerticalScroll(180)
 assert(dragging.row == originalRow, "dragged slider writes to a recycled option")
 stub.Script(dragging.slider, "OnMouseUp")
 assert(originalRow.option.get(originalRow.info) == originalRow.option.max)
+-- Repeated wheel ticks on a numeric slider must not discard the first tick
+-- while a deferred UI repaint is pending.
+ui:SelectPage("zoomSettings")
+local wheelControl
+for _, f in ipairs(ui.pools.range) do
+    if f:IsShown() and not f.row.disabled and f.row.option.max - f.row.option.min >= 3 * (f.row.option.step or 1) then
+        wheelControl = f; break
+    end
+end
+assert(wheelControl)
+local wheelRow = wheelControl.row
+local step = wheelRow.option.step or 1
+ui:Apply(wheelRow, wheelRow.option.min)
+ui:Rebuild(false)
+-- Pool controls may rebind after the preceding application.
+for _, f in ipairs(ui.pools.range) do
+    if f:IsShown() and f.row.option == wheelRow.option then wheelControl = f; break end
+end
+stub.Script(wheelControl.slider, "OnMouseWheel", 1)
+stub.Script(wheelControl.slider, "OnMouseWheel", 1)
+assert(math.abs(wheelRow.option.get(wheelRow.info) - (wheelRow.option.min + 2 * step)) < 0.0001,
+    "two immediate wheel ticks were lost or merged")
+local safeZoom = GetCameraZoom
+_G.GetCameraZoom = function() error("camera unavailable") end
+assert(pcall(function() ui:UpdateStatus() end), "status panel crashes on camera API error")
+_G.GetCameraZoom = safeZoom
 -- The diagnostic snapshot changes while the page remains open.
 local liveValue = "Before"
 ns.Config.options.args.debugSettings.args.statusSnapshot.name = function() return liveValue end

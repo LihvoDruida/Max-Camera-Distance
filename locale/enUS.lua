@@ -544,6 +544,10 @@ L["BINDING_OPEN_CAMERA_SETTINGS"] = "Open camera settings"
 
 -- Native settings window
 L["UI_OVERVIEW"] = "Overview"
+L["UI_OVERVIEW_DESC"] = "Quick controls for the most common camera tasks. All other settings remain available in the categories on the left. Changes apply immediately."
+L["UI_APPLY_FAILED"] = "Could not apply this setting. See the chat log for the technical error."
+L["UI_QUICK_ACTIONS"] = "Quick actions"
+L["UI_RESULT_COUNT"] = "%d settings"
 L["UI_SEARCH"] = "Search settings…"
 L["UI_SEARCH_RESULTS"] = "Search results"
 L["UI_NO_RESULTS"] = "No matching settings are available on this client."

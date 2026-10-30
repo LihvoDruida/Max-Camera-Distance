@@ -11,6 +11,17 @@ local TEXT = { 0.88, 0.83, 0.72 }
 local BG = "Interface\\Tooltips\\UI-Tooltip-Background"
 local EDGE = "Interface\\Tooltips\\UI-Tooltip-Border"
 local L = setmetatable({}, { __index = function(_, key) return ns.Locale:Get(key) end })
+local CONTROL_NAMES = { "check", "slider", "number", "control", "input" }
+-- Keep the landing page deliberately short; every entry reuses the original
+-- option get/set/availability handlers and profile storage.
+local OVERVIEW_SECTIONS = {
+    { "generalSettings", { "manualMaxPreset", "maxZoomFactor" } },
+    { "zoomSettings", { "reactiveZoom", "zoomTransition" } },
+    { "smartSettings", { "autoCombatZoom" } },
+    { "mountSettings", { "autoMountZoom" } },
+    { "afkSettings", { "enableAFK" } },
+    { "reloadGroup", { "minimapButton", "languageOverride" } },
+}
 
 local function frame(kind, name, parent)
     return CreateFrame(kind or "Frame", name, parent, BackdropTemplateMixin and "BackdropTemplate" or nil)
@@ -115,6 +126,37 @@ function UI:CollectRows(pageKey, query)
     local rows, root = {}, ns.Config.options
     query = fold(query)
     local searching = query ~= ""
+    if pageKey == "overview" and not searching then
+        rows[#rows + 1] = { option = { type = "description" }, name = L.UI_OVERVIEW_DESC, info = {} }
+        for _, section in ipairs(OVERVIEW_SECTIONS) do
+            local group = root.args[section[1]]
+            if group and not self:Evaluate(group, "hidden", { section[1] }, false) then
+                local sectionRows = {}
+                for _, key in ipairs(section[2]) do
+                    local option = group.args and group.args[key]
+                    local info = { section[1], key }
+                    if option and not self:Evaluate(option, "hidden", info, false) then
+                        sectionRows[#sectionRows + 1] = {
+                            option = option, info = info,
+                            name = self:Evaluate(option, "name", info, ""),
+                            desc = self:Evaluate(option, "desc", info, ""),
+                            disabled = self:Evaluate(group, "disabled", { section[1] }, false)
+                                or self:Evaluate(option, "disabled", info, false),
+                            trail = (section[1] == "reloadGroup") and L.UI_QUICK_ACTIONS
+                                or self:Evaluate(group, "name", { section[1] }, ""),
+                        }
+                    end
+                end
+                if #sectionRows > 0 then
+                    rows[#rows + 1] = { option = { type = "header" },
+                        info = { section[1] }, name = (section[1] == "reloadGroup") and L.UI_QUICK_ACTIONS
+                            or self:Evaluate(group, "name", { section[1] }, "") }
+                    for _, row in ipairs(sectionRows) do rows[#rows + 1] = row end
+                end
+            end
+        end
+        return rows
+    end
     local function walk(group, path, inheritedDisabled, trail)
         for _, item in ipairs(ordered(group.args)) do
             local o, info = item.option, {}
@@ -126,7 +168,8 @@ function UI:CollectRows(pageKey, query)
                 local desc = UI:Evaluate(o, "desc", info, "")
                 if o.type == "group" then
                     if searching or o.inline or pageKey == item.key then
-                        local nextTrail = clean(name) ~= " " and clean(name) ~= "" and name or trail
+                        local nextTrail = clean(name):match("%S")
+                            and (trail and (trail .. " / " .. clean(name)) or clean(name)) or trail
                         if not searching and clean(name):match("%S") then
                             rows[#rows + 1] = { option = { type = "header", name = name }, info = info, name = name }
                         end
@@ -174,6 +217,8 @@ end
 
 function UI:ShowDetails(row)
     if not self.window then return end
+    if row and row == self.detailRow then return end
+    self.detailRow = row
     self.detailTitle:SetText(row and clean(row.name) or L.UI_HELP_TITLE)
     local text = row and row.desc or L.UI_HELP_DESC
     if row and row.disabled then text = text .. "\n\n|cffcda86c" .. L.UI_DISABLED .. "|r" end
@@ -198,6 +243,7 @@ function UI:Apply(row, ...)
     local function commit()
         local ok, err = pcall(handler, row.info, unpack(values))
         if not ok then
+            UI:ShowDetails({ name = row.name, desc = L.UI_APPLY_FAILED })
             print("|cffff6060MCD:|r " .. tostring(err))
             return
         end
@@ -313,6 +359,18 @@ function UI:CreateRow(kind)
     f.kind = kind
     f:EnableMouse(false)
     f.title = label(f, "", 13)
+    if kind ~= "header" and kind ~= "description" then
+        f.surface = f:CreateTexture(nil, "BACKGROUND")
+        f.surface:SetAllPoints()
+        f.surface:SetColorTexture(0.11, 0.095, 0.072, 0.50)
+    end
+    local function focus()
+        UI:ShowDetails(f.row)
+        if f.surface then f.surface:SetColorTexture(0.18, 0.145, 0.10, 0.78) end
+    end
+    local function unfocus()
+        if f.surface then f.surface:SetColorTexture(0.11, 0.095, 0.072, 0.50) end
+    end
     f.title:SetPoint("TOPLEFT", 12, -11)
     f.title:SetWidth(485)
     f.title:SetJustifyV("TOP")
@@ -331,7 +389,8 @@ function UI:CreateRow(kind)
             if row.choice then UI:Apply(row, row.choice, checked) else UI:Apply(row, checked) end
         end
         check:SetScript("OnClick", apply)
-        check:SetScript("OnEnter", function() UI:ShowDetails(f.row) end)
+        check:SetScript("OnEnter", focus)
+        check:SetScript("OnLeave", unfocus)
     elseif kind == "range" then
         local slider = frame("Slider", nil, f)
         slider:SetOrientation("HORIZONTAL"); slider:SetSize(376, 18)
@@ -342,7 +401,9 @@ function UI:CreateRow(kind)
         slider.low = label(f, "", 10, GOLD); slider.low:SetPoint("BOTTOMLEFT", 14, 0)
         slider.high = label(f, "", 10, GOLD); slider.high:SetPoint("BOTTOMRIGHT", -130, 0)
         local number = edit(f, 91); number:SetPoint("BOTTOMRIGHT", -14, 9)
-        number:SetScript("OnEditFocusGained", function() UI.interacting = true end)
+        number:SetScript("OnEditFocusGained", function() UI.interacting = true; UI:ShowDetails(f.row) end)
+        number:SetScript("OnEnter", focus)
+        number:SetScript("OnLeave", unfocus)
         number:SetScript("OnEditFocusLost", function() UI.interacting = false; UI:RequestRefresh() end)
         f.slider, f.number = slider, number
         local function normal(value)
@@ -367,12 +428,26 @@ function UI:CreateRow(kind)
             UI:RequestRefresh()
         end)
         slider:EnableMouseWheel(true)
-        slider:SetScript("OnMouseWheel", function(_, delta) commit(slider:GetValue() + delta * (f.row.option.step or 1)) end)
-        slider:SetScript("OnEnter", function() UI:ShowDetails(f.row) end)
+        slider:SetScript("OnMouseWheel", function(_, delta)
+            local step = f.row.option.step or 1
+            -- Read the committed value: immediate successive wheel ticks must
+            -- accumulate even before the next deferred window refresh.
+            local current = UI:Evaluate(f.row.option, "get", f.row.info, slider:GetValue())
+            local nextValue = normal((tonumber(current) or slider:GetValue()) + delta * step)
+            f.syncing = true; slider:SetValue(nextValue); f.syncing = false
+            number:SetText(string.format("%g", nextValue))
+            commit(nextValue)
+        end)
+        slider:SetScript("OnEnter", focus)
+        slider:SetScript("OnLeave", unfocus)
         number:SetScript("OnEnterPressed", function(self)
             local value = tonumber((self:GetText() or ""):gsub(",", "."))
             self:ClearFocus()
-            if value and value == value and value ~= math.huge and value ~= -math.huge then commit(value) end
+            if value and value == value and value ~= math.huge and value ~= -math.huge then
+                commit(value)
+            else
+                UI:ShowDetails({ name = f.row.name, desc = L.UI_INVALID })
+            end
             UI:RequestRefresh()
         end)
     elseif kind == "select" then
@@ -384,18 +459,23 @@ function UI:CreateRow(kind)
         arrow:SetSize(20, 20); arrow:SetPoint("RIGHT", -6, 0)
         arrow:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
         f.control:SetScript("OnClick", function(self) UI:ShowDetails(f.row); UI:ShowChoices(f.row, self) end)
-        f.control:SetScript("OnEnter", function() UI:ShowDetails(f.row) end)
+        f.control:SetScript("OnEnter", focus)
+        f.control:SetScript("OnLeave", unfocus)
     elseif kind == "input" then
         f.input = edit(f, 362); f.input:SetPoint("BOTTOMLEFT", 12, 6)
-        f.input:SetScript("OnEditFocusGained", function() UI.interacting = true end)
+        f.input:SetScript("OnEditFocusGained", function() UI.interacting = true; UI:ShowDetails(f.row) end)
+        f.input:SetScript("OnEnter", focus)
+        f.input:SetScript("OnLeave", unfocus)
         f.input:SetScript("OnEditFocusLost", function() UI.interacting = false; UI:RequestRefresh() end)
         f.control = button(f, L.UI_CREATE, 112, 28); f.control:SetPoint("BOTTOMRIGHT", -12, 6)
         local function commit() UI:Apply(f.row, f.input:GetText()); f.input:ClearFocus() end
         f.control:SetScript("OnClick", commit); f.input:SetScript("OnEnterPressed", commit)
+        f.control:SetScript("OnEnter", focus); f.control:SetScript("OnLeave", unfocus)
     elseif kind == "execute" then
         f.control = button(f, "", 483, 30); f.control:SetPoint("LEFT", 12, 0)
         f.control:SetScript("OnClick", function() UI:ShowDetails(f.row); UI:Apply(f.row) end)
-        f.control:SetScript("OnEnter", function() UI:ShowDetails(f.row) end)
+        f.control:SetScript("OnEnter", focus)
+        f.control:SetScript("OnLeave", unfocus)
         f.title:Hide()
     elseif kind == "header" then
         f.title:SetTextColor(unpack(GOLD))
@@ -409,7 +489,8 @@ end
 function UI:BindRow(f, row)
     f.row, f.syncing, f.pendingValue = row, true, nil
     f.title:SetText(row.name)
-    f:SetAlpha(row.disabled and 0.45 or 1)
+    f:SetAlpha(row.disabled and 0.55 or 1)
+    if f.surface then f.surface:SetColorTexture(0.11, 0.095, 0.072, 0.50) end
     f:EnableMouse(false)
     local o = row.option
     if f.check then
@@ -454,10 +535,8 @@ end
 
 function UI:RenderVisible()
     if not self.rows or self.interacting then return end
-    for _, pool in pairs(self.pools) do
-        for _, f in ipairs(pool) do f:Hide() end
-    end
-    local counts, top = {}, self.scroll:GetVerticalScroll()
+    local used, counts = {}, {}
+    local top = self.scroll:GetVerticalScroll()
     local bottom = top + self.scroll:GetHeight()
     for _, row in ipairs(self.rows) do
         if row.y + row.height >= top and row.y <= bottom then
@@ -466,12 +545,23 @@ function UI:RenderVisible()
             local pool = self.pools[kind] or {}; self.pools[kind] = pool
             local f = pool[counts[kind]]
             if not f then f = self:CreateRow(kind); pool[counts[kind]] = f end
-            f:ClearAllPoints(); f:SetPoint("TOPLEFT", 0, -row.y); f:SetSize(507, row.height - 3)
-            self:BindRow(f, row); f:Show()
-            for _, key in ipairs({ "check", "slider", "number", "control", "input" }) do
+            if f.renderY ~= row.y or f.renderHeight ~= row.height then
+                f:ClearAllPoints(); f:SetPoint("TOPLEFT", 0, -row.y)
+                f:SetSize(507, row.height - 3)
+                f.renderY, f.renderHeight = row.y, row.height
+            end
+            -- Scrolling the same visible rows does not re-evaluate their
+            -- getters, reset edit-box text or rewrite slider values.
+            if f.row ~= row then self:BindRow(f, row) end
+            used[f] = true
+            f:Show()
+            for _, key in ipairs(CONTROL_NAMES) do
                 self:ClipControl(f[key], self.scroll, not row.disabled)
             end
         end
+    end
+    for _, pool in pairs(self.pools) do
+        for _, f in ipairs(pool) do if not used[f] then f:Hide() end end
     end
 end
 
@@ -487,17 +577,31 @@ function UI:Rebuild(resetScroll)
         if not b then b = button(self.navChild, "", 191, 36); self.navButtons[i] = b end
         b:ClearAllPoints(); b:SetPoint("TOPLEFT", 0, -(i - 1) * 40)
         b.text:SetText(page.name); b.text:SetJustifyH("LEFT")
+        if not b.selectedMarker then
+            b.selectedMarker = b:CreateTexture(nil, "ARTWORK")
+            b.selectedMarker:SetPoint("TOPLEFT", 3, -4)
+            b.selectedMarker:SetPoint("BOTTOMLEFT", 3, 4)
+            b.selectedMarker:SetWidth(3)
+            b.selectedMarker:SetColorTexture(unpack(GOLD))
+        end
+        b.selectedMarker:SetShown(self.pageKey == page.key)
+        b.text:SetTextColor(unpack(self.pageKey == page.key and GOLD or TEXT))
         b:SetBackdropColor(self.pageKey == page.key and 0.23 or 0.08, 0.14, 0.08, 0.8)
         b:SetScript("OnClick", function() self:SelectPage(item.key) end); b:Show()
         self:ClipControl(b, self.nav, true)
     end
     for i = #self.pages + 1, #self.navButtons do self.navButtons[i]:Hide() end
     self.navChild:SetHeight(max(1, #self.pages * 40))
-    self.rows = self:CollectRows(self.pageKey, self.search:GetText())
+    for _, b in ipairs(self.navButtons) do
+        if b:IsShown() then self:ClipControl(b, self.nav, true) end
+    end
+    local query = self.search:GetText()
+    self.rows = self:CollectRows(self.pageKey, query)
     local y = 0
     for _, row in ipairs(self.rows) do
         local kind = row.option.type
         local height = (kind == "range" and 88) or ((kind == "select" or kind == "input") and 80) or 46
+        self.measure:SetWidth((kind == "toggle" or kind == "multiselect") and 451 or 485)
         self.measure:SetText(row.name)
         local textHeight = self.measure:GetStringHeight()
         if kind == "range" then height = max(height, textHeight + 61)
@@ -520,6 +624,12 @@ function UI:Rebuild(resetScroll)
         for _, page in ipairs(self.pages) do if page.key == self.pageKey then title = page.name end end
     end
     self.pageTitle:SetText(title)
+    local count = 0
+    for _, row in ipairs(self.rows) do
+        if row.option.type ~= "header" and row.option.type ~= "description" then count = count + 1 end
+    end
+    self.resultCount:SetText(string.format(L.UI_RESULT_COUNT, count))
+    self.resultCount:SetShown(query ~= "" or self.pageKey == "overview")
     self.empty:SetShown(#self.rows == 0)
     self.dirty = false
     self:RenderVisible()
@@ -527,11 +637,19 @@ end
 
 function UI:SelectPage(key)
     self.pageKey = key
-    if self.search then self.search:SetText(""); self:Rebuild(true); self:ShowDetails(nil) end
+    if self.search then
+        if self.search:GetText() ~= "" then self.search:SetText("") end
+        self.searchDelay = nil
+        self:Rebuild(true); self:ShowDetails(nil)
+    end
 end
 
 function UI:UpdateStatus()
-    local zoom = type(GetCameraZoom) == "function" and Compat.Plain(GetCameraZoom()) or nil
+    local zoom
+    if type(GetCameraZoom) == "function" then
+        local ok, value = pcall(GetCameraZoom)
+        if ok then zoom = Compat.Plain(value) end
+    end
     local db = ns.Database.db
     local text = Compat.CLIENT_TAG .. "  •  " .. Compat.VERSION .. "  •  " .. tostring(Compat.INTERFACE)
     if type(zoom) == "number" then text = text .. "  |  " .. L.UI_DISTANCE .. ": " .. string.format("%.1f / %g", zoom, Compat.MAX_CAMERA_YARDS) end
@@ -554,6 +672,14 @@ function UI:SetStandaloneEscape(enabled)
         if UISpecialFrames[i] == name then table.remove(UISpecialFrames, i) end
     end
     if enabled then table.insert(UISpecialFrames, name) end
+end
+
+function UI:UpdateLabels()
+    self.searchHint:SetText(L.UI_SEARCH)
+    self.empty:SetText(L.UI_NO_RESULTS)
+    self.closeButton.text:SetText("X")
+    self.doneButton.text:SetText(L.UI_CLOSE)
+    if self.choices then self.choices.title:SetText(L.UI_SELECT) end
 end
 
 function UI:ConfigureLayout(embedded)
@@ -599,6 +725,14 @@ function UI:Create()
     close:SetScript("OnClick", function() w:Hide() end)
     self.profile = label(w, "", 12); self.profile:SetPoint("TOPRIGHT", -60, -25); self.profile:SetWidth(430); self.profile:SetJustifyH("RIGHT")
     self.search = edit(w, 194); self.search:SetPoint("TOPLEFT", 18, -76)
+    self.search:SetTextInsets(9, 35, 0, 0)
+    self.clearSearch = button(w, "X", 25, 24)
+    self.clearSearch:SetPoint("RIGHT", self.search, "RIGHT", -3, 0)
+    self.clearSearch:SetScript("OnClick", function()
+        if self.search:GetText() ~= "" then self.search:SetText("") end
+        self.search:ClearFocus(); self.searchDelay = nil
+        self:Rebuild(true); self:ShowDetails(nil)
+    end)
     self.search:SetScript("OnTextChanged", function() self.searchDelay = 0.14; self.dirty = true end)
     self.search:SetScript("OnEscapePressed", function(e) e:SetText(""); e:ClearFocus() end)
     self.search:SetScript("OnEnterPressed", function(e) e:ClearFocus() end)
@@ -614,7 +748,10 @@ function UI:Create()
     self.nav:SetScript("OnMouseWheel", function(f, d) f:SetVerticalScroll(max(0, min(f:GetVerticalScrollRange(), f:GetVerticalScroll() - d * 40))) end)
     self.navButtons, self.pools = {}, {}
     local body = frame("Frame", nil, w); self.body = body; body:SetPoint("TOPLEFT", 225, -76); body:SetSize(538, 533); backdrop(body)
-    self.pageTitle = label(body, "", 17, GOLD); self.pageTitle:SetPoint("TOPLEFT", 18, -16); self.pageTitle:SetWidth(496)
+    self.pageTitle = label(body, "", 17, GOLD); self.pageTitle:SetPoint("TOPLEFT", 18, -16); self.pageTitle:SetWidth(330)
+    self.resultCount = label(body, "", 11)
+    self.resultCount:SetPoint("TOPRIGHT", -18, -20)
+    self.resultCount:SetWidth(150); self.resultCount:SetJustifyH("RIGHT")
     self.scroll = CreateFrame("ScrollFrame", nil, body)
     self.scroll:SetPoint("TOPLEFT", 10, -52); self.scroll:SetSize(507, 467)
     self.content = CreateFrame("Frame", nil, self.scroll); self.content:SetSize(507, 1); self.scroll:SetScrollChild(self.content)
@@ -665,6 +802,7 @@ function UI:Create()
             local reset = self.searchDelay ~= nil; self.searchDelay = nil; self:Rebuild(reset)
         end
         self.searchHint:SetShown(self.search:GetText() == "")
+        self.clearSearch:SetShown(self.search:GetText() ~= "")
         if statusTick >= 1 then
             statusTick = 0; self:UpdateStatus()
             -- Diagnostic names depend on camera state. Rebuild only this page,
@@ -679,6 +817,7 @@ function UI:Create()
         self:RequestRefresh()
     end)
     self:FitScreen(); self:ShowDetails(nil)
+    self.clearSearch:Hide()
     w:Hide()
 end
 
@@ -690,7 +829,7 @@ function UI:OpenEmbedded(host)
     self.window:SetFrameStrata(host:GetFrameStrata())
     self.window:SetFrameLevel(host:GetFrameLevel() + 1)
     self:SetStandaloneEscape(false); self:ConfigureLayout(true)
-    self.window:Show(); self:FitScreen()
+    self.window:Show(); self:FitScreen(); self:UpdateLabels()
     self.pageKey = self.pageKey or "overview"
     self:Rebuild(false); self:UpdateStatus()
     return true
@@ -703,7 +842,7 @@ function UI:Open()
     self.window:SetParent(UIParent); self.window:ClearAllPoints(); self.window:SetPoint("CENTER")
     self.window:SetFrameStrata("DIALOG")
     self:SetStandaloneEscape(true); self:ConfigureLayout(false)
-    self.window:Show(); self:FitScreen()
+    self.window:Show(); self:FitScreen(); self:UpdateLabels()
     self.pageKey = self.pageKey or "overview"
     self:Rebuild(false); self:UpdateStatus()
     return true

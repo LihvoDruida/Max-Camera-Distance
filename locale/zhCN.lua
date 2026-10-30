@@ -500,6 +500,10 @@ L["BINDING_OPEN_CAMERA_SETTINGS"] = "打开镜头设置"
 
 -- Native settings window
 L["UI_OVERVIEW"] = "概览"
+L["UI_OVERVIEW_DESC"] = "常用镜头设置集中在此。其他选项仍可通过左侧分类访问。修改会立即生效。"
+L["UI_APPLY_FAILED"] = "无法应用此设置。技术错误信息已显示在聊天窗口。"
+L["UI_QUICK_ACTIONS"] = "快捷操作"
+L["UI_RESULT_COUNT"] = "%d 项设置"
 L["UI_SEARCH"] = "搜索设置…"
 L["UI_SEARCH_RESULTS"] = "搜索结果"
 L["UI_NO_RESULTS"] = "此客户端没有符合条件的设置。"
