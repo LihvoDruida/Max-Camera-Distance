@@ -93,6 +93,12 @@ end
 -- UTILITY --
 -------------
 local function safeGetCVarNumber(name, fallback)
+    -- Shared compatibility layer is ready by the time camera animations run.
+    -- Its getter screens 12.1 secret values and unavailable CVar APIs.
+    local compat = _G.MaxCameraDistanceCompat and _G.MaxCameraDistanceCompat.runtime;
+    if compat and compat.SafeGetCVarNumber then
+        return compat.SafeGetCVarNumber(name) or fallback;
+    end
     local value = nil;
     if (C_CVar and C_CVar.GetCVar) then
         local ok, result = pcall(C_CVar.GetCVar, name);
@@ -102,7 +108,8 @@ local function safeGetCVarNumber(name, fallback)
         local ok, result = pcall(GetCVar, name);
         if (ok) then value = result; end
     end
-    return tonumber(value) or fallback;
+    local ok, number = pcall(tonumber, value);
+    return (ok and number) or fallback;
 end
 
 local function safeSetCVar(name, value)
@@ -110,13 +117,34 @@ local function safeSetCVar(name, value)
     if compat and compat.SafeSetCVar then return compat.SafeSetCVar(name, value); end
     if (C_CVar and C_CVar.SetCVar) then
         local ok, result = pcall(C_CVar.SetCVar, name, value);
-        return ok and result ~= false;
+        if not ok or result == false then return false; end
+        if result == true then return true; end
+        -- A nil return can mean a rejected secure write. Verify legacy clients
+        -- that return nil on success rather than assuming success.
+        local actual = safeGetCVarNumber(name);
+        return actual ~= nil and math.abs(actual - tonumber(value)) < 0.00001;
     end
     if (type(SetCVar) == "function") then
         local ok, result = pcall(SetCVar, name, value);
-        return ok and result ~= false;
+        if not ok or result == false then return false; end
+        if result == true then return true; end
+        local actual = safeGetCVarNumber(name);
+        return actual ~= nil and math.abs(actual - tonumber(value)) < 0.00001;
     end
     return false;
+end
+
+-- A failed/secret camera read must cancel easing instead of leaving a broken
+-- OnUpdate running every frame. Keep all special handling private to this lib.
+local function safeGetCameraZoom()
+    if type(GetCameraZoom) ~= "function" then return nil end
+    local ok, value = pcall(GetCameraZoom)
+    if not ok then return nil end
+    local compat = _G.MaxCameraDistanceCompat and _G.MaxCameraDistanceCompat.runtime
+    if compat and compat.IsSecret and compat.IsSecret(value) then return nil end
+    if type(value) ~= "number" or value ~= value
+        or value == math.huge or value == -math.huge then return nil end
+    return value
 end
 
 local function positiveSpeed(value, fallback)
@@ -253,12 +281,14 @@ function LibCamera:SetZoom(endValue, duration, easingFunc, callback)
         -- func() gets called one frame after SetZoom(). This is why we set the values here!
         local currentTime = GetTime();
         beginTime = beginTime or currentTime;
-        beginValue = beginValue or GetCameraZoom();
+        beginValue = beginValue or safeGetCameraZoom();
+        if beginValue == nil then self:StopZooming(); return nil; end
         change = change or (endValue - beginValue);
 
         frameCount = frameCount + 1;
 
-        local currentValue = GetCameraZoom();
+        local currentValue = safeGetCameraZoom();
+        if currentValue == nil then self:StopZooming(); return nil; end
 
         local beyondPosition = (change > 0 and currentValue >= endValue) or (change < 0 and currentValue <= endValue);
 
@@ -362,7 +392,11 @@ function LibCamera:SetZoomUsingCVar(endValue, duration, callback)
     -- start every zoom by making sure that we stop zooming
     self:StopZooming();
 
-    local beginValue = GetCameraZoom();
+    local beginValue = safeGetCameraZoom();
+    if beginValue == nil then
+        if callback then callback(true); end
+        return;
+    end
     local change = endValue - beginValue;
 
     -- Forever validates camera zoom speed against a strictly-positive range
@@ -394,7 +428,7 @@ function LibCamera:SetZoomUsingCVar(endValue, duration, callback)
 
     local triggeredZoom = false;
 
-    local lastValue = GetCameraZoom();
+    local lastValue = safeGetCameraZoom() or beginValue;
     local func = function()
         -- trigger zoom only once but ON THE NEXT FRAME
         -- this is because you can only do one CameraZoom___ function once a frame
@@ -410,7 +444,8 @@ function LibCamera:SetZoomUsingCVar(endValue, duration, callback)
             triggeredZoom = true;
         end
 
-        local currentValue = GetCameraZoom();
+        local currentValue = safeGetCameraZoom();
+        if currentValue == nil then self:StopZooming(); return nil; end
 
         -- check if we've got beyond the position that we were aiming for
         -- local beyondPosition = (change > 0 and currentValue >= endValue) or (change < 0 and currentValue <= endValue);

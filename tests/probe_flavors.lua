@@ -51,6 +51,11 @@ check("Retail: remains Retail", retail.IS_RETAIL and not retail.IS_FOREVER and r
     retail.CLIENT_TAG)
 check("Retail: 12.1+ flag remains Retail-only", retail.IS_12_1_OR_LATER == true)
 
+local retailPtr = loadCase("Retail PTR 12.1.7", "12.1.7", 70493, 120107, 1, false)
+check("Retail PTR 12.1.7: detected as Midnight / modern APIs",
+    retailPtr.IS_RETAIL and retailPtr.IS_MIDNIGHT and retailPtr.IS_12_1_OR_LATER,
+    retailPtr.CLIENT_TAG)
+
 local era = loadCase("Classic Era", "1.15.9", 69722, 11509, 2, false)
 check("Classic Era: remains classic, not Forever", era.IS_CLASSIC_ERA and era.IS_CLASSIC and not era.IS_FOREVER and not era.USES_MODERN_API,
     era.CLIENT_TAG)
@@ -66,6 +71,12 @@ check("TBC 2.5.6: recognizes Anniversary and Classic zoom model",
     tbc256.IS_TBC_ANNIVERSARY and tbc256.IS_CLASSIC and tbc256.MAX_CAMERA_YARDS == 50
     and tbc256.CONVERSION_RATIO == 12.5, tbc256.CLIENT_TAG)
 
+local wrath = loadCase("Wrath 3.4.5", "3.4.5", 63697, 30405, 2, false)
+check("Wrath 3.4.5: Classic progression", wrath.IS_WRATH_CLASSIC and not wrath.IS_TITAN_REFORGED)
+local titan = loadCase("Titan Reforged", "3.80.2", 70522, 38002, 2, false)
+check("Titan 3.80.2: distinct client", titan.IS_TITAN_REFORGED and titan.CLIENT_TAG == "Titan Reforged")
+local cata = loadCase("Cataclysm Classic", "4.4.2", 60895, 40402, 2, false)
+check("Cataclysm 4.4.2: Classic progression", cata.IS_CATA_CLASSIC and not cata.USES_MODERN_API)
 local mists = loadCase("Mists", "5.5.4", 70000, 50504, 5, false)
 check("Mists: remains Classic-family", mists.IS_MOP_CLASSIC and mists.IS_CLASSIC and not mists.IS_FOREVER,
     mists.CLIENT_TAG)

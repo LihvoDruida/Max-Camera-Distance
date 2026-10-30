@@ -35,4 +35,21 @@ _G.issecretvalue = function(v) return v == secret end
 assert(loadfile("Compat.lua"))("Max_Camera_Distance", ns)
 local before = writes
 assert(not ns.Compat.SafeSetCVar("cameraZoomSpeed", secret) and writes == before)
-print("probe_cvar_policy: PASS (rejections, unsupported, read-only, secure, secret)")
+-- Modern C_CVar getters can fail or return protected values; probing a CVar
+-- must not attempt to compare or stringify such a value in addon code.
+local oldGetter = C_CVar.GetCVar
+C_CVar.GetCVar = function(name)
+    if name == "cameraZoomSpeed" then return secret end
+    return oldGetter(name)
+end
+_G.GetCVar = C_CVar.GetCVar
+assert(ns.Compat.SafeGetCVar("cameraZoomSpeed") == nil,
+    "secret CVar value was returned to normal code")
+assert(not ns.Compat.HasCVar("cameraZoomSpeed"),
+    "secret CVar value was treated as readable")
+C_CVar.GetCVar = oldGetter
+_G.GetCVar = oldGetter
+ns.Compat.InvalidateCVarCaches()
+assert(ns.Compat.SafeGetCVar("cameraZoomSpeed") == "2",
+    "recovering CVar getter did not resume")
+print("probe_cvar_policy: PASS (rejections, unsupported, readonly, secure, secret getters)")

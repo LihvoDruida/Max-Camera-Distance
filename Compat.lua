@@ -195,15 +195,17 @@ end
 function Compat.SafeGetCVar(name)
     if C_CVar and C_CVar.GetCVar then
         local ok, val = pcall(C_CVar.GetCVar, name)
-        if ok and val ~= nil then
-            return val
+        if ok then
+            if Compat.IsSecret(val) then return nil end
+            if val ~= nil then return val end
         end
     end
 
     if type(GetCVar) == 'function' then
         local ok, val = pcall(GetCVar, name)
-        if ok and val ~= nil then
-            return val
+        if ok then
+            if Compat.IsSecret(val) then return nil end
+            if val ~= nil then return val end
         end
     end
 
@@ -218,14 +220,14 @@ end
 function Compat.SafeGetCVarDefault(name)
     if C_CVar and C_CVar.GetCVarDefault then
         local ok, val = pcall(C_CVar.GetCVarDefault, name)
-        if ok and val ~= nil then
+        if ok and not Compat.IsSecret(val) and val ~= nil then
             return val
         end
     end
 
     if type(GetCVarDefault) == 'function' then
         local ok, val = pcall(GetCVarDefault, name)
-        if ok and val ~= nil then
+        if ok and not Compat.IsSecret(val) and val ~= nil then
             return val
         end
     end
@@ -300,7 +302,7 @@ local function GetCVarWritePolicy(name)
 
     if C_CVar and C_CVar.GetCVarInfo then
         local ok, value, _, _, _, isLockedFromUser, isSecure, isReadOnly = pcall(C_CVar.GetCVarInfo, name)
-        if ok and value ~= nil then
+        if ok and not Compat.IsSecret(value) and value ~= nil then
             cached = {
                 locked = isLockedFromUser and true or false,
                 secure = isSecure and true or false,
@@ -410,12 +412,18 @@ function Compat.SupportsScenarioZone()
 end
 
 function Compat.GetAddonVersion()
-    if C_AddOns and C_AddOns.GetAddOnMetadata then
-        return C_AddOns.GetAddOnMetadata(addonName, 'Version') or 'Dev'
+    if C_AddOns and type(C_AddOns.GetAddOnMetadata) == 'function' then
+        local ok, version = pcall(C_AddOns.GetAddOnMetadata, addonName, 'Version')
+        if ok and not Compat.IsSecret(version) and type(version) == 'string' then
+            return version
+        end
     end
 
-    if GetAddOnMetadata then
-        return GetAddOnMetadata(addonName, 'Version') or 'Dev'
+    if type(GetAddOnMetadata) == 'function' then
+        local ok, version = pcall(GetAddOnMetadata, addonName, 'Version')
+        if ok and not Compat.IsSecret(version) and type(version) == 'string' then
+            return version
+        end
     end
 
     return 'Dev'

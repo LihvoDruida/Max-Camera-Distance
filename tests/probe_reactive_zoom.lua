@@ -3,6 +3,9 @@ local nativeCalls = {}
 local zoom = 14
 local lastTransition
 local stopCount = 0
+local simulatedCameraFailure = false
+local clock = 100
+local fpsSamples = 0
 local profile = { reactiveZoom = false }
 local frames = {}
 local nativeIn = function(increments)
@@ -14,8 +17,12 @@ local nativeOut = function(increments)
     zoom = zoom + (increments == nil and 1 or increments)
 end
 _G.CameraZoomIn, _G.CameraZoomOut = nativeIn, nativeOut
-_G.GetCameraZoom = function() return zoom end
-_G.GetFramerate = function() return 60 end
+_G.GetCameraZoom = function()
+    if simulatedCameraFailure then error("camera unavailable") end
+    return zoom
+end
+_G.GetTime = function() return clock end
+_G.GetFramerate = function() fpsSamples = fpsSamples + 1; return 60 end
 _G.GetCVar = function(name)
     if name == "cameraDistanceMaxZoomFactor" then return "4" end
     if name == "cameraZoomSpeed" then return "20" end
@@ -89,4 +96,46 @@ profile.reactiveZoom = false
 rz:Refresh()
 assert(CameraZoomIn == otherIn and CameraZoomOut == otherOut,
     "reactive uninstall clobbered another addon's camera handlers")
-print("probe_reactive_zoom: PASS (disabled/native, default step, manual passthrough, toggle, coexistence)")
+
+-- Regression: an unavailable modern/tainted zoom read must not eat wheel input.
+profile.reactiveZoom = true
+rz:Refresh()
+local zoomBeforeError = zoom
+simulatedCameraFailure = true
+assert(pcall(CameraZoomIn), "reactive camera read failure escaped to UI")
+assert(zoom == zoomBeforeError - 2,
+    "camera API failure did not fall back to the preceding zoom handler")
+assert(rz:GetStatus().currentZoom == nil,
+    "status accessed a broken camera getter without protection")
+-- Blizzard can ignore a native zoom at either end-stop. Pending passthrough
+-- must stop polling instead of holding its OnUpdate frame for the whole login.
+simulatedCameraFailure = false
+local watchdog = frames[#frames]
+assert(watchdog and watchdog.OnUpdate, "zoom watchdog missing")
+assert(watchdog.visible, "native zoom fallback did not start watchdog")
+watchdog.OnUpdate(watchdog, 2.05)
+assert(not watchdog.visible and not rz:GetStatus().passthrough,
+    "stalled native zoom left a permanent per-frame watchdog")
+
+-- Querying frame rate for each rapid wheel notch wasted work under fast wheels.
+clock = clock + 1
+fpsSamples = 0
+CameraZoomIn()
+CameraZoomIn()
+CameraZoomOut()
+assert(fpsSamples == 1,
+    "wheel burst queried frame-rate multiple times")
+clock = clock + 0.4
+CameraZoomIn()
+assert(fpsSamples == 2,
+    "frame-rate estimate was not refreshed after the sample interval")
+
+-- A non-wheel zoom call during easing must invalidate the old target.
+CameraZoomOut(4)
+assert(rz:GetStatus().target == nil,
+    "native third-party zoom did not clear the reactive target")
+profile.reactiveZoom = false
+rz:Refresh()
+assert(CameraZoomIn == otherIn and CameraZoomOut == otherOut,
+    "native handlers were not restored after final toggle")
+print("probe_reactive_zoom: PASS (native, default step, safety fallback, watchdog timeout, FPS throttle, coexistence)")

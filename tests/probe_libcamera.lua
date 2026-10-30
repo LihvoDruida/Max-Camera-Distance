@@ -80,4 +80,19 @@ for tick = 1, 120 do
 end
 assert(math.abs(zoom - 20) <= 0.05, "fallback easing does not reach the target")
 assert(not cam:IsZooming(), "fallback easing never releases its update driver")
-print("probe_libcamera: PASS (ranges, no-op, private instance, rejected-write fallback)")
+-- A blocked camera API must not strand LibCamera's OnUpdate driver.
+local cameraGetter = _G.GetCameraZoom
+_G.GetCameraZoom = function() error("camera value is unavailable") end
+local cancelled = false
+cam:SetZoomUsingCVar(20, 0.3, function(wasCancelled) cancelled = wasCancelled end)
+assert(cancelled and not cam:IsZooming(),
+    "unavailable camera getter did not abort the CVar animation")
+cam:SetZoom(20, 0.3)
+local update = cam.frame:GetScript("OnUpdate")
+assert(update, "easing zoom did not begin")
+now = now + 1 / 30
+update(cam.frame, 1 / 30)
+assert(not cam:IsZooming() and cam.frame:GetScript("OnUpdate") == nil,
+    "unavailable camera getter left LibCamera easing running")
+_G.GetCameraZoom = cameraGetter
+print("probe_libcamera: PASS (ranges, no-op, private lib, rejected writes, blocked camera getters)")

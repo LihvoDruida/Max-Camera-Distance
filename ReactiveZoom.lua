@@ -30,6 +30,19 @@ local CONVERSION_RATIO = Compat.CONVERSION_RATIO or 15
 local math_abs, math_min, math_max = math.abs, math.min, math.max
 local GetFramerate = GetFramerate
 local GetCameraZoom = GetCameraZoom
+local GetTime = GetTime
+
+-- A camera API may fail or return an inaccessible value on modern clients.
+-- Never let an unsafe camera reading break Blizzard's mouse-wheel controls.
+local function SafeGetCameraZoom()
+    if type(GetCameraZoom) ~= "function" then return nil end
+    local ok, value = pcall(GetCameraZoom)
+    if not ok or (Compat.IsSecret and Compat.IsSecret(value)) then return nil end
+    if type(value) ~= "number" or value ~= value or value == math.huge or value == -math.huge then
+        return nil
+    end
+    return value
+end
 
 local function DB()
     return (ns.Database and ns.Database.db and ns.Database.db.profile) or nil
@@ -62,6 +75,8 @@ local passthroughPending = false
 local passthroughActive = false
 local passthroughStartZoom = nil
 local lastWatchedZoom = nil
+local watchdogElapsed = 0
+local WATCHDOG_TIMEOUT = 2.0
 
 -- =====================================================================
 -- Frame timing
@@ -70,8 +85,20 @@ local lastWatchedZoom = nil
 -- finish inside a single frame there is nothing to ease, so we hand the notch
 -- straight to Blizzard instead of paying for a LibCamera OnUpdate.
 local secondsPerFrame = 1 / 60
+local lastFpsSampleAt
+local FPS_SAMPLE_INTERVAL = 0.35
 
 local function RefreshFrameTimeEstimate()
+    -- Mouse-wheel events can arrive dozens of times per second. The frame-time
+    -- estimate need not be sampled on every notch, and is safe to reuse briefly.
+    if type(GetTime) == "function" then
+        local okNow, now = pcall(GetTime)
+        if okNow and type(now) == "number" then
+            if lastFpsSampleAt and now >= lastFpsSampleAt
+                and now - lastFpsSampleAt < FPS_SAMPLE_INTERVAL then return end
+            lastFpsSampleAt = now
+        end
+    end
     if type(GetFramerate) ~= "function" then return end
     local ok, fps = pcall(GetFramerate)
     fps = ok and tonumber(fps) or nil
@@ -157,6 +184,7 @@ function ReactiveZoom:ResetTarget()
     reactiveZoomTarget = nil
     passthroughPending, passthroughActive = false, false
     passthroughStartZoom, lastWatchedZoom = nil, nil
+    watchdogElapsed = 0
     if watchdog then watchdog:Hide() end
 end
 
@@ -165,7 +193,7 @@ end
 -- ceiling moves at runtime and cannot be cached.
 local function CurrentMaxZoom()
     local factor = GetCVarNumber("cameraDistanceMaxZoomFactor")
-    if not factor then
+    if not factor or factor ~= factor or factor <= 0 or factor == math.huge then
         return Compat.MAX_CAMERA_YARDS or 39
     end
     return factor * CONVERSION_RATIO
@@ -188,7 +216,8 @@ end
 local function PassThrough(zoomIn, increments)
     passthroughPending = true
     passthroughActive = false
-    passthroughStartZoom = GetCameraZoom and GetCameraZoom() or nil
+    passthroughStartZoom = SafeGetCameraZoom()
+    watchdogElapsed = 0
     if watchdog then watchdog:Show() end
 
     if zoomIn then
@@ -201,8 +230,10 @@ end
 local function HandleWheel(zoomIn, increments)
     local db = DB()
     RefreshFrameTimeEstimate()
-    local currentZoom = GetCameraZoom()
-    if type(currentZoom) ~= "number" then
+    local currentZoom = SafeGetCameraZoom()
+    if currentZoom == nil then
+        -- Still allow native zoom even if the optional reactive path fails.
+        ReactiveZoom:ResetTarget()
         PassThrough(zoomIn, increments)
         return
     end
@@ -231,6 +262,7 @@ local function HandleWheel(zoomIn, increments)
     end
 
     reactiveZoomTarget = reactiveZoomTarget or currentZoom
+    watchdogElapsed = 0
     watchdog:Show()
 
     local maxZoom = CurrentMaxZoom()
@@ -291,7 +323,15 @@ end
 -- alive only while a wheel/lib-camera movement is actually in flight.
 watchdog = CreateFrame("Frame")
 watchdog:Hide()
-watchdog:SetScript("OnUpdate", function()
+watchdog:SetScript("OnUpdate", function(_, elapsed)
+    -- A native zoom at the camera's end-stop may never start moving. Without a
+    -- deadline this watchdog used to poll on EVERY frame for the entire session.
+    watchdogElapsed = watchdogElapsed + (tonumber(elapsed) or 0)
+    if watchdogElapsed >= WATCHDOG_TIMEOUT then
+        ReactiveZoom:ResetTarget()
+        return
+    end
+
     -- This frame exists only while a wheel/lib-camera movement is in flight.
     -- Idling with Reactive Zoom enabled must cost zero per-frame work.
     if reactiveZoomTarget == nil and not passthroughPending and not passthroughActive then
@@ -299,8 +339,8 @@ watchdog:SetScript("OnUpdate", function()
         return
     end
 
-    local currentZoom = GetCameraZoom and GetCameraZoom()
-    if type(currentZoom) ~= "number" then
+    local currentZoom = SafeGetCameraZoom()
+    if currentZoom == nil then
         ReactiveZoom:ResetTarget()
         return
     end
@@ -351,6 +391,7 @@ function ReactiveZoom:Install()
         -- The old wrapper silently converted nil to 0, freezing such calls.
         local amount = increments == nil and 1 or tonumber(increments)
         if amount ~= 1 then
+            ReactiveZoom:ResetTarget()
             return OriginalCameraZoomIn(increments, ...)
         end
         return HandleWheel(true, amount)
@@ -362,6 +403,7 @@ function ReactiveZoom:Install()
         end
         local amount = increments == nil and 1 or tonumber(increments)
         if amount ~= 1 then
+            ReactiveZoom:ResetTarget()
             return OriginalCameraZoomOut(increments, ...)
         end
         return HandleWheel(false, amount)
@@ -406,7 +448,7 @@ function ReactiveZoom:GetStatus()
         enabled = self:IsEnabled(),
         installed = installed,
         target = reactiveZoomTarget,
-        currentZoom = GetCameraZoom and GetCameraZoom() or nil,
+        currentZoom = SafeGetCameraZoom(),
         maxZoom = CurrentMaxZoom(),
         secondsPerFrame = secondsPerFrame,
         easing = (DB() and DB().reactiveZoomEasing) or "OutQuad",
