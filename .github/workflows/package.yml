@@ -3,7 +3,7 @@ name: Continuous Integration
 on:
   push:
     tags:
-      - "*"
+      - "v[0-9]*"
       - "!**-alpha**"
       - "!**-beta**"
 
@@ -23,42 +23,37 @@ jobs:
       - name: Fetch all tags (required for next steps)
         run: git fetch --tags --force
 
-      - name: Get Latest Tag or use TOC version
+      # This workflow runs on tag pushes, not on an arbitrary branch.
+      # Never pick an unrelated "latest" tag or fall back to the TOC version.
+      - name: Resolve and validate release tag
         id: get_latest_tag
+        shell: bash
         run: |
-          # Отримуємо версію з .toc
-          TOC_VERSION=$(grep -oP '^## Version: \K.*' Max_Camera_Distance.toc)
-          TOC_FALLBACK="${TOC_VERSION}"
-
-          TAGS=$(git tag -l)
-          if [ -z "$TAGS" ]; then
-            LATEST_TAG="$TOC_FALLBACK"
-            echo "⚠️ Теги не знайдено, використовується версія з TOC: $LATEST_TAG"
-          else
-            LATEST_TAG="$GITHUB_REF_NAME"
-            echo "🧷 Знайдено останній тег: $LATEST_TAG"
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            echo "Invalid release tag: $TAG" >&2
+            exit 1
           fi
+          TAG_SHA="$(git rev-parse "refs/tags/${TAG}^{commit}")"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if [[ "$TAG_SHA" != "$HEAD_SHA" ]]; then
+            echo "Release tag does not point at the checked-out commit" >&2
+            exit 1
+          fi
+          echo "FINAL_VERSION=$TAG" >> "$GITHUB_ENV"
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
 
-          echo "FINAL_VERSION=$LATEST_TAG" >> $GITHUB_ENV
-          echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
-
-      # Flavour .toc files are generated from Max_Camera_Distance.toc.
-      # Fail the build rather than shipping stale interface versions or a
-      # dash-suffixed file that no client will load.
+      # Flavor .toc files are generated from Max_Camera_Distance.toc.
       - name: Verify .toc files are current
         run: python3 tools/generate_tocs.py --check
 
-      # .pkgmeta externals are NOT in source. Only verify source-owned files here.
       - name: Verify XML manifests (source, externals fetched during package)
         run: python3 tools/verify_manifest.py --allow-missing-externals
 
       - name: Install Lua 5.1 (probes and bytecode audit)
         run: sudo apt-get update && sudo apt-get install -y lua5.1
 
-      # Invoked through bash on purpose. The executable bit is a git file mode,
-      # and it does not survive a checkout made on Windows, a zip round-trip, or
-      # a file added without `git update-index --chmod=+x`. Depending on it made
-      # the gate fail with exit 126 (Permission denied) rather than running.
       - name: Run source-only regression gate
         run: bash ./check_all.sh
 
@@ -66,28 +61,42 @@ jobs:
         run: |
           echo "GitHub Ref: ${{ github.ref }}"
           echo "Actor: ${{ github.actor }}"
-          echo "Використана версія: $FINAL_VERSION"
+          echo "Release version: $FINAL_VERSION"
 
       - name: Update Version in .toc Files
         run: |
           find . -type f -name "*.toc" | while read toc_file; do
-            echo "Оновлення версії в файлі: $toc_file"
+            echo "Updating version in: $toc_file"
             sed -i "s/^## Version: .*/## Version: ${FINAL_VERSION}/" "$toc_file"
-            echo "✅ Версія в $toc_file оновлено до ${FINAL_VERSION}"
           done
 
-      # Генеруємо changelog тільки для поточного тега
-      - name: Generate CHANGELOG.md
+      # IMPORTANT: --current selects the commits belonging to THIS checked-out
+      # tag, whereas --latest can pick a different/latest tag in a repo with
+      # multiple release lines. This is the auto-generated release description.
+      - name: Generate CHANGELOG.md for current tag
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          # --latest: бере зміни тільки для останнього тега
-          # --strip header: прибирає заголовок, щоб не дублювати його в описі релізу
-          args: --latest --strip header --output CHANGELOG.md
+          args: --current --strip header --output CHANGELOG.md
 
-      # Перевіряємо, чи файл створився (для дебагу)
-      - name: Verify Changelog
-        run: cat CHANGELOG.md
+      # Prevent publishing an empty, ungrouped or wrong-version release body.
+      - name: Validate release description
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${FINAL_VERSION#v}"
+          test -s CHANGELOG.md
+          grep -Fq "## [$VERSION] - " CHANGELOG.md
+          grep -Eq '^[[:space:]]*### [^[:space:]]' CHANGELOG.md
+          grep -Eq '^[[:space:]]*- [^[:space:]]' CHANGELOG.md
+          if grep -Eq '^[[:space:]]*## \[(Unreleased|unreleased)\]' CHANGELOG.md; then
+            echo "Unexpected unreleased section in release notes" >&2
+            exit 1
+          fi
+          cat CHANGELOG.md
+
+      # .pkgmeta manual-changelog points to this generated CHANGELOG.md.
+      # Package creation is deliberately kept AFTER generation and validation.
       - name: Create Package (no upload)
         id: package
         uses: BigWigsMods/packager@v2
@@ -98,9 +107,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # BigWigsMods/packager@v2 does not provide archive_path here.
-          # Discover the ONE archive that -d actually produced; do not use an
-          # empty output that resolves to the repository directory.
           shopt -s nullglob
           archives=(.release/Max_Camera_Distance-*.zip)
           if (( ${#archives[@]} != 1 )); then
@@ -117,8 +123,8 @@ jobs:
           MCD_PACKAGED_ROOT: ${{ github.workspace }}/.release/Max_Camera_Distance
         run: bash ./check_all.sh
 
-      # Keep and reuse the verified tree. No copying or external checkout can
-      # replace runtime files between validation and publication.
+      # Publish only after both source and packaged checks succeeded.
+      # BigWigs uses the generated CHANGELOG.md as release notes.
       - name: Upload Verified Package
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_KEY }}
@@ -129,7 +135,8 @@ jobs:
 
       - name: Add Summary
         run: |
-          echo "## ✅ CI завершено успішно" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ CI завершено успішно" >> "$GITHUB_STEP_SUMMARY"
+          echo "Generated release description from git-cliff for $FINAL_VERSION" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Notify Discord on Failure
         if: failure()

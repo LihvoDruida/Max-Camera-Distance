@@ -1,15 +1,11 @@
-# git-cliff configuration file
-# https://git-cliff.org/docs/configuration
-
+# Release notes are generated automatically on a version tag push, before
+# BigWigsMods/packager uploads the verified distribution and creates the release.
 [changelog]
-# Заголовок файлу
 header = """
 # Changelog
 
 All notable changes to this project will be documented in this file.
 """
-
-# Шаблон тіла (Тільки текст коміту, без автора, без посилань)
 body = """
 {% if version -%}
     ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
@@ -24,39 +20,31 @@ body = """
     {% endfor %}
 {% endfor %}
 """
-# Видаляє зайві переноси рядків на початку/в кінці шаблону
 trim = true
 
 [git]
 conventional_commits = true
 filter_unconventional = false
 split_commits = false
-
-# Попередня обробка тексту комітів
 commit_preprocessors = [
-  # Замінює посилання на задачу (#123) просто на текст #123 (щоб не було битих посилань)
   { pattern = '\((\w+\s)?#([0-9]+)\)', replace = " # ${2}" },
-  # Видаляє зайві пробіли в кінці рядка
   { pattern = " +$", replace = "" }
 ]
-
-# Парсери: визначають, в яку групу потрапить коміт
 commit_parsers = [
   { message = "^feat", group = "🚀 New Features" },
   { message = "^fix", group = "🐛 Bug Fixes" },
-  { message = "^doc", group = "📚 Documentation", skip = true },
   { message = "^perf", group = "⚡ Performance" },
   { message = "^refactor", group = "🛠️ Refactor" },
-  { message = "^style", group = "🎨 Styling", skip = true },
-  { message = "^test", group = "🧪 Testing", skip = true },
+  { message = "^style", group = "🎨 Styling" },
+  { message = "^docs?", group = "📚 Documentation" },
+  { message = "^test", group = "🧪 Testing" },
+  { message = "^ci", group = "🔧 CI" },
   { message = "^chore\\(release\\): prepare for", skip = true },
-  { message = "^chore", group = "⚙️ Miscellaneous Tasks" },
+  { message = "^chore", group = "⚙️ Maintenance" },
   { body = ".*security", group = "🔒 Security" },
   { message = "^revert", group = "⏪ Revert" },
-  # Все інше
   { message = ".*", group = "📦 Other Changes" },
 ]
-
 protect_breaking_commits = false
 filter_commits = false
 tag_pattern = "v[0-9].*"
