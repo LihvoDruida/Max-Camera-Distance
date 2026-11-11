@@ -10,8 +10,8 @@ local ipairs = ipairs
 
 local IsInInstance = IsInInstance
 local GetInstanceInfo = GetInstanceInfo
-local IsInRaid = IsInRaid
-local IsInGroup = IsInGroup
+local IsInRaid = Compat.IsInRaid or IsInRaid
+local IsInGroup = Compat.IsInGroup or IsInGroup
 local UnitIsPVP = UnitIsPVP
 local C_PvP = C_PvP
 local C_ChallengeMode = C_ChallengeMode
@@ -164,7 +164,7 @@ end
 function Contexts:IsSupported(context)
     local def = self.DEFINITIONS[context]
     if not def then return false end
-    if def.retailOnly and not Compat.IS_RETAIL then return false end
+    if def.retailOnly and not Compat.SupportsMythicPlus() then return false end
     if context == "arena" and Compat.IS_CLASSIC_ERA then return false end
     if context == "scenario" and not Compat.SupportsScenarioZone() then return false end
     return true
@@ -259,7 +259,7 @@ function Contexts:Resolve(db)
             return "dungeon"
         end
 
-        if instanceType == "scenario" then
+        if instanceType == "scenario" and self:IsSupported("scenario") then
             return "scenario"
         end
     end

@@ -9,6 +9,7 @@ local function object(kind, name, parent, template)
     stub.objects[#stub.objects + 1] = o
     return setmetatable(o, { __index = function(_, key)
         if key == "SetFontHeight" and stub.legacyFonts then return nil end
+        if stub.legacyWidgets and (key == "SetShown" or key == "SetEnabled" or key == "SetColorTexture" or key == "SetObeyStepOnDrag") then return nil end
         if key:match("^SetBackdrop") and _G.BackdropTemplateMixin and template ~= "BackdropTemplate" then return nil end
         if methods[key] then return methods[key] end
         if tostring(key):match("^[A-Z]") then error("Unknown UI method " .. tostring(key) .. " on " .. kind) end
@@ -84,6 +85,12 @@ function methods:SetChecked(value) self.checked = value end
 function methods:GetChecked() return self.checked end
 function methods:SetEnabled(value) self.enabled = value end
 function methods:IsEnabled() return self.enabled end
+function methods:Enable() self.enabled = true end
+function methods:Disable() self.enabled = false end
+function methods:SetTexture(...)
+    self.textureArgs = { ... }
+    if type(self.textureArgs[1]) == "number" then stub.legacyColorWrites = (stub.legacyColorWrites or 0) + 1 end
+end
 function methods:ClearFocus() self.focus = false end
 function methods:HasFocus() return self.focus == true end
 function methods:SetScale(value) self.scale = value end
@@ -93,7 +100,7 @@ function methods:RegisterEvent() end
 for _, name in ipairs({ "SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "SetTextColor", "SetJustifyH",
     "SetJustifyV", "SetTextInsets", "SetAutoFocus", "SetMaxLetters",
     "EnableMouseWheel", "SetNormalTexture", "SetPushedTexture", "SetCheckedTexture",
-    "SetOrientation", "SetThumbTexture", "SetObeyStepOnDrag", "SetAlpha", "SetColorTexture", "SetTexture",
+    "SetOrientation", "SetThumbTexture", "SetObeyStepOnDrag", "SetAlpha", "SetColorTexture",
     "SetMovable", "SetClampedToScreen", "RegisterForDrag", "StartMoving", "StopMovingOrSizing" }) do
     methods[name] = function() end
 end

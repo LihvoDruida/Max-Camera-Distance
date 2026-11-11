@@ -6,7 +6,9 @@
     <Include file="libs\_manifest.xml"/>
     <Include file="locale\_manifest.xml"/>
     <Script file="Locales.lua"/>
+    <Script file="ClientSupport.lua"/>
     <Script file="Compat.lua"/>
+    <Script file="Timer.lua"/>
     <Script file="Contexts.lua"/>
     <Script file="Database.lua"/>
     <Script file="CVarGuard.lua"/>

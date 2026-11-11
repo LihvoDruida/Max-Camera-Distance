@@ -52,4 +52,13 @@ _G.GetCVar = oldGetter
 ns.Compat.InvalidateCVarCaches()
 assert(ns.Compat.SafeGetCVar("cameraZoomSpeed") == "2",
     "recovering CVar getter did not resume")
+-- Some backported namespaces return nil despite completing a write. Readback
+-- must confirm it, while explicit failure/throws must remain final.
+C_CVar.SetCVar = function(_, new) value = tostring(new) end
+assert(ns.Compat.SafeSetCVar("cameraZoomSpeed", 4) and value == "4", "void namespace setter was not verified")
+C_CVar.SetCVar = function() error("write denied") end
+assert(not ns.Compat.SafeSetCVar("cameraZoomSpeed", 5) and legacyWrites == 0, "denied namespace write fell through")
+-- A namespace loaded late must be discovered without reloading Compat.lua.
+_G.C_CVar = { GetCVar = function() return "6" end, SetCVar = function() return false end }
+assert(ns.Compat.SafeGetCVar("cameraZoomSpeed") == "6", "late namespace was ignored")
 print("probe_cvar_policy: PASS (rejections, unsupported, readonly, secure, secret getters)")

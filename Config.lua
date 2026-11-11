@@ -254,7 +254,8 @@ local function SetOption(key, value)
         or key == "afkSkipMounted"
         or key == "afkSkipFlying"
         or key == "afkResumeAfterCombat"
-        or key == "afkZoomOut" then
+        or key == "afkZoomOut"
+        or key == "afkZoomDistance" then
         if ns.Functions and ns.Functions.RefreshAfkMode then
             ns.Functions:RefreshAfkMode(true)
         end
@@ -1302,7 +1303,7 @@ function Config:SetupOptions()
                                 forms = L["MOUNT_ZOOM_MODE_FORMS"] or "Travel forms only",
                             }
                             if Compat.SupportsFlyingMountMode() then values.flying = L["MOUNT_ZOOM_MODE_FLYING"] end
-                            if IS_RETAIL then
+                            if Compat.SupportsSkyriding() then
                                 values.skyriding = L["MOUNT_ZOOM_MODE_SKYRIDING"] or "Skyriding only"
                             end
                             return values
@@ -1321,7 +1322,7 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("dragonRacingRaceFirstPerson", val) end,
                         order = 61.6,
                         disabled = function() return not GetOption("autoMountZoom") end,
-                        hidden = function() return not IS_RETAIL end,
+                        hidden = function() return not Compat.SupportsSkyriding() end,
                         width = "full",
                     },
                     mountZoomFactor = {
@@ -1801,12 +1802,24 @@ function Config:SetupOptions()
                     },
                     afkZoomOut = {
                         type = "toggle",
-                        name = L["AFK_ZOOM_OUT_NAME"] or "Zoom out while AFK",
-                        desc = L["AFK_ZOOM_OUT_DESC"] or "Pushes the camera to the maximum managed distance when AFK mode starts.",
+                        name = L["AFK_ZOOM_ENABLE_NAME"] or "Adjust zoom while AFK",
+                        desc = L["AFK_ZOOM_ENABLE_DESC"] or "Uses the selected AFK distance and restores your previous zoom when AFK mode ends.",
                         get = function() return GetOption("afkZoomOut") end,
                         set = function(_, val) SetOption("afkZoomOut", val) end,
                         disabled = function() return not GetOption("afkMode") end,
                         order = 13
+                    },
+                    afkZoomDistance = {
+                        type = "range",
+                        name = L["AFK_ZOOM_DISTANCE_NAME"] or "AFK zoom distance",
+                        desc = L["AFK_ZOOM_DISTANCE_DESC"] or "Lower values bring the camera closer to your character. Your previous zoom is restored when AFK mode ends.",
+                        min = 1,
+                        max = maxDistance,
+                        step = 0.5,
+                        get = function() return GetOption("afkZoomDistance") end,
+                        set = function(_, val) SetOption("afkZoomDistance", val) end,
+                        disabled = function() return not GetOption("afkMode") or not GetOption("afkZoomOut") end,
+                        order = 13.5
                     },
                     afkDelay = {
                         type = "range",

@@ -3,6 +3,7 @@ ns.GamePad = ns.GamePad or {}
 local GamePad = ns.GamePad
 
 local Compat = ns.Compat or {}
+local C_Timer = ns.Timer or _G.C_Timer
 
 local type = type
 local pairs = pairs
@@ -474,7 +475,8 @@ local function ResolveActive()
     if C_GamePad and C_GamePad.GetActiveDeviceID then
         local ok, deviceID = pcall(C_GamePad.GetActiveDeviceID)
         if ok then
-            local plain = Compat.Plain and Compat.Plain(deviceID) or deviceID
+            local plain = deviceID
+            if Compat.Plain then plain = Compat.Plain(deviceID) end
             local num = tonumber(plain)
             if num ~= nil then
                 return num >= 0
@@ -1055,7 +1057,8 @@ function GamePad:OnGamePadEvent(event, ...)
     if C_GamePad and C_GamePad.GetActiveDeviceID then
         local ok, deviceID = pcall(C_GamePad.GetActiveDeviceID)
         if ok then
-            local plain = Compat.Plain and Compat.Plain(deviceID) or deviceID
+            local plain = deviceID
+            if Compat.Plain then plain = Compat.Plain(deviceID) end
             local num = tonumber(plain)
             if num ~= nil and num >= 0 then state.lastDeviceID = num end
         end

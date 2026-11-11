@@ -99,7 +99,7 @@ stage "Probe: LibCamera ranges"    lua51_probe tests/probe_libcamera.lua
 stage "Probe: native/reactive zoom" lua51_probe tests/probe_reactive_zoom.lua
 native_matrix() {
     local flavor mode
-    for flavor in retail ptr era tbc wrath titan cata mists forever; do
+    for flavor in retail ptr era tbc titan mists forever; do
         for mode in fallback embedded; do
             if [[ "$mode" == "fallback" || -n "${MCD_PACKAGED_ROOT:-}" ]]; then
                 lua51_probe tests/probe_native_settings.lua "$flavor" "$mode" || return $?
@@ -113,6 +113,20 @@ stage "Probe: delayed modern settings registration" lua51_probe tests/probe_nati
 stage "Probe: delayed legacy settings registration" lua51_probe tests/probe_native_settings.lua forever fallback legacy late
 stage "Probe: CVar write policy"   lua51_probe tests/probe_cvar_policy.lua
 stage "Probe: activity and mount capabilities" lua51_probe tests/probe_context_mounts.lua
+stage "Probe: AFK zoom and restoration" lua51_probe tests/probe_afk_zoom.lua
+stage "Probe: AFK lifecycle" lua51_probe tests/probe_afk_lifecycle.lua
+stage "Probe: optional library compatibility" lua51_probe tests/probe_library_fallback.lua
+stage "Probe: timer API variants" lua51_probe tests/probe_timers.lua
+stage "Probe: cross-client API shapes" lua51_probe tests/probe_cross_client.lua
+stage "Probe: official regional scope" lua51_probe tests/probe_official_regions.lua
+regional_locale_ui() {
+    local locale
+    for locale in enUS enGB deDE frFR esES esMX ptBR itIT ruRU koKR zhCN zhTW ukUA; do
+        lua51_probe tests/probe_native_settings.lua retail fallback modern ready "$locale" EU || return $?
+    done
+    lua51_probe tests/probe_native_settings.lua titan fallback modern ready zhCN CN
+}
+stage "Probe: regional locale UI" regional_locale_ui
 stage "Probe: flavor matrix"       lua51_probe tests/probe_flavors.lua
 
 # Only after the BigWigs packager has downloaded .pkgmeta externals do we

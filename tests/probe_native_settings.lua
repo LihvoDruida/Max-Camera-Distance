@@ -4,16 +4,20 @@ _G.CreateFrame = stub.CreateFrame
 _G.UIParent = CreateFrame("Frame", "UIParent"); UIParent:SetSize(1920, 1080)
 _G.UISpecialFrames = {}
 _G.GetTime = function() return 0 end
-_G.GetLocale = function() return "enUS" end
+_G.GetLocale = function() return arg[5] or "enUS" end
 local cases = {
-    retail = { "12.1.0", 120100, 1 }, ptr = { "12.1.5", 120105, 1 },
+    retail = { "12.1.5", 120105, 1 }, ptr = { "12.1.7", 120107, 1 },
     era = { "1.15.9", 11509, 2 }, tbc = { "2.5.6", 20506, 5 },
     wrath = { "3.4.5", 30405, 11 }, titan = { "3.80.2", 38002, 11 },
     cata = { "4.4.2", 40402, 14 }, mists = { "5.5.4", 50504, 19 },
     forever = { "1.60.1", 16001, 1 },
+    wod = { "6.2.4", 60200, 1 }, legion = { "7.3.5", 70300, 1 },
+    bfa = { "8.3.7", 80300, 1 }, shadowlands = { "9.2.7", 90207, 1 },
+    dragonflight = { "10.2.7", 100207, 1 }, tww = { "11.2.0", 110200, 1 },
 }
 _G.BackdropTemplateMixin = arg[3] ~= "legacy" and {} or nil
 stub.legacyFonts = arg[3] == "legacy"
+stub.legacyWidgets = arg[3] == "legacy"
 local selected = cases[arg[1] or "retail"]
 assert(selected, "unknown test flavor")
 _G.GetBuildInfo = function() return selected[1], "69933", "2026", selected[2] end
@@ -25,10 +29,10 @@ _G.GetCameraZoom = function() return 18 end
 _G.WOW_PROJECT_ID, _G.WOW_PROJECT_MAINLINE = selected[3], 1
 _G.UnitNameUnmodified = UnitName
 _G.UnitFactionGroup = function() return "Alliance" end
-_G.GetCurrentRegionName = function() return "EU" end
-_G.GetCurrentRegion = function() return 3 end
+_G.GetCurrentRegionName = function() return arg[6] or (arg[1] == "titan" and "CN" or "EU") end
+_G.GetCurrentRegion = function() return ({ US = 1, KR = 2, EU = 3, TW = 4, CN = 5 })[GetCurrentRegionName()] end
 _G.strlenutf8 = function(s) return #s end
-_G.securecallfunction = function(fn, ...) return fn(...) end
+_G.securecallfunction = selected[2] >= 90000 and function(fn, ...) return fn(...) end or nil
 local cvars = { cameraDistanceMaxZoomFactor = "2.6", cameraYawMoveSpeed = "180", cameraPitchMoveSpeed = "90",
     test_cameraOverShoulder = "0", test_cameraDynamicPitch = "0", CameraKeepCharacterCentered = "1" }
 _G.GetCVar = function(name) return cvars[name] end
@@ -90,7 +94,7 @@ assert(quickKeys.maxZoomFactor and quickKeys.reactiveZoom and quickKeys.autoComb
     "quick dashboard lost a primary camera control")
 assert(ui.resultCount:GetText():match(tostring(quickCount)), "quick-setting count incorrect")
 -- Search can be cleared without switching pages or leaving focus behind.
-ui.search:SetText("zoom")
+ui.search:SetText(ns.Locale:Get("MAX_ZOOM_FACTOR"))
 ui:Rebuild(true)
 assert(ui.resultCount:IsShown() and ui.pageTitle:GetText() == ns.Locale:Get("UI_SEARCH_RESULTS"))
 assert(#ui.rows > 0 and #ui:CollectRows("overview", "no-match-xyz-2026") == 0, "search filter ineffective")
@@ -121,6 +125,20 @@ assert(not ns.Config.options.args.presetSettings, "old preset page still duplica
 assert(ns.Config.options.args.mountSettings.args.mountZoomPreset, "mount preset separated from mount settings")
 assert(ns.Config.options.args.zoomSettings.args.reactiveZoom, "wheel settings not grouped")
 assert(ns.Config.options.args.afkSettings.args.enableAFK, "AFK settings missing")
+local afkOptions = ns.Config.options.args.afkSettings.args
+assert(afkOptions.afkZoomDistance.max == ns.Compat.MAX_CAMERA_YARDS, "wrong AFK slider range")
+local profile = ns.Database.db.profile
+profile.afkMode, profile.afkZoomOut = true, true
+assert(not afkOptions.afkZoomDistance.disabled(), "AFK slider disabled")
+afkOptions.afkZoomDistance.set(nil, 5.5)
+assert(afkOptions.afkZoomDistance.get() == 5.5, "AFK slider did not save distance")
+profile.afkZoomOut = false
+assert(afkOptions.afkZoomDistance.disabled(), "AFK slider enabled after opt-out")
+profile.afkMode = false
+
+if stub.legacyWidgets then
+    assert((stub.legacyColorWrites or 0) > 0, "legacy texture color fallback was not used")
+end
 local groups = ns.Config.options.args.smartSettings.args
 for _, id in ipairs(ns.Contexts.ORDER) do
     local def = ns.Contexts.DEFINITIONS[id]
@@ -134,7 +152,7 @@ for _, id in ipairs(ns.Contexts.ORDER) do
 end
 local modes = ns.Config.options.args.mountSettings.args.mountZoomMode.values()
 assert((modes.flying ~= nil) == (arg[1] ~= "era"), "Era exposes flying-only mount mode")
-assert((modes.skyriding ~= nil) == ns.Compat.IS_RETAIL)
+assert((modes.skyriding ~= nil) == ns.Compat.SupportsSkyriding())
 
 -- Every page and all scrollbar positions exercise actual row creation/binding.
 for _, page in ipairs(ui:GetPages()) do
@@ -145,7 +163,7 @@ for _, page in ipairs(ui:GetPages()) do
         assert(#pool < 30, "virtualization creates too many " .. kind .. " widgets")
     end
 end
-local search = ui:CollectRows("overview", "MAX CAMERA DISTANCE")
+local search = ui:CollectRows("overview", ns.Locale:Get("MAX_ZOOM_FACTOR"):upper())
 assert(#search > 0, "global search does not find non-overview settings")
 ns.Database.db.profile.language = "ukUA"
 ns.Config.options = nil; ns.Config:SetupOptions()
@@ -317,4 +335,4 @@ assert(ui.window.scale * 1060 <= 900 and ui.window.scale * 670 <= 600)
 local count = #stub.objects
 for i = 1, 12 do ns.Config:Open(); ui.window:Hide() end
 assert(#stub.objects == count, "reopening grows frame count")
-print("probe_native_settings: PASS " .. (arg[1] or "retail") .. "/" .. (arg[2] or "fallback") .. " (strict controls, pages, search, profiles, pooling)")
+print("probe_native_settings: PASS " .. (arg[1] or "retail") .. "/" .. (arg[2] or "fallback") .. " locale=" .. GetLocale() .. " region=" .. GetCurrentRegionName() .. " (strict controls, pages, search, profiles, pooling)")

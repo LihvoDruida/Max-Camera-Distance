@@ -34,7 +34,7 @@ local UnitExists = UnitExists
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local UnitIsDead = UnitIsDead
 local UnitIsGhost = UnitIsGhost
-local C_Timer = C_Timer
+local C_Timer = ns.Timer or C_Timer
 local GetTime = GetTime
 local pcall = pcall
 
@@ -221,7 +221,41 @@ local function ScheduleStartupCameraRefresh()
     end
 end
 
+function Core:InitBasicMinimapButton()
+    if not _G.Minimap then return false end
+    local button = self.basicMinimapButton
+    if not button then
+        button = CreateFrame("Button", nil, Minimap)
+        self.basicMinimapButton = button
+        button:SetSize(24, 24)
+        button:SetPoint("CENTER", Minimap, "CENTER", -56, -56)
+        button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        local icon = button:CreateTexture(nil, "ARTWORK")
+        icon:SetAllPoints(button)
+        icon:SetTexture("Interface\\AddOns\\" .. addonName .. "\\assets\\icon")
+        button:SetScript("OnClick", function()
+            if ns.Config and ns.Config.Open then ns.Config:Open() end
+        end)
+        button:SetScript("OnEnter", function()
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(button, "ANCHOR_LEFT")
+            GameTooltip:AddLine(L["ADDON_TITLE"] or "Max Camera Distance")
+            GameTooltip:AddLine(L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] or "Click to open settings")
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    end
+    self:RefreshMinimapButton()
+    return true
+end
+
 function Core:RefreshMinimapButton()
+    if self.basicMinimapButton then
+        local db = ns.Database and ns.Database.db and ns.Database.db.profile
+        if db and db.minimap and db.minimap.hide then self.basicMinimapButton:Hide()
+        else self.basicMinimapButton:Show() end
+        return
+    end
     if not LDBIcon or not ns.Database or not ns.Database.db or not ns.Database.db.profile then return end
 
     ns.Database.db.profile.minimap = ns.Database.db.profile.minimap or { hide = false }
@@ -239,6 +273,10 @@ end
 
 local function InitMinimapButton()
     if minimapInited then return end
+    if Compat.CanUseCallbackLibraries and not Compat.CanUseCallbackLibraries() then
+        minimapInited = Core:InitBasicMinimapButton()
+        return
+    end
 
     ResolveOptionalLibs()
     if not LDB or not LDBIcon then return end
@@ -562,6 +600,9 @@ end
 eventHandlers.PLAYER_CONTROL_GAINED = ForceSmartUpdate
 eventHandlers.PLAYER_CONTROL_LOST = ForceSmartUpdate
 eventHandlers.GROUP_ROSTER_UPDATE = RequestSmartUpdate
+-- Pre-MoP rosters use separate party/raid notifications.
+eventHandlers.PARTY_MEMBERS_CHANGED = RequestSmartUpdate
+eventHandlers.RAID_ROSTER_UPDATE = RequestSmartUpdate
 eventHandlers.ENCOUNTER_START = ForceSmartUpdate
 eventHandlers.ENCOUNTER_END = ForceSmartUpdate
 eventHandlers.ZONE_CHANGED_NEW_AREA = ForceSmartUpdate

@@ -23,6 +23,26 @@ local OVERVIEW_SECTIONS = {
     { "reloadGroup", { "minimapButton", "languageOverride" } },
 }
 
+-- Widget methods were added in different patches. Use the older equivalents
+-- only on our own controls; do not modify FrameXML or shared widget metatables.
+local function shown(widget, value)
+    if type(widget.SetShown) == "function" then widget:SetShown(value)
+    elseif value then widget:Show() else widget:Hide() end
+end
+local function enabled(widget, value)
+    if type(widget.SetEnabled) == "function" then widget:SetEnabled(value)
+    elseif value and type(widget.Enable) == "function" then widget:Enable()
+    elseif not value and type(widget.Disable) == "function" then widget:Disable()
+    else
+        widget:EnableMouse(value)
+        if not value and type(widget.ClearFocus) == "function" then widget:ClearFocus() end
+    end
+end
+local function solid(texture, ...)
+    if type(texture.SetColorTexture) == "function" then texture:SetColorTexture(...)
+    else texture:SetTexture(...) end
+end
+
 local function frame(kind, name, parent)
     return CreateFrame(kind or "Frame", name, parent, BackdropTemplateMixin and "BackdropTemplate" or nil)
 end
@@ -271,7 +291,7 @@ function UI:Confirm(text, callback)
         overlay:SetFrameLevel(self.window:GetFrameLevel() + 40)
         overlay:EnableMouse(true)
         local tint = overlay:CreateTexture(nil, "BACKGROUND")
-        tint:SetAllPoints(); tint:SetColorTexture(0, 0, 0, 0.75)
+        tint:SetAllPoints(); solid(tint, 0, 0, 0, 0.75)
         local panel = frame("Frame", nil, overlay)
         panel:SetSize(430, 155); panel:SetPoint("CENTER"); backdrop(panel)
         overlay.text = label(panel, "", 15, GOLD)
@@ -362,14 +382,14 @@ function UI:CreateRow(kind)
     if kind ~= "header" and kind ~= "description" then
         f.surface = f:CreateTexture(nil, "BACKGROUND")
         f.surface:SetAllPoints()
-        f.surface:SetColorTexture(0.11, 0.095, 0.072, 0.50)
+        solid(f.surface, 0.11, 0.095, 0.072, 0.50)
     end
     local function focus()
         UI:ShowDetails(f.row)
-        if f.surface then f.surface:SetColorTexture(0.18, 0.145, 0.10, 0.78) end
+        if f.surface then solid(f.surface, 0.18, 0.145, 0.10, 0.78) end
     end
     local function unfocus()
-        if f.surface then f.surface:SetColorTexture(0.11, 0.095, 0.072, 0.50) end
+        if f.surface then solid(f.surface, 0.11, 0.095, 0.072, 0.50) end
     end
     f.title:SetPoint("TOPLEFT", 12, -11)
     f.title:SetWidth(485)
@@ -397,7 +417,7 @@ function UI:CreateRow(kind)
         slider:SetPoint("BOTTOMLEFT", 13, 13)
         backdrop(slider, { 0.015, 0.012, 0.01, 1 })
         slider:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
-        slider:SetObeyStepOnDrag(true)
+        if type(slider.SetObeyStepOnDrag) == "function" then slider:SetObeyStepOnDrag(true) end
         slider.low = label(f, "", 10, GOLD); slider.low:SetPoint("BOTTOMLEFT", 14, 0)
         slider.high = label(f, "", 10, GOLD); slider.high:SetPoint("BOTTOMRIGHT", -130, 0)
         local number = edit(f, 91); number:SetPoint("BOTTOMRIGHT", -14, 9)
@@ -481,7 +501,7 @@ function UI:CreateRow(kind)
         f.title:SetTextColor(unpack(GOLD))
         local line = f:CreateTexture(nil, "BACKGROUND")
         line:SetHeight(1); line:SetPoint("BOTTOMLEFT", 12, 3); line:SetPoint("BOTTOMRIGHT", -12, 3)
-        line:SetColorTexture(0.46, 0.34, 0.17, 0.65)
+        solid(line, 0.46, 0.34, 0.17, 0.65)
     end
     return f
 end
@@ -490,32 +510,32 @@ function UI:BindRow(f, row)
     f.row, f.syncing, f.pendingValue = row, true, nil
     f.title:SetText(row.name)
     f:SetAlpha(row.disabled and 0.55 or 1)
-    if f.surface then f.surface:SetColorTexture(0.11, 0.095, 0.072, 0.50) end
+    if f.surface then solid(f.surface, 0.11, 0.095, 0.072, 0.50) end
     f:EnableMouse(false)
     local o = row.option
     if f.check then
         f.check:SetChecked(self:Evaluate(o, "get", row.info, false, row.choice))
-        f.check:SetEnabled(not row.disabled)
+        enabled(f.check, not row.disabled)
     elseif f.slider then
         f.slider:SetMinMaxValues(o.min, o.max)
         f.slider:SetValueStep(o.step or 1)
         local value = self:Evaluate(o, "get", row.info, o.min)
         value = tonumber(value) or o.min
-        f.slider:SetValue(value); f.slider:SetEnabled(not row.disabled)
+        f.slider:SetValue(value); enabled(f.slider, not row.disabled)
         f.number:SetText(string.format("%g", value)); f.number:EnableMouse(not row.disabled)
-        f.number:SetEnabled(not row.disabled)
+        enabled(f.number, not row.disabled)
         f.slider.low:SetText(string.format("%g", o.min)); f.slider.high:SetText(string.format("%g", o.max))
     elseif o.type == "select" then
         local values = self:Evaluate(o, "values", row.info, {})
         local selected = self:Evaluate(o, "get", row.info, nil)
         f.control.text:SetText(values[selected] or L.UI_SELECT)
-        f.control:SetEnabled(not row.disabled and next(values) ~= nil)
+        enabled(f.control, not row.disabled and next(values) ~= nil)
     elseif o.type == "input" then
         f.input:SetText(self:Evaluate(o, "get", row.info, ""))
-        f.input:SetEnabled(not row.disabled); f.control:SetEnabled(not row.disabled)
+        enabled(f.input, not row.disabled); enabled(f.control, not row.disabled)
     elseif o.type == "execute" then
         f.control:SetHeight(max(30, row.height - 12))
-        f.control.text:SetText(row.name); f.control:SetEnabled(not row.disabled)
+        f.control.text:SetText(row.name); enabled(f.control, not row.disabled)
     end
     f.syncing = false
 end
@@ -582,9 +602,9 @@ function UI:Rebuild(resetScroll)
             b.selectedMarker:SetPoint("TOPLEFT", 3, -4)
             b.selectedMarker:SetPoint("BOTTOMLEFT", 3, 4)
             b.selectedMarker:SetWidth(3)
-            b.selectedMarker:SetColorTexture(unpack(GOLD))
+            solid(b.selectedMarker, unpack(GOLD))
         end
-        b.selectedMarker:SetShown(self.pageKey == page.key)
+        shown(b.selectedMarker, self.pageKey == page.key)
         b.text:SetTextColor(unpack(self.pageKey == page.key and GOLD or TEXT))
         b:SetBackdropColor(self.pageKey == page.key and 0.23 or 0.08, 0.14, 0.08, 0.8)
         b:SetScript("OnClick", function() self:SelectPage(item.key) end); b:Show()
@@ -618,7 +638,7 @@ function UI:Rebuild(resetScroll)
     else self.scroll:SetVerticalScroll(min(self.scroll:GetVerticalScroll(), max(0, y - self.scroll:GetHeight()))) end
     self.scrollbar:SetMinMaxValues(0, max(0, y - self.scroll:GetHeight()))
     self.scrollbar:SetValue(self.scroll:GetVerticalScroll())
-    self.scrollbar:SetShown(y > self.scroll:GetHeight())
+    shown(self.scrollbar, y > self.scroll:GetHeight())
     local title = L.UI_SEARCH_RESULTS
     if self.search:GetText() == "" then
         for _, page in ipairs(self.pages) do if page.key == self.pageKey then title = page.name end end
@@ -629,8 +649,8 @@ function UI:Rebuild(resetScroll)
         if row.option.type ~= "header" and row.option.type ~= "description" then count = count + 1 end
     end
     self.resultCount:SetText(string.format(L.UI_RESULT_COUNT, count))
-    self.resultCount:SetShown(query ~= "" or self.pageKey == "overview")
-    self.empty:SetShown(#self.rows == 0)
+    shown(self.resultCount, query ~= "" or self.pageKey == "overview")
+    shown(self.empty, #self.rows == 0)
     self.dirty = false
     self:RenderVisible()
 end
@@ -702,7 +722,7 @@ function UI:ConfigureLayout(embedded)
     self.profile:ClearAllPoints(); self.profile:SetPoint("TOPRIGHT", embedded and -20 or -60, -25)
     self.profile:SetWidth(embedded and 300 or 430)
     self.status:SetWidth(embedded and 740 or 810)
-    self.closeButton:SetShown(not embedded); self.doneButton:SetShown(not embedded)
+    shown(self.closeButton, not embedded); shown(self.doneButton, not embedded)
     self:ShowDetails(nil)
 end
 
@@ -801,8 +821,8 @@ function UI:Create()
         if self.dirty and not self.interacting and (not self.searchDelay or self.searchDelay <= 0) then
             local reset = self.searchDelay ~= nil; self.searchDelay = nil; self:Rebuild(reset)
         end
-        self.searchHint:SetShown(self.search:GetText() == "")
-        self.clearSearch:SetShown(self.search:GetText() ~= "")
+        shown(self.searchHint, self.search:GetText() == "")
+        shown(self.clearSearch, self.search:GetText() ~= "")
         if statusTick >= 1 then
             statusTick = 0; self:UpdateStatus()
             -- Diagnostic names depend on camera state. Rebuild only this page,

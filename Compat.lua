@@ -7,9 +7,6 @@ local pcall = pcall
 local tonumber = tonumber
 local tostring = tostring
 
-local C_CVar = C_CVar
-local C_UI = C_UI
-local C_AddOns = C_AddOns
 local GetCVar = GetCVar
 local GetCVarDefault = GetCVarDefault
 local SetCVar = SetCVar
@@ -29,8 +26,17 @@ local cvarWritePolicyCache = {}
 -- version, so this is the value we actually want. It used to be stored as
 -- Compat.BUILD, which made /mcd status report a nonsense "build=".
 local okBuild, clientVersion, buildNumber, _, tocVersion = pcall(GetBuildInfo)
-Compat.INTERFACE = okBuild and (tonumber(tocVersion) or 0) or 0
 Compat.VERSION = okBuild and tostring(clientVersion or '') or ''
+Compat.VERSION_MAJOR, Compat.VERSION_MINOR, Compat.VERSION_PATCH = Compat.VERSION:match('^(%d+)%.(%d+)%.?(%d*)')
+Compat.VERSION_MAJOR = tonumber(Compat.VERSION_MAJOR) or 0
+Compat.VERSION_MINOR = tonumber(Compat.VERSION_MINOR) or 0
+Compat.VERSION_PATCH = tonumber(Compat.VERSION_PATCH) or 0
+Compat.INTERFACE = okBuild and (tonumber(tocVersion) or 0) or 0
+Compat.INTERFACE_SOURCE = Compat.INTERFACE > 0 and 'GetBuildInfo' or 'unknown'
+if Compat.INTERFACE == 0 and Compat.VERSION_MAJOR > 0 then
+    Compat.INTERFACE = Compat.VERSION_MAJOR * 10000 + Compat.VERSION_MINOR * 100 + Compat.VERSION_PATCH
+    Compat.INTERFACE_SOURCE = 'version'
+end
 Compat.BUILD_NUMBER = okBuild and (tonumber(buildNumber) or 0) or 0
 Compat.BUILD = Compat.INTERFACE -- kept for backwards compatibility
 Compat.PROJECT_ID = WOW_PROJECT_ID or 0
@@ -53,16 +59,22 @@ Compat.FOREVER_MARKER_SOURCE = clientFlavor.SOURCE
 -- and NOT Classic Era, but it does use the modern UI/API/CVar family. This split
 -- prevents Classic-only gameplay features from being mixed with modern API
 -- compatibility shims.
-Compat.IS_RETAIL = (not Compat.IS_FOREVER) and ((Compat.PROJECT_ID == WOW_PROJECT_MAINLINE_VALUE) or (Compat.INTERFACE >= 100000))
+-- A mainline project ID alone is not enough: modified Classic clients can
+-- report 1. Conversely, a future Classic expansion must not become Retail
+-- merely because its interface number crosses a numeric threshold.
+Compat.IS_RETAIL = (not Compat.IS_FOREVER) and Compat.INTERFACE >= 60000
+    and (Compat.PROJECT_ID == WOW_PROJECT_MAINLINE_VALUE or Compat.PROJECT_ID == 0)
 Compat.USES_MODERN_API = Compat.IS_RETAIL or Compat.IS_FOREVER
-Compat.IS_MOP_CLASSIC = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 50000 and Compat.INTERFACE < 60000)
-Compat.IS_CATA_CLASSIC = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 40000 and Compat.INTERFACE < 50000)
-Compat.IS_TITAN_REFORGED = (not Compat.IS_FOREVER) and Compat.VERSION:match('^3%.80%.') ~= nil
-Compat.IS_WRATH_CLASSIC = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 30000 and Compat.INTERFACE < 40000)
-Compat.IS_TBC_ANNIVERSARY = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 20000 and Compat.INTERFACE < 30000)
-Compat.IS_CLASSIC_ERA = (not Compat.IS_FOREVER) and (Compat.INTERFACE >= 10000 and Compat.INTERFACE < 20000)
+Compat.IS_MOP_CLASSIC = (not Compat.IS_FOREVER and not Compat.IS_RETAIL) and (Compat.INTERFACE >= 50000 and Compat.INTERFACE < 60000)
+Compat.IS_CATA_CLASSIC = (not Compat.IS_FOREVER and not Compat.IS_RETAIL) and (Compat.INTERFACE >= 40000 and Compat.INTERFACE < 50000)
+Compat.IS_TITAN_REFORGED = (not Compat.IS_FOREVER and not Compat.IS_RETAIL)
+    and (Compat.VERSION:match('^3%.80%.') ~= nil or (Compat.INTERFACE >= 38000 and Compat.INTERFACE < 39000))
+Compat.IS_WRATH_CLASSIC = (not Compat.IS_FOREVER and not Compat.IS_RETAIL) and (Compat.INTERFACE >= 30000 and Compat.INTERFACE < 40000)
+Compat.IS_TBC_ANNIVERSARY = (not Compat.IS_FOREVER and not Compat.IS_RETAIL) and (Compat.INTERFACE >= 20000 and Compat.INTERFACE < 30000)
+Compat.IS_CLASSIC_ERA = (not Compat.IS_FOREVER and not Compat.IS_RETAIL) and (Compat.INTERFACE >= 10000 and Compat.INTERFACE < 20000)
 Compat.IS_CLASSIC = Compat.IS_MOP_CLASSIC or Compat.IS_CATA_CLASSIC or Compat.IS_WRATH_CLASSIC
     or Compat.IS_TBC_ANNIVERSARY or Compat.IS_CLASSIC_ERA
+    or (not Compat.IS_FOREVER and not Compat.IS_RETAIL and Compat.PROJECT_ID > 0 and Compat.PROJECT_ID ~= WOW_PROJECT_MAINLINE_VALUE)
 -- Legacy aggregate kept for callers that need actual Classic products.
 -- Forever deliberately stays outside this family even though it shares modern APIs.
 Compat.IS_CLASSIC_FAMILY = Compat.IS_CLASSIC
@@ -96,8 +108,9 @@ end
 
 -- Forever's 1.60.x client uses the modern camera/CVar family, so it follows the
 -- modern camera units/cap rather than Classic Era's 12.5/50-yard model.
-Compat.MAX_CAMERA_YARDS = Compat.USES_MODERN_API and 39 or 50
-Compat.CONVERSION_RATIO = Compat.USES_MODERN_API and 15 or 12.5
+Compat.USES_MODERN_CAMERA = Compat.IS_FOREVER or (Compat.IS_RETAIL and Compat.INTERFACE >= 70000)
+Compat.MAX_CAMERA_YARDS = Compat.USES_MODERN_CAMERA and 39 or 50
+Compat.CONVERSION_RATIO = Compat.USES_MODERN_CAMERA and 15 or 12.5
 
 -- ---------------------------------------------------------------------
 -- Secret value helpers (Midnight 12.0+, tightened in 12.1)
@@ -341,13 +354,22 @@ function Compat.SafeSetCVar(name, value)
     if not Compat.HasCVar(name) then return false end
     if C_CVar and type(C_CVar.SetCVar) == 'function' then
         local ok, result = pcall(C_CVar.SetCVar, name, value)
-        -- A rejected modern write is not permission to try the legacy alias.
-        return ok and result == true
+        -- Explicit failure is final; do not retry a protected write through an
+        -- alias. Some backported namespaces return nil on a successful write.
+        if not ok or Compat.IsSecret(result) or result == false then return false end
+        if result == true then return true end
+        local actual = Compat.SafeGetCVar(name)
+        if actual == nil then return false end
+        local expectedNumber, actualNumber = tonumber(value), tonumber(actual)
+        if expectedNumber and actualNumber then
+            return math.abs(expectedNumber - actualNumber) < 0.00001
+        end
+        return tostring(actual) == tostring(value)
     end
     if type(SetCVar) == 'function' then
         local ok, result = pcall(SetCVar, name, value)
         -- Old native setters have no return; verify those writes by readback.
-        if not ok or result == false then return false end
+        if not ok or Compat.IsSecret(result) or result == false then return false end
         if result == true then return true end
         local actual = Compat.SafeGetCVar(name)
         if actual == nil then return false end
@@ -408,7 +430,125 @@ function Compat.SupportsFlyingMountMode()
 end
 
 function Compat.SupportsScenarioZone()
-    return Compat.IS_RETAIL or Compat.IS_MOP_CLASSIC
+    return (Compat.IS_RETAIL or Compat.IS_CLASSIC) and Compat.INTERFACE >= 50000
+end
+
+function Compat.SupportsMythicPlus()
+    return Compat.IS_RETAIL and Compat.INTERFACE >= 70000
+end
+
+function Compat.SupportsSkyriding()
+    return Compat.IS_RETAIL and Compat.INTERFACE >= 100000
+end
+
+-- Prefer the running client's group APIs; old clients use two separate roster
+-- counters. Keep these adapters local to this addon, never install globals.
+local function ReadCount(modern, legacy, limit)
+    local fn = _G[modern] or _G[legacy]
+    if type(fn) ~= 'function' then return 0 end
+    local ok, value = pcall(fn)
+    if not ok then return 0 end
+    value = tonumber(Compat.Plain(value))
+    if not value or value ~= value then return 0 end
+    return math.max(0, math.min(limit, math.floor(value)))
+end
+
+function Compat.IsInRaid()
+    if type(_G.IsInRaid) == 'function' then
+        local ok, value = pcall(_G.IsInRaid)
+        return ok and Compat.IsTruthy(value)
+    end
+    return ReadCount('GetNumRaidMembers', 'GetNumRaidMembers', 40) > 0
+end
+
+function Compat.IsInGroup()
+    if type(_G.IsInGroup) == 'function' then
+        local ok, value = pcall(_G.IsInGroup)
+        return ok and Compat.IsTruthy(value)
+    end
+    return Compat.IsInRaid() or ReadCount('GetNumPartyMembers', 'GetNumPartyMembers', 4) > 0
+end
+
+function Compat.GetNumSubgroupMembers()
+    return ReadCount('GetNumSubgroupMembers', 'GetNumPartyMembers', 4)
+end
+
+function Compat.GetNumGroupMembers()
+    if type(_G.GetNumGroupMembers) == 'function' or Compat.IsInRaid() then
+        return ReadCount('GetNumGroupMembers', 'GetNumRaidMembers', 40)
+    end
+    local party = Compat.GetNumSubgroupMembers()
+    return party > 0 and party + 1 or 0
+end
+
+-- CallbackHandler 8+ calls a native helper absent from archival clients.
+-- Fall back to our own profile store/minimap button rather than defining a
+-- global secure-call shim or letting an optional dependency stop startup.
+function Compat.CanUseCallbackLibraries()
+    if type(_G.securecallfunction) == 'function' then return true end
+    if not _G.LibStub then return true end
+    local ok, library, minor = pcall(_G.LibStub, 'CallbackHandler-1.0', true)
+    return not ok or not library or (tonumber(minor) or 0) < 8
+end
+
+-- Region and UI language are independent: e.g. an EU account can use zhCN.
+-- Never infer the account region from GetLocale(), realm names or spell text.
+function Compat.GetRegion()
+    if type(_G.GetCurrentRegion) == 'function' then
+        local ok, value = pcall(_G.GetCurrentRegion)
+        if ok then
+            value = Compat.Plain(value)
+            local region = ({ [1] = 'US', [2] = 'KR', [3] = 'EU', [4] = 'TW', [5] = 'CN' })[value]
+            if region then return region end
+        end
+    end
+    if type(_G.GetCurrentRegionName) == 'function' then
+        local ok, value = pcall(_G.GetCurrentRegionName)
+        value = ok and Compat.Plain(value) or nil
+        if type(value) == 'string' then
+            value = value:upper()
+            if value == 'US' or value == 'EU' or value == 'KR' or value == 'TW' or value == 'CN' then return value end
+        end
+    end
+    return 'UNKNOWN'
+end
+
+function Compat.GetRegionSupport()
+    local matrix = ns.ClientSupport or {}
+    local region = Compat.GetRegion()
+    local info = { region = region, status = 'unlisted-interface', verifiedDate = matrix.verified_date or 'unknown' }
+    if type(_G.GetLocale) == 'function' then
+        local ok, locale = pcall(_G.GetLocale)
+        if ok then info.locale = Compat.Plain(locale) end
+    end
+    info.locale = type(info.locale) == 'string' and info.locale or 'enUS'
+    for _, product in ipairs(matrix.products or {}) do
+        local matched = product.interface == Compat.INTERFACE
+        local test = false
+        if not matched then
+            for _, interface in ipairs(product.test_interfaces or {}) do
+                if interface == Compat.INTERFACE then matched, test = true, true; break end
+            end
+        end
+        if matched then
+            info.product, info.name = product.key, product.name
+            info.status = test and 'official-test-interface' or 'official-live-interface'
+            if region ~= 'UNKNOWN' then
+                info.regionListed = false
+                for _, allowed in ipairs(product.regions) do
+                    if allowed == region then info.regionListed = true; break end
+                end
+            end
+            info.interfaceStatus = info.status
+            if region == 'UNKNOWN' then info.status = 'region-unknown'
+            elseif not info.regionListed then info.status = 'unlisted-region' end
+            info.observedBuild = not test and product.builds[region] or nil
+            -- Build numbers can differ during regional hotfix rollout. This is
+            -- diagnostics, never a gate that disables the camera on another build.
+            return info
+        end
+    end
+    return info
 end
 
 function Compat.GetAddonVersion()

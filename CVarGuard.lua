@@ -12,6 +12,7 @@ local hooksecurefunc = hooksecurefunc
 local math_abs = math.abs
 
 local Compat = ns.Compat or {}
+local C_Timer = ns.Timer or _G.C_Timer
 local C_CVar = C_CVar
 
 local internalWriteDepth = 0

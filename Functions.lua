@@ -38,7 +38,7 @@ ResolveOptionalLibs()
 -- =====================================================================
 -- 1) FAST LOCALS / API
 -- =====================================================================
-local C_Timer     = C_Timer
+local C_Timer     = ns.Timer or C_Timer
 local C_UnitAuras = C_UnitAuras
 local C_MountJournal = _G.C_MountJournal
 local AuraUtil = _G.AuraUtil
@@ -77,10 +77,10 @@ local UnitOnTaxi = UnitOnTaxi
 local IsFlying = IsFlying
 local CloseAllWindows = CloseAllWindows
 
-local IsInRaid             = IsInRaid
-local IsInGroup            = IsInGroup
-local GetNumGroupMembers   = GetNumGroupMembers
-local GetNumSubgroupMembers= GetNumSubgroupMembers
+local IsInRaid             = Compat.IsInRaid or IsInRaid
+local IsInGroup            = Compat.IsInGroup or IsInGroup
+local GetNumGroupMembers   = Compat.GetNumGroupMembers or GetNumGroupMembers
+local GetNumSubgroupMembers= Compat.GetNumSubgroupMembers or GetNumSubgroupMembers
 
 local IS_FOREVER = Compat.IS_FOREVER and true or false
 local USES_MODERN_API = Compat.USES_MODERN_API and true or false
@@ -149,17 +149,37 @@ ns.MANAGED_CVAR_NAMES = MANAGED_CVAR_NAMES
 -- once, and every call site gets a plain boolean.
 local IsTruthySafe = Compat.IsTruthy or function(value) return value and true or false end
 
+Functions._auraCache = { expiresAt = 0, spells = {} }
 local function HasPlayerAura(spellID)
-    if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then
-        return false
+    if C_UnitAuras and type(C_UnitAuras.GetPlayerAuraBySpellID) == "function" then
+        local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellID)
+        if ok then return IsTruthySafe(aura) end
     end
-
-    local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellID)
-    if not ok then
-        return false
+    -- Modern Classic and older branches may expose only indexed aura data.
+    -- Reuse one short-lived set instead of rescanning 40 buffs for every ID.
+    local getter = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
+    local UnitBuff = _G.UnitBuff
+    if type(getter) ~= "function" and type(UnitBuff) ~= "function" then return false end
+    local now = GetTime and GetTime() or 0
+    if now >= Functions._auraCache.expiresAt then
+        for id in pairs(Functions._auraCache.spells) do Functions._auraCache.spells[id] = nil end
+        for i = 1, 40 do
+            local auraID
+            if type(getter) == "function" then
+                local ok, aura = pcall(getter, "player", i, "HELPFUL")
+                if not ok or not IsTruthySafe(aura) then break end
+                if Compat.CanAccessTable(aura) then auraID = Compat.Plain(aura.spellId) end
+            else
+                local ok, name, _, _, _, _, _, _, _, _, id, legacyID = pcall(UnitBuff, "player", i)
+                if not ok or not IsTruthySafe(name) then break end
+                auraID = Compat.Plain(id)
+                if type(auraID) ~= "number" then auraID = Compat.Plain(legacyID) end
+            end
+            if type(auraID) == "number" then Functions._auraCache.spells[auraID] = true end
+        end
+        Functions._auraCache.expiresAt = now + (GetTime and 0.05 or 0)
     end
-
-    return IsTruthySafe(aura)
+    return Functions._auraCache.spells[spellID] == true
 end
 
 -- Kept for backwards compatibility with any external caller; it now answers the
@@ -254,6 +274,7 @@ local runtimeCache = {
 
 -- AFK
 local afkActive = false
+local afkCamera = {} -- transient pre-AFK zoom; never stored in the profile
 local afkUIHidden = false
 local afkPendingToken = 0
 local afkSuppressUntilClear = false
@@ -382,6 +403,7 @@ local function NotifyConfigChanged(state, targetYards)
 end
 
 function Functions:InvalidateRuntimeCaches(scope)
+    Functions._auraCache.expiresAt = 0
     runtimeCache.combatSignals = nil
     runtimeCache.combatSignalsExpiresAt = 0
     runtimeCache.combatSignalsDb = nil
@@ -486,7 +508,7 @@ end
 
 local function ClampNumber(value, minValue, maxValue)
     local num = tonumber(value)
-    if not num then return nil end
+    if not num or num ~= num then return nil end
     if num < minValue then return minValue end
     if num > maxValue then return maxValue end
     return num
@@ -532,7 +554,8 @@ local function GetShapeshiftFormSpellID(formIndex)
         elseif i == 3 then value = b
         else value = a end
 
-        local plainValue = Compat.Plain and Compat.Plain(value) or value
+        local plainValue = value
+        if Compat.Plain then plainValue = Compat.Plain(value) end
         if plainValue ~= nil then
             local num = tonumber(plainValue)
             if num and num > 0 and type(plainValue) ~= "boolean" then
@@ -925,7 +948,7 @@ function Functions:IsSkyriding()
         end
     end
 
-    if USES_MODERN_API and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+    if (C_UnitAuras and (C_UnitAuras.GetPlayerAuraBySpellID or C_UnitAuras.GetAuraDataByIndex)) or type(_G.UnitBuff) == "function" then
         if HasPlayerAura(404464) then return true end
         if HasPlayerAura(404468) then return false end
     end
@@ -1045,7 +1068,7 @@ function Functions:IsDragonRacingRaceActive()
         return false
     end
 
-    if USES_MODERN_API and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+    if (C_UnitAuras and (C_UnitAuras.GetPlayerAuraBySpellID or C_UnitAuras.GetAuraDataByIndex)) or type(_G.UnitBuff) == "function" then
         for spellID in pairs(DRAGONRACING_RACE_AURAS) do
             if HasPlayerAura(spellID) then
                 return true
@@ -1126,7 +1149,7 @@ function Functions:IsFlyingTravelContext()
         end
     end
 
-    if USES_MODERN_API and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+    if (C_UnitAuras and (C_UnitAuras.GetPlayerAuraBySpellID or C_UnitAuras.GetAuraDataByIndex)) or type(_G.UnitBuff) == "function" then
         for spellID in pairs(FLYING_TRAVEL_BUFF_IDS) do
             if HasPlayerAura(spellID) then
                 return true
@@ -1155,7 +1178,7 @@ function Functions:IsTravelFormOnlyActive()
         end
     end
 
-    if USES_MODERN_API and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+    if (C_UnitAuras and (C_UnitAuras.GetPlayerAuraBySpellID or C_UnitAuras.GetAuraDataByIndex)) or type(_G.UnitBuff) == "function" then
         for spellID in pairs(TRAVEL_BUFF_IDS) do
             if HasPlayerAura(spellID) then
                 return true
@@ -1224,21 +1247,8 @@ function IsInTravelForm()
         if spellID and TRAVEL_FORM_IDS[spellID] then return true end
     end
 
-    if USES_MODERN_API then
-        if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-            for spellID in pairs(TRAVEL_BUFF_IDS) do
-                if HasPlayerAura(spellID) then return true end
-            end
-        end
-    else
-        local UnitBuff = _G.UnitBuff
-        if UnitBuff then
-            for i = 1, 40 do
-                local okBuff, _, _, _, _, _, _, _, _, _, spellID = pcall(UnitBuff, "player", i)
-                if not okBuff or not spellID then break end
-                if TRAVEL_BUFF_IDS[spellID] then return true end
-            end
-        end
+    for spellID in pairs(TRAVEL_BUFF_IDS) do
+        if HasPlayerAura(spellID) then return true end
     end
 
     return false
@@ -1248,6 +1258,7 @@ end
 -- 8) TRANSITIONS (fix race conditions)
 -- =====================================================================
 local function CancelTransition()
+    runtimeCache.pendingZoomCap = nil
     pendingReturnInfo = nil
     if CameraStateController and CameraStateController.ClearPendingReturn then
         CameraStateController:ClearPendingReturn()
@@ -1478,12 +1489,16 @@ local function IsZoomCapAligned(targetYards)
     return true
 end
 
-local function ApplyZoomTransition(targetYards, transitionTime)
-    targetYards = NormalizeTargetYards(targetYards)
+local function ApplyZoomTransition(targetYards, transitionTime, capYards)
+    -- A restored zoom may sit inside the configured range (or at first person).
+    -- Keep the allowed wheel range separate from the animation's destination.
+    targetYards = targetYards == 0 and 0 or NormalizeTargetYards(targetYards)
+    capYards = NormalizeTargetYards(capYards or targetYards)
+    targetYards = math.min(targetYards, capYards)
     lastAutoAppliedZoomYards = targetYards
     lastAutoAppliedAt = (GetTime and GetTime() or 0)
 
-    local targetFactor = targetYards / CONVERSION_RATIO
+    local targetFactor = capYards / CONVERSION_RATIO
     local currentFactor = SafeGetCVar("cameraDistanceMaxZoomFactor")
 
     if currentFactor == nil then
@@ -1500,10 +1515,12 @@ local function ApplyZoomTransition(targetYards, transitionTime)
         ScheduleTransition((transitionTime or 0) + 0.05, function()
             -- If state changed since scheduling, ignore (prevents stale restore)
             if myToken ~= stateToken then return end
-            ApplyZoomCap(targetYards)
+            ApplyZoomCap(capYards)
+            runtimeCache.pendingZoomCap = nil
         end)
+        runtimeCache.pendingZoomCap = transitionTimer and capYards or nil
     else
-        ApplyZoomCap(targetYards)
+        ApplyZoomCap(capYards)
         if LibCamera and LibCamera.SetZoomUsingCVar then
             SafeLibCall(LibCamera, "SetZoomUsingCVar", targetYards, transitionTime)
         end
@@ -1720,7 +1737,8 @@ function Functions:ResolveGlidingInfo(signals)
         if ok then
             isGliding = IsTruthySafe(glidingValue)
             canGlide = IsTruthySafe(canGlideValue)
-            local plainSpeed = Compat.Plain and Compat.Plain(speedValue) or speedValue
+            local plainSpeed = speedValue
+            if Compat.Plain then plainSpeed = Compat.Plain(speedValue) end
             forwardSpeed = tonumber(plainSpeed)
         end
     end
@@ -1939,8 +1957,10 @@ local function ResolveZoomTarget(db, includeDiagnostics)
         targetSourceType = "manual"
         targetPresetId = "manual"
     elseif state == ZOOM_STATE_AFK then
-        targetYards = maxYards
-        targetDistanceKey = "maxZoomFactor"
+        targetYards = db.afkZoomOut ~= false
+            and NormalizeTargetYards(db.afkZoomDistance or maxYards)
+            or afkCamera.zoom or maxYards
+        targetDistanceKey = "afkZoomDistance"
         targetSourceType = "afk"
         targetPresetId = "afk"
     elseif state == ZOOM_STATE_DRAGON_RACE_FIRST_PERSON then
@@ -2120,6 +2140,7 @@ local function IsProfessionActivityBlockingAfk()
 end
 
 local function StopAfkRotation()
+    afkCamera.rotationSpeed, afkCamera.rotationDirection = nil, nil
     SafeFunctionCall(MoveViewRightStop)
     SafeFunctionCall(MoveViewLeftStop)
 end
@@ -2133,15 +2154,43 @@ local function ShowUiAfterAfk()
 end
 
 local function ApplyAfkZoom(db)
-    if not db or db.afkZoomOut == false then return end
+    if not db then return end
 
     local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE)
         or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
     local transition = math.max(0.2, math.min(4, tonumber(db.zoomTransitionTime) or 0.5))
 
-    ApplyZoomCap(maxYards)
-    if LibCamera and LibCamera.SetZoomUsingCVar then
-        SafeLibCall(LibCamera, "SetZoomUsingCVar", maxYards, transition)
+    local target = db.afkZoomOut ~= false
+        and NormalizeTargetYards(db.afkZoomDistance or maxYards) or nil
+    if target then
+        afkCamera.changedZoom = true
+    elseif afkCamera.changedZoom then
+        -- Turning AFK zoom off while active returns to the entry distance.
+        target = afkCamera.zoom
+    end
+
+    if afkCamera.applied and afkCamera.appliedTarget == target
+        and afkCamera.transition == transition
+        and (target == nil or IsZoomCapAligned(maxYards)) then
+        return
+    end
+    afkCamera.applied, afkCamera.appliedTarget, afkCamera.transition = true, target, transition
+
+    -- AFK owns the camera until exit. Invalidate pending combat/mount returns
+    -- before they can move the camera or lower its cap behind this transition.
+    stateToken = stateToken + 1
+    CancelTransition()
+    if LibCamera and LibCamera.StopZooming then
+        SafeLibCall(LibCamera, "StopZooming")
+    end
+    if target ~= nil then
+        ApplyZoomCap(maxYards)
+        if LibCamera and LibCamera.SetZoomUsingCVar then
+            SafeLibCall(LibCamera, "SetZoomUsingCVar", target, transition)
+        end
+    end
+    if CameraStateController and CameraStateController.SetState then
+        CameraStateController:SetState(ZOOM_STATE_AFK, target or afkCamera.zoom, "afk", "afk_mode")
     end
 end
 
@@ -2150,8 +2199,10 @@ local function StartAfkRotation(db)
 
     local speed = ClampAfkRotationSpeed(db.afkRotationSpeed)
     local direction = NormalizeAfkDirection(db.afkDirection)
+    if afkCamera.rotationSpeed == speed and afkCamera.rotationDirection == direction then return end
 
     StopAfkRotation()
+    afkCamera.rotationSpeed, afkCamera.rotationDirection = speed, direction
 
     if direction == "left" then
         SafeFunctionCall(MoveViewLeftStart, speed)
@@ -2204,7 +2255,19 @@ local ExitAfkMode
 
 local function EnterAfkMode(db)
     if afkActive or not db then return end
+    afkCamera.pendingToken = nil
 
+    Functions:InvalidateRuntimeCaches()
+    ResolveOptionalLibs()
+    afkCamera.state, afkCamera.cap, afkCamera.context = ResolveZoomTarget(db)
+    afkCamera.profile, afkCamera.smartState = db, currentZoomState
+    afkCamera.zoom = SafeValueCall(GetCameraZoom)
+    if Compat.Plain then afkCamera.zoom = Compat.Plain(afkCamera.zoom) end
+    afkCamera.zoom = tonumber(afkCamera.zoom)
+    if afkCamera.zoom and (afkCamera.zoom ~= afkCamera.zoom or afkCamera.zoom < 0 or afkCamera.zoom == math.huge) then
+        afkCamera.zoom = nil
+    end
+    afkCamera.changedZoom = false
     afkActive = true
     afkResumeAfterCombat = false
 
@@ -2213,8 +2276,8 @@ local function EnterAfkMode(db)
 
     if db.afkHideUI ~= false then
         SafeFunctionCall(CloseAllWindows)
+        afkUIHidden = SafeBoolCall(UIParent and UIParent.IsShown, UIParent)
         SafeFunctionCall(UIParent and UIParent.Hide, UIParent)
-        afkUIHidden = true
         safeExitFrame:Show()
     else
         ShowUiAfterAfk()
@@ -2241,15 +2304,41 @@ ExitAfkMode = function(reason, suppressUntilClear, restoreCamera)
         Functions:logMessage("info", L["AFK_EXIT_MSG"] or "AFK Mode: disabled (restored UI and camera).")
     end
 
-    if restoreCamera ~= false and ns.Functions and ns.Functions.AdjustCamera then
-        ns.Functions:AdjustCamera(true)
+    if hadActiveAfk then
+        -- Stop the AFK animation even when no usable entry zoom was available.
+        stateToken = stateToken + 1
+        CancelTransition()
+        if LibCamera and LibCamera.StopZooming then
+            SafeLibCall(LibCamera, "StopZooming")
+        end
     end
+    if hadActiveAfk and restoreCamera ~= false then
+        Functions:InvalidateRuntimeCaches()
+        local db = DB()
+        if db and afkCamera.zoom ~= nil then
+            local state, cap, context = ResolveZoomTarget(db)
+            -- Profile changes, new activities and edited normal distances use
+            -- their current setting instead of reviving an obsolete snapshot.
+            if db == afkCamera.profile and state == afkCamera.state
+                and context == afkCamera.context and math_abs(cap - afkCamera.cap) < 0.01 then
+                afkCamera.sameContext = true
+                if afkCamera.changedZoom then afkCamera.restoreZoom = math.min(afkCamera.zoom, cap) end
+            end
+        end
+        afkCamera.exiting = true
+        Functions:AdjustCamera(true)
+    end
+    afkCamera = {}
 end
 
 local function ScheduleAfkModeEntry(db)
+    local delay = ClampAfkDelay(db and db.afkDelay)
+    -- Repeated aura/model/flag events must not restart the same AFK countdown.
+    if afkCamera.pendingToken == afkPendingToken
+        and afkCamera.pendingProfile == db and afkCamera.pendingDelay == delay then return end
     afkPendingToken = afkPendingToken + 1
     local token = afkPendingToken
-    local delay = ClampAfkDelay(db and db.afkDelay)
+    afkCamera.pendingToken, afkCamera.pendingProfile, afkCamera.pendingDelay = token, db, delay
 
     if delay <= 0 then
         local currentDb = DB()
@@ -2275,6 +2364,7 @@ local function ScheduleAfkModeEntry(db)
         local currentDb = DB()
         if not currentDb then return end
 
+        afkCamera.pendingToken = nil
         local canEnter = CanEnterAfkMode(currentDb)
         if not canEnter then return end
 
@@ -2347,8 +2437,8 @@ function Functions:RefreshAfkMode(force)
             StartAfkRotation(db)
             if db.afkHideUI ~= false then
                 SafeFunctionCall(CloseAllWindows)
+                afkUIHidden = afkUIHidden or SafeBoolCall(UIParent and UIParent.IsShown, UIParent)
                 SafeFunctionCall(UIParent and UIParent.Hide, UIParent)
-                afkUIHidden = true
                 safeExitFrame:Show()
             else
                 ShowUiAfterAfk()
@@ -2372,9 +2462,12 @@ safeExitFrame:SetAllPoints(WorldFrame)
 safeExitFrame:SetFrameStrata("TOOLTIP")
 safeExitFrame:EnableKeyboard(true)
 if safeExitFrame.SetPropagateKeyboardInput then
-    safeExitFrame:SetPropagateKeyboardInput(false)
+    safeExitFrame:SetPropagateKeyboardInput(true)
 end
-safeExitFrame:SetScript("OnKeyDown", function(_, key)
+safeExitFrame:SetScript("OnKeyDown", function(self, key)
+    if self.SetPropagateKeyboardInput then
+        self:SetPropagateKeyboardInput(key ~= "ESCAPE")
+    end
     if key == "ESCAPE" then
         Functions:ManualExitAfkMode()
     end
@@ -2399,9 +2492,11 @@ if safeExitFrame.SetPropagateGamePadInput then
     -- comes back.
     pcall(safeExitFrame.SetPropagateGamePadInput, safeExitFrame, true)
 end
-safeExitFrame:SetScript("OnGamePadButtonDown", function()
-    Functions:ManualExitAfkMode()
-end)
+if type(safeExitFrame.EnableGamePadButton) == "function" then
+    pcall(safeExitFrame.SetScript, safeExitFrame, "OnGamePadButtonDown", function()
+        Functions:ManualExitAfkMode()
+    end)
+end
 if UISpecialFrames and safeExitFrame.GetName then
     tinsert(UISpecialFrames, safeExitFrame:GetName())
 end
@@ -2879,6 +2974,13 @@ end
 
 local function SaveCurrentZoomForState(state)
     if not state then return end
+    if afkCamera.exiting then
+        -- The visible AFK close-up is not a manual zoom for the previous state.
+        if state == afkCamera.smartState and afkCamera.zoom ~= nil then
+            lastZoomByState[state] = afkCamera.zoom
+        end
+        return
+    end
     local currentZoom = GetCameraZoom and GetCameraZoom()
     if currentZoom == nil then return end
     lastZoomByState[state] = currentZoom
@@ -3003,6 +3105,9 @@ function Functions:ShouldApplyOptionImmediately(key)
 end
 
 function Functions:UpdateSmartZoomState(event)
+    -- AFK zoom has its own distance and entry snapshot. Queued world/combat
+    -- updates must not replace that target or overwrite normal-state history.
+    if afkActive then return end
     local db = DB()
     if not db then return end
     if not db.autoCombatZoom and not db.autoMountZoom then return end
@@ -3020,6 +3125,15 @@ function Functions:UpdateSmartZoomState(event)
         lastCombatContext = snapshot.resolvedContext
     end
 
+    if afkCamera.exiting and afkCamera.sameContext and not afkCamera.changedZoom then
+        stateToken = stateToken + 1
+        currentZoomState = newState
+        CancelTransition()
+        ApplyZoomCap(targetYards)
+        NotifyConfigChanged(newState, targetYards)
+        return
+    end
+
     local stateChanged = (newState ~= previousState)
     if stateChanged then
         SaveCurrentZoomForState(previousState)
@@ -3034,11 +3148,22 @@ function Functions:UpdateSmartZoomState(event)
     end
 
     local appliedTargetYards = targetYards
-    if stateChanged then
+    if afkCamera.exiting and afkCamera.changedZoom then
+        appliedTargetYards = afkCamera.restoreZoom or targetYards
+    elseif stateChanged then
         local restoredTarget = GetRestoreZoomTarget(db, previousState, newState, targetYards)
         if restoredTarget ~= nil then
             appliedTargetYards = restoredTarget
         end
+    end
+
+    -- The delayed cap reduction belongs to the current animation. A queued
+    -- event must not restart it at the preset distance while restoring a
+    -- closer saved zoom. Explicit edits still replace the transition.
+    if newState == currentZoomState and event ~= "manual_update"
+        and runtimeCache.pendingZoomCap == targetYards and not afkCamera.exiting then
+        NotifyConfigChanged(newState, targetYards)
+        return
     end
 
     -- If going INTO combat or mount, always cancel pending “zoom-in”
@@ -3051,14 +3176,15 @@ function Functions:UpdateSmartZoomState(event)
     -- or when we explicitly force a manual refresh.
     local stateSame = (newState == currentZoomState)
     local capAligned = IsZoomCapAligned(targetYards)
-    if stateSame and HasStateManualOverride(newState, targetYards, transitionTime, db) then
+    if stateSame and not afkCamera.exiting and HasStateManualOverride(newState, targetYards, transitionTime, db) then
         if not capAligned then
             ApplyZoomCap(targetYards)
         end
         NotifyConfigChanged(newState, targetYards)
         return
     end
-    if stateSame and capAligned and event ~= "manual_update" then
+    if stateSame and capAligned and event ~= "manual_update"
+        and not (afkCamera.exiting and afkCamera.changedZoom) then
         NotifyConfigChanged(newState, targetYards)
         return
     end
@@ -3101,7 +3227,7 @@ function Functions:UpdateSmartZoomState(event)
             if CameraStateController and CameraStateController.ClearPendingReturn then
                 CameraStateController:ClearPendingReturn()
             end
-            ApplyZoomTransition(appliedTargetYards, transitionTime)
+            ApplyZoomTransition(appliedTargetYards, transitionTime, targetYards)
             Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, appliedTargetYards))
             NotifyConfigChanged()
             return
@@ -3122,7 +3248,7 @@ function Functions:UpdateSmartZoomState(event)
                 return
             end
 
-            ApplyZoomTransition(appliedTargetYards, transitionTime)
+            ApplyZoomTransition(appliedTargetYards, transitionTime, targetYards)
             Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", ZOOM_STATE_NONE, appliedTargetYards))
             NotifyConfigChanged()
         end)
@@ -3141,7 +3267,7 @@ function Functions:UpdateSmartZoomState(event)
         if CameraStateController and CameraStateController.ClearPendingReturn then
             CameraStateController:ClearPendingReturn()
         end
-        ApplyZoomTransition(appliedTargetYards, transitionTime)
+        ApplyZoomTransition(appliedTargetYards, transitionTime, targetYards)
         if snapshot and snapshot.resolvedContext then
             Functions:logMessage("info", string.format(L["SMART_ZOOM_MSG"] or "Smart Zoom: state=%s, target=%.1f yards", newState, appliedTargetYards) .. " [" .. tostring(snapshot.resolvedContext) .. "]")
         else
@@ -3243,6 +3369,12 @@ function Functions:PrintRuntimeStatus()
         .. " interface=" .. tostring(Compat.INTERFACE or "unknown")
         .. " modernAPI=" .. FormatBool(Compat.USES_MODERN_API)
         .. " forever=" .. FormatBool(Compat.IS_FOREVER))
+    if Compat.GetRegionSupport then
+        local support = Compat.GetRegionSupport()
+        self:SendMessage(" - region: " .. support.region .. " locale=" .. support.locale
+            .. " support=" .. support.status .. " product=" .. tostring(support.product or "unlisted")
+            .. " snapshotBuild=" .. tostring(support.observedBuild or "unknown"))
+    end
     self:SendMessage(" - zoom: " .. tostring((GetCameraZoom and GetCameraZoom()) or "unknown"))
     self:SendMessage(" - state: " .. tostring(snapshot and snapshot.state or "unknown") .. " previous=" .. tostring(snapshot and snapshot.previousState or (controllerSnapshot and controllerSnapshot.previousState) or "none"))
     self:SendMessage(" - target yards: " .. tostring(snapshot and snapshot.targetYards or "unknown"))
@@ -3331,9 +3463,11 @@ function Functions:AdjustCamera(forceNow)
     SanitizeRuntimeProfile(db)
     Functions:UpdateActionCam()
 
-    if db.autoCombatZoom or db.autoMountZoom then
+    if afkActive then
+        ApplyAfkZoom(db)
+    elseif db.autoCombatZoom or db.autoMountZoom then
         if forceNow then
-            Functions:UpdateSmartZoomState("manual_update")
+            Functions:UpdateSmartZoomState(afkCamera.exiting and not afkCamera.changedZoom and "afk_exit" or "manual_update")
         else
             Functions:RequestUpdate()
         end
@@ -3342,17 +3476,26 @@ function Functions:AdjustCamera(forceNow)
         local maxYards = (ns.Database and ns.Database.DEFAULTS and ns.Database.DEFAULTS.MAX_POSSIBLE_DISTANCE) or (Compat.MAX_CAMERA_YARDS or (USES_MODERN_API and 39 or 50))
         local manualTargetYards = (GetDistanceValue(db, "maxZoomFactor")) or db.maxZoomFactor or maxYards
 
-        stateToken = stateToken + 1
-        currentZoomState = ZOOM_STATE_MANUAL
-        if CameraStateController and CameraStateController.SetState then
-            CameraStateController:SetState(ZOOM_STATE_MANUAL, manualTargetYards, "manual", "manual_mode")
+        -- Keep an unfinished AFK restore smooth when a queued manual-mode
+        -- refresh arrives before its delayed cap reduction.
+        if afkCamera.exiting or currentZoomState ~= ZOOM_STATE_MANUAL
+            or runtimeCache.pendingZoomCap ~= manualTargetYards then
+            stateToken = stateToken + 1
+            currentZoomState = ZOOM_STATE_MANUAL
+            if CameraStateController and CameraStateController.SetState then
+                CameraStateController:SetState(ZOOM_STATE_MANUAL, manualTargetYards, "manual", "manual_mode")
+            end
+            CancelTransition()
+
+            if afkCamera.exiting and afkCamera.restoreZoom ~= nil then
+                ApplyZoomTransition(afkCamera.restoreZoom, db.zoomTransitionTime or 0.5, manualTargetYards)
+            else
+                ApplyManualCameraCapOnly(manualTargetYards, "manual_mode")
+            end
+
+            Functions:logMessage("info", L["SMART_ZOOM_DISABLED_MSG"] or "Smart Zoom is disabled. Using manual max distance settings.")
+            NotifyConfigChanged()
         end
-        CancelTransition()
-
-        ApplyManualCameraCapOnly(manualTargetYards, "manual_mode")
-
-        Functions:logMessage("info", L["SMART_ZOOM_DISABLED_MSG"] or "Smart Zoom is disabled. Using manual max distance settings.")
-        NotifyConfigChanged()
     end
 
     Functions:ApplyManagedCVars()

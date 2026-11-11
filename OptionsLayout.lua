@@ -71,7 +71,7 @@ function Layout:Apply(options)
         "shoulderModelCompensation", "shoulderSmartFade", "shoulderFadeEnd", "shoulderFadeStart" }, 1)
     root.gamePadSettings.order = 6.5
     local afk = page("afkSettings", "AFK_MODE_HEADER", 7)
-    move(extra, afk, { "afkHeader", "descAFK", "enableAFK", "afkHideUI", "afkZoomOut", "afkDelay",
+    move(extra, afk, { "afkHeader", "descAFK", "enableAFK", "afkHideUI", "afkZoomOut", "afkZoomDistance", "afkDelay",
         "afkDirection", "afkRotationSpeed", "afkSkipMounted", "afkSkipFlying", "afkResumeAfterCombat" }, 1)
     local graphics = page("foreverGraphics", "UI_FOREVER_GRAPHICS", 9, function()
         if not ns.Compat.IS_FOREVER then return true end

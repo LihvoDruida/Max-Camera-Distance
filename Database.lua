@@ -9,6 +9,7 @@ local Database = ns.Database
 local AceDB
 
 local function ResolveAceDB()
+    if ns.Compat and ns.Compat.CanUseCallbackLibraries and not ns.Compat.CanUseCallbackLibraries() then return nil end
     LibStub = LibStub or _G.LibStub
     if LibStub and not AceDB then
         AceDB = LibStub("AceDB-3.0", true)
@@ -311,7 +312,8 @@ local PROFILE_DEFAULTS = {
     afkSkipMounted = true,
     afkSkipFlying = true,
     afkResumeAfterCombat = true,
-    afkZoomOut = true,
+    afkZoomOut = true, -- legacy key: enable AFK zoom in either direction
+    afkZoomDistance = MAX_YARDS,
 
 
     -- localization
@@ -624,7 +626,7 @@ function Database:ApplyMigrations(profile)
     }
     if type(profile.mountZoomMode) ~= "string" or not VALID_MOUNT_ZOOM_MODES[profile.mountZoomMode] then
         profile.mountZoomMode = PROFILE_DEFAULTS.mountZoomMode
-    elseif (not IS_RETAIL and profile.mountZoomMode == "skyriding")
+    elseif (not Compat.SupportsSkyriding() and profile.mountZoomMode == "skyriding")
         or (Compat.IS_CLASSIC_ERA and profile.mountZoomMode == "flying") then
         -- A profile copied from Retail should not leave mount zoom permanently
         -- disabled on Forever/Classic through an unavailable Skyriding-only mode.
@@ -635,7 +637,7 @@ function Database:ApplyMigrations(profile)
     profile.autoCombatZoom = NormalizeBoolean(profile.autoCombatZoom, PROFILE_DEFAULTS.autoCombatZoom)
     profile.autoMountZoom = NormalizeBoolean(profile.autoMountZoom, PROFILE_DEFAULTS.autoMountZoom)
     profile.dragonRacingRaceFirstPerson = NormalizeBoolean(profile.dragonRacingRaceFirstPerson, PROFILE_DEFAULTS.dragonRacingRaceFirstPerson)
-    if not IS_RETAIL then
+    if not Compat.SupportsSkyriding() then
         profile.dragonRacingRaceFirstPerson = false
     end
     profile.combatZoomOnPlayer = NormalizeBoolean(profile.combatZoomOnPlayer, PROFILE_DEFAULTS.combatZoomOnPlayer)
@@ -672,6 +674,7 @@ function Database:ApplyMigrations(profile)
     profile.afkSkipFlying = NormalizeBoolean(profile.afkSkipFlying, PROFILE_DEFAULTS.afkSkipFlying)
     profile.afkResumeAfterCombat = NormalizeBoolean(profile.afkResumeAfterCombat, PROFILE_DEFAULTS.afkResumeAfterCombat)
     profile.afkZoomOut = NormalizeBoolean(profile.afkZoomOut, PROFILE_DEFAULTS.afkZoomOut)
+    profile.afkZoomDistance = Clamp(tonumber(profile.afkZoomDistance) or PROFILE_DEFAULTS.afkZoomDistance, 1, MAX_YARDS)
     profile.enableDebugLogging = NormalizeBoolean(profile.enableDebugLogging, PROFILE_DEFAULTS.enableDebugLogging)
     profile.minimap.hide = NormalizeBoolean(profile.minimap.hide, false)
 

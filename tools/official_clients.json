@@ -1,0 +1,192 @@
+{
+  "verified_date": "2026-11-11",
+  "regions": [
+    "US",
+    "EU",
+    "KR",
+    "TW",
+    "CN"
+  ],
+  "region_ids": {
+    "US": 1,
+    "KR": 2,
+    "EU": 3,
+    "TW": 4,
+    "CN": 5
+  },
+  "products": [
+    {
+      "key": "retail",
+      "name": "Retail / Midnight",
+      "product": "wow",
+      "version": "12.1.5",
+      "project": 1,
+      "interface": 120105,
+      "regions": [
+        "US",
+        "EU",
+        "KR",
+        "TW",
+        "CN"
+      ],
+      "builds": {
+        "US": 70783,
+        "EU": 70783,
+        "KR": 70783,
+        "TW": 70783,
+        "CN": 70783
+      },
+      "suffixes": [
+        "Mainline"
+      ],
+      "flavor": "mainline",
+      "expansion": "Midnight",
+      "test_interfaces": [
+        120107
+      ],
+      "versions_source": "https://us.version.battle.net/v2/products/wow/versions"
+    },
+    {
+      "key": "mists",
+      "name": "Mists of Pandaria Classic",
+      "product": "wow_classic",
+      "version": "5.5.4",
+      "project": 19,
+      "interface": 50504,
+      "regions": [
+        "US",
+        "EU",
+        "KR",
+        "TW",
+        "CN"
+      ],
+      "builds": {
+        "US": 70631,
+        "EU": 70631,
+        "KR": 70631,
+        "TW": 70631,
+        "CN": 70631
+      },
+      "suffixes": [
+        "Mists"
+      ],
+      "flavor": "mists",
+      "expansion": "Mists of Pandaria Classic",
+      "versions_source": "https://us.version.battle.net/v2/products/wow_classic/versions"
+    },
+    {
+      "key": "tbc",
+      "name": "Burning Crusade Classic Anniversary",
+      "product": "wow_anniversary",
+      "version": "2.5.6",
+      "project": 5,
+      "interface": 20506,
+      "regions": [
+        "US",
+        "EU",
+        "KR",
+        "TW",
+        "CN"
+      ],
+      "builds": {
+        "US": 70577,
+        "EU": 70577,
+        "KR": 70577,
+        "TW": 70577,
+        "CN": 70577
+      },
+      "suffixes": [
+        "TBC"
+      ],
+      "flavor": "tbc",
+      "expansion": "Burning Crusade Classic Anniversary",
+      "versions_source": "https://us.version.battle.net/v2/products/wow_anniversary/versions"
+    },
+    {
+      "key": "era",
+      "name": "Classic Era / Hardcore / Season of Discovery client",
+      "product": "wow_classic_era",
+      "version": "1.15.9",
+      "project": 2,
+      "interface": 11509,
+      "regions": [
+        "US",
+        "EU",
+        "KR",
+        "TW",
+        "CN"
+      ],
+      "builds": {
+        "US": 70576,
+        "EU": 70576,
+        "KR": 70576,
+        "TW": 70576,
+        "CN": 70576
+      },
+      "suffixes": [
+        "Vanilla"
+      ],
+      "flavor": "vanilla",
+      "expansion": "Classic Era / Hardcore / Season of Discovery",
+      "versions_source": "https://us.version.battle.net/v2/products/wow_classic_era/versions"
+    },
+    {
+      "key": "forever",
+      "name": "World of Warcraft: Forever",
+      "product": "wowf",
+      "version": "1.60.1",
+      "project": 1,
+      "interface": 16001,
+      "regions": [
+        "US",
+        "EU",
+        "KR",
+        "TW",
+        "CN"
+      ],
+      "builds": {
+        "US": 70888,
+        "EU": 70888,
+        "KR": 70862,
+        "TW": 70862,
+        "CN": 70862
+      },
+      "suffixes": [
+        "Camelot"
+      ],
+      "flavor": "forever",
+      "expansion": "World of Warcraft: Forever",
+      "extra_files": [
+        "Forever.lua"
+      ],
+      "versions_source": "https://us.version.battle.net/v2/products/wowf/versions"
+    },
+    {
+      "key": "titan",
+      "name": "Titan Reforged - Chrono (CN)",
+      "product": "wow_classic_titan",
+      "version": "3.80.2",
+      "project": 11,
+      "interface": 38002,
+      "regions": [
+        "CN"
+      ],
+      "builds": {
+        "CN": 70522
+      },
+      "suffixes": [
+        "Wrath"
+      ],
+      "flavor": "wrath",
+      "expansion": "Titan Reforged - Chrono (CN)",
+      "versions_source": "https://us.version.battle.net/v2/products/wow_classic_titan/versions"
+    }
+  ],
+  "sources": [
+    "https://worldofwarcraft.blizzard.com/en-us/content-update-notes",
+    "https://worldofwarcraft.blizzard.com/en-us/news/24304162",
+    "https://worldofwarcraft.blizzard.com/en-us/",
+    "https://wow.blizzard.cn/classic/home.html",
+    "https://wow.blizzard.cn/news/20260910/43790_1313526.html"
+  ]
+}
