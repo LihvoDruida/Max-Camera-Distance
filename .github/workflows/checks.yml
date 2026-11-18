@@ -1,0 +1,26 @@
+name: Checks
+
+# Source-only regression gate for every pull request and push to main.
+# Release packaging stays in package.yml and runs on tags only.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1 (probes and bytecode audit)
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+
+      - name: Run source-only regression gate
+        run: bash ./check_all.sh

@@ -1121,6 +1121,48 @@ check("phase 18: status exposes mode, enforced and live value",
     state.mode == "game" and state.desired == nil and tonumber(state.live) == 1,
     tostring(state.mode) .. "/" .. tostring(state.desired) .. "/" .. tostring(state.live))
 
+-- cameraView restores re-apply the whole addon state; that pass must not
+-- touch the icon CVar in game mode either.
+cvars:ResetCounters()
+cvars:Set("SoftTargetIconGameObject", 1)
+stub.Fire("CVAR_UPDATE", "cameraView", "2")
+Functions:AdjustCamera(true)
+check("phase 18: cameraView change does not write the icon CVar in game mode",
+    SoftTargetWrites() == 0 and cvars:Number("SoftTargetIconGameObject") == 1,
+    table.concat(cvars.writeLog, ","))
+
+-- Switching between an enforcing profile and a game-setting profile: only the
+-- enforcing one may write, and leaving it must not revert another addon's value.
+local profileStore = ns.Database.db
+local gameProfile = profileStore.profile
+local enforcingProfile = {}
+for k, v in pairs(gameProfile) do enforcingProfile[k] = v end
+enforcingProfile.softTargetIconsMode = "off"
+cvars:Set("SoftTargetIconGameObject", 1)
+profileStore.profile = enforcingProfile
+ns.Database:OnProfileUpdate("probe switch to enforcing profile")
+check("phase 18: switching to an 'off' profile enforces 0",
+    cvars:Number("SoftTargetIconGameObject") == 0)
+profileStore.profile = gameProfile
+ns.Database:OnProfileUpdate("probe switch back to game profile")
+cvars:ResetCounters()
+cvars:Set("SoftTargetIconGameObject", 1)
+stub.Fire("CVAR_UPDATE", "SoftTargetIconGameObject", "1")
+Functions:ApplyManagedCVars()
+check("phase 18: after switching back, another addon's 1 survives",
+    SoftTargetWrites() == 0 and cvars:Number("SoftTargetIconGameObject") == 1)
+
+-- Event delivered before GetCVar observes the new value ('on' mode): the
+-- handler may skip the write, but the next full apply must still enforce it.
+gameProfile.softTargetIconsMode = "on"
+cvars:Set("SoftTargetIconGameObject", 1)
+stub.Fire("CVAR_UPDATE", "SoftTargetIconGameObject", "0")
+cvars:Set("SoftTargetIconGameObject", 0)
+Functions:ApplyManagedCVars()
+check("phase 18: 'on' mode re-enforces after an event that raced the read",
+    cvars:Number("SoftTargetIconGameObject") == 1)
+gameProfile.softTargetIconsMode = "game"
+
 db.softTargetIconsMode = "bogus"
 ns.Database:ApplyMigrations(db)
 check("phase 18: unknown mode values normalize to the game setting",
