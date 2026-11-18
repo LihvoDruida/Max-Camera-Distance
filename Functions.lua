@@ -843,6 +843,27 @@ function Functions:GetDistancePresetId(distanceKey)
     return GetDistancePresetId(db, distanceKey)
 end
 
+-- SoftTargetIconGameObject is a global client setting that gathering addons
+-- (NodeSight Sparkles) also require. nil means "leave it to the game".
+-- Stored on the module table: the main chunk is already at Lua 5.1's
+-- 200-local limit.
+function Functions.GetSoftTargetIconsDesired(db)
+    local mode = db and db.softTargetIconsMode
+    if mode == "on" then return 1 end
+    if mode == "off" then return 0 end
+    return nil
+end
+
+function Functions:GetSoftTargetIconsState()
+    local db = DB()
+    return {
+        mode = (db and db.softTargetIconsMode) or "game",
+        desired = Functions.GetSoftTargetIconsDesired(db),
+        live = SafeGetCVar("SoftTargetIconGameObject"),
+        supported = Compat.SupportsSoftTargetIcons and Compat.SupportsSoftTargetIcons() or false,
+    }
+end
+
 local function UpdateCVar(key, value)
     key = CanonicalCVarName(key)
 
@@ -3376,6 +3397,15 @@ function Functions:PrintRuntimeStatus()
             .. " snapshotBuild=" .. tostring(support.observedBuild or "unknown"))
     end
     self:SendMessage(" - zoom: " .. tostring((GetCameraZoom and GetCameraZoom()) or "unknown"))
+    local softTarget = self:GetSoftTargetIconsState()
+    if softTarget.supported then
+        local profileName = ns.Database and ns.Database.db and ns.Database.db.GetCurrentProfile
+            and ns.Database.db:GetCurrentProfile() or "unknown"
+        self:SendMessage(" - soft target icons: mode=" .. tostring(softTarget.mode)
+            .. " enforced=" .. tostring(softTarget.desired or "none")
+            .. " live=" .. tostring(softTarget.live or "unknown")
+            .. " profile=" .. tostring(profileName))
+    end
     self:SendMessage(" - state: " .. tostring(snapshot and snapshot.state or "unknown") .. " previous=" .. tostring(snapshot and snapshot.previousState or (controllerSnapshot and controllerSnapshot.previousState) or "none"))
     self:SendMessage(" - target yards: " .. tostring(snapshot and snapshot.targetYards or "unknown"))
     self:SendMessage(" - pending return: " .. tostring(snapshot and snapshot.pendingReturnActive and "active" or "none") .. " remaining=" .. tostring(snapshot and snapshot.pendingReturnRemaining or 0))
@@ -3588,7 +3618,10 @@ function Functions:ApplyManagedCVars()
     UpdateCVar("cameraIndirectOffset", db.cameraIndirectOffset or GetIndirectOffsetDefault())
     UpdateCVar("occludedSilhouettePlayer", db.occludedSilhouettePlayer and 1 or 0)
     UpdateCVar("resampleAlwaysSharpen", db.resampleAlwaysSharpen and 1 or 0)
-    UpdateCVar("SoftTargetIconGameObject", db.softTargetInteract and 1 or 0)
+    local softTargetIcons = Functions.GetSoftTargetIconsDesired(db)
+    if softTargetIcons ~= nil then
+        UpdateCVar("SoftTargetIconGameObject", softTargetIcons)
+    end
 
     if IS_FOREVER then
         UpdateCVar("volumeFog", db.volumeFog and 1 or 0)
@@ -3750,7 +3783,13 @@ function Functions:OnCVarUpdate(_, cvarName, value)
         end
         db.resampleAlwaysSharpen = (desired == 1)
     elseif cvarName == "SoftTargetIconGameObject" then
-        local desired = db.softTargetInteract and 1 or 0
+        local desired = Functions.GetSoftTargetIconsDesired(db)
+        if desired == nil then
+            -- "Game setting" mode: another addon or the player owns this CVar.
+            -- Only refresh the settings UI that shows the live value.
+            NotifyConfigChanged()
+            return
+        end
         if numValue ~= desired then
             UpdateCVar(cvarName, desired)
             return

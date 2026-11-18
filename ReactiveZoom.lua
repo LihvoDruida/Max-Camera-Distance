@@ -59,10 +59,17 @@ end
 -- Capture the native (or preceding addon's) handlers when installing, not at
 -- file-load time. Disabled Reactive Zoom must never take over Blizzard's zoom.
 -- Keep our wrapper references so disabling can release only globals we own.
+--
+-- Every Install() creates a new GENERATION of wrappers. Each generation keeps
+-- its own immutable predecessor: a wrapper that another addon still holds in
+-- its chain after we uninstalled must delegate to the function IT replaced,
+-- never to a shared variable that a later Install() has already overwritten
+-- (that turned old -> other addon -> new -> old into an endless re-entry).
 local OriginalCameraZoomIn
 local OriginalCameraZoomOut
 local ZoomInWrapper
 local ZoomOutWrapper
+local activeGeneration = 0
 local installed = false
 local reactiveZoomTarget = nil
 
@@ -372,6 +379,33 @@ end)
 -- Hooking unconditionally used to leave a wrapper active for everyone.
 -- Explicitly preserve CameraZoomIn()/CameraZoomOut()'s optional default step
 -- of 1 (passing nil to the original is valid as well).
+local function IsProgrammaticZoom(marker)
+    -- LibCamera (ours and the public one) passes `true` as the second argument
+    -- so other addons can tell an addon-driven step from a wheel notch.
+    return marker == true
+end
+
+local function CreateWrapper(zoomIn, previous, generation)
+    return function(increments, ...)
+        -- Stale generations and the disabled state are pure pass-throughs to
+        -- the predecessor captured for THIS wrapper, with untouched arguments.
+        if generation ~= activeGeneration or not ReactiveZoom:IsEnabled() then
+            return previous(increments, ...)
+        end
+        if IsProgrammaticZoom((...)) then
+            return previous(increments, ...)
+        end
+        -- The native APIs accept an omitted increment and default it to 1.
+        -- The old wrapper silently converted nil to 0, freezing such calls.
+        local amount = increments == nil and 1 or tonumber(increments)
+        if amount ~= 1 then
+            ReactiveZoom:ResetTarget()
+            return previous(increments, ...)
+        end
+        return HandleWheel(zoomIn, amount)
+    end
+end
+
 function ReactiveZoom:Install()
     if installed or not self:IsEnabled() then return end
 
@@ -381,33 +415,10 @@ function ReactiveZoom:Install()
     end
 
     -- Another camera addon may have been loaded since our Lua file ran.
+    activeGeneration = activeGeneration + 1
     OriginalCameraZoomIn, OriginalCameraZoomOut = zoomIn, zoomOut
-
-    ZoomInWrapper = function(increments, ...)
-        if not ReactiveZoom:IsEnabled() then
-            return OriginalCameraZoomIn(increments, ...)
-        end
-        -- The native APIs accept an omitted increment and default it to 1.
-        -- The old wrapper silently converted nil to 0, freezing such calls.
-        local amount = increments == nil and 1 or tonumber(increments)
-        if amount ~= 1 then
-            ReactiveZoom:ResetTarget()
-            return OriginalCameraZoomIn(increments, ...)
-        end
-        return HandleWheel(true, amount)
-    end
-
-    ZoomOutWrapper = function(increments, ...)
-        if not ReactiveZoom:IsEnabled() then
-            return OriginalCameraZoomOut(increments, ...)
-        end
-        local amount = increments == nil and 1 or tonumber(increments)
-        if amount ~= 1 then
-            ReactiveZoom:ResetTarget()
-            return OriginalCameraZoomOut(increments, ...)
-        end
-        return HandleWheel(false, amount)
-    end
+    ZoomInWrapper = CreateWrapper(true, zoomIn, activeGeneration)
+    ZoomOutWrapper = CreateWrapper(false, zoomOut, activeGeneration)
 
     _G.CameraZoomIn = ZoomInWrapper
     _G.CameraZoomOut = ZoomOutWrapper
@@ -431,6 +442,9 @@ function ReactiveZoom:Uninstall()
     if _G.CameraZoomOut == ZoomOutWrapper then
         _G.CameraZoomOut = OriginalCameraZoomOut
     end
+    -- Retire this generation: if another addon still calls our wrapper, it
+    -- now delegates straight to its own predecessor.
+    activeGeneration = activeGeneration + 1
     installed = false
 end
 
@@ -447,6 +461,7 @@ function ReactiveZoom:GetStatus()
     return {
         enabled = self:IsEnabled(),
         installed = installed,
+        generation = activeGeneration,
         target = reactiveZoomTarget,
         currentZoom = SafeGetCameraZoom(),
         maxZoom = CurrentMaxZoom(),

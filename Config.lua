@@ -259,6 +259,14 @@ local function SetOption(key, value)
         if ns.Functions and ns.Functions.RefreshAfkMode then
             ns.Functions:RefreshAfkMode(true)
         end
+    elseif key == "softTargetIconsMode" then
+        -- Writes at most one icon CVar; zoom and camera state stay untouched.
+        if value == "on" or value == "off" then
+            db.softTargetInteract = (value == "on")
+        end
+        if ns.Functions and ns.Functions.ApplyManagedCVars then
+            ns.Functions:ApplyManagedCVars()
+        end
     elseif IS_FOREVER and (key == "volumeFog" or key == "volumeFogInterior" or key == "volumeFogLevel"
         or key == "foreverGroundEffectsOverride" or key == "groundEffectDensity"
         or key == "groundEffectDist" or key == "groundEffectFade") then
@@ -1460,14 +1468,27 @@ function Config:SetupOptions()
                         set = function(_, val) SetOption("resampleAlwaysSharpen", val) end,
                         order = 21
                     },
-                    softTargetInteract = {
-                        type = "toggle",
+                    softTargetIconsMode = {
+                        type = "select",
                         name = L["SOFT_TARGET_INTERACT"],
-                        desc = L["SOFT_TARGET_INTERACT_DESC"],
+                        desc = function()
+                            local live = Compat.SafeGetCVar and Compat.SafeGetCVar("SoftTargetIconGameObject")
+                            return (L["SOFT_TARGET_ICONS_MODE_DESC"] or "Controls the global SoftTargetIconGameObject setting for every character and addon. \"Game setting\" never writes it, so gathering addons such as NodeSight can manage it. Current game value: %s.")
+                                :format(tostring(live or "?"))
+                        end,
+                        values = function()
+                            return {
+                                game = L["SOFT_TARGET_ICONS_MODE_GAME"] or "Game setting (do not change)",
+                                on = L["SOFT_TARGET_ICONS_MODE_ON"] or "Always on",
+                                off = L["SOFT_TARGET_ICONS_MODE_OFF"] or "Always off",
+                            }
+                        end,
+                        sorting = { "game", "on", "off" },
                         hidden = function() return not SupportsSoftTargetIcons() end,
-                        get = function() return GetOption("softTargetInteract") end,
-                        set = function(_, val) SetOption("softTargetInteract", val) end,
-                        order = 22
+                        get = function() return GetOption("softTargetIconsMode") or "game" end,
+                        set = function(_, val) SetOption("softTargetIconsMode", val) end,
+                        order = 22,
+                        width = "full",
                     },
                 },
             },

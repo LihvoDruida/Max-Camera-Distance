@@ -287,7 +287,12 @@ local PROFILE_DEFAULTS = {
     occludedSilhouettePlayer = (defaultOccludedSilhouette == 1) or false,
 
     resampleAlwaysSharpen = (defaultSharpen == 1) or false,
+    -- Legacy boolean. Kept only so older builds and downgrades still read a
+    -- sensible value; it no longer decides whether the addon writes the CVar.
     softTargetInteract = (defaultSoftTarget == 1) or false,
+    -- "game": never write SoftTargetIconGameObject (other addons such as
+    -- NodeSight own it); "on"/"off": explicitly enforce 1/0.
+    softTargetIconsMode = "game",
 
     -- actioncam / afk
     actionCamShoulder = false, -- legacy key for migration
@@ -649,6 +654,11 @@ function Database:ApplyMigrations(profile)
     profile.occludedSilhouettePlayer = NormalizeBoolean(profile.occludedSilhouettePlayer, PROFILE_DEFAULTS.occludedSilhouettePlayer)
     profile.resampleAlwaysSharpen = NormalizeBoolean(profile.resampleAlwaysSharpen, PROFILE_DEFAULTS.resampleAlwaysSharpen)
     profile.softTargetInteract = NormalizeBoolean(profile.softTargetInteract, PROFILE_DEFAULTS.softTargetInteract)
+    if profile.softTargetIconsMode ~= "game" and profile.softTargetIconsMode ~= "on" and profile.softTargetIconsMode ~= "off" then
+        -- Profiles without an explicit choice of the new mode stop managing the
+        -- global icon CVar. Migration never writes the CVar itself.
+        profile.softTargetIconsMode = "game"
+    end
     if IS_FOREVER then
         profile.volumeFog = NormalizeBoolean(profile.volumeFog, PROFILE_DEFAULTS.volumeFog)
         profile.volumeFogInterior = NormalizeBoolean(profile.volumeFogInterior, PROFILE_DEFAULTS.volumeFogInterior)
@@ -751,7 +761,8 @@ local RESCUED_CVAR_KEYS = {
     { key = "cameraIndirectVisibility", cvar = "cameraIndirectVisibility",  isBoolean = true },
     { key = "occludedSilhouettePlayer", cvar = "occludedSilhouettePlayer",  isBoolean = true },
     { key = "resampleAlwaysSharpen",    cvar = "resampleAlwaysSharpen",     isBoolean = true },
-    { key = "softTargetInteract",       cvar = "SoftTargetIconGameObject",  isBoolean = true },
+    -- softTargetInteract is intentionally absent: copying one live global CVar
+    -- into every profile recorded no user choice and later fought other addons.
 }
 
 function Database:MigrateDynamicCVarDefaults()
@@ -970,6 +981,12 @@ function Database:OnProfileUpdate(reason)
 
     if ns.Core and ns.Core.RefreshMinimapButton then
         ns.Core:RefreshMinimapButton()
+    end
+
+    -- Reactive Zoom installs global wrappers; the active profile, not the one
+    -- that was active when the toggle was last clicked, decides whether they exist.
+    if ns.ReactiveZoom and ns.ReactiveZoom.Refresh then
+        ns.ReactiveZoom:Refresh()
     end
 
     if ns.Config and ns.Config.NotifyChange then

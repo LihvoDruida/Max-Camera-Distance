@@ -138,4 +138,63 @@ profile.reactiveZoom = false
 rz:Refresh()
 assert(CameraZoomIn == otherIn and CameraZoomOut == otherOut,
     "native handlers were not restored after final toggle")
-print("probe_reactive_zoom: PASS (native, default step, safety fallback, watchdog timeout, FPS throttle, coexistence)")
+-- Regression: a third-party wrapper installed AFTER ours, then Reactive Zoom
+-- toggled off and on. The old wrapper used to read the shared predecessor that
+-- the re-install had overwritten, so new -> third party -> old -> third party
+-- looped until the stack blew up.
+_G.CameraZoomIn, _G.CameraZoomOut = nativeIn, nativeOut
+profile.reactiveZoom = true
+rz:Refresh()
+local thirdPartyEntries = 0
+local function WrapThirdParty(name)
+    local previous = _G[name]
+    _G[name] = function(...)
+        thirdPartyEntries = thirdPartyEntries + 1
+        if thirdPartyEntries > 4 then error("third-party wrapper re-entered") end
+        return previous(...)
+    end
+end
+WrapThirdParty("CameraZoomIn")
+WrapThirdParty("CameraZoomOut")
+profile.reactiveZoom = false
+rz:Refresh()
+profile.reactiveZoom = true
+rz:Refresh()
+for _, call in ipairs({
+    function() CameraZoomOut(2) end,
+    function() CameraZoomIn(2) end,
+}) do
+    thirdPartyEntries = 0
+    local before = #nativeCalls
+    local ok, err = pcall(call)
+    assert(ok, "stale reactive wrapper re-entered the chain: " .. tostring(err))
+    assert(thirdPartyEntries == 1 and #nativeCalls == before + 1 and nativeCalls[#nativeCalls].amount == 2,
+        "explicit step did not reach the native handler exactly once")
+end
+thirdPartyEntries = 0
+lastTransition = nil
+CameraZoomOut()
+assert(thirdPartyEntries == 0 and lastTransition ~= nil,
+    "current generation stopped handling wheel notches after re-install")
+profile.reactiveZoom = false
+rz:Refresh()
+
+-- Regression: LibCamera marks its own steps with a second `true` argument.
+-- They must reach the predecessor unchanged instead of being accelerated.
+_G.CameraZoomIn, _G.CameraZoomOut = nativeIn, nativeOut
+profile.reactiveZoom = true
+rz:Refresh()
+for _, case in ipairs({ { fn = "CameraZoomOut", action = "out" }, { fn = "CameraZoomIn", action = "in" } }) do
+    local before = #nativeCalls
+    lastTransition = nil
+    _G[case.fn](1, true)
+    assert(#nativeCalls == before + 1 and nativeCalls[#nativeCalls].action == case.action
+        and nativeCalls[#nativeCalls].amount == 1 and lastTransition == nil,
+        "programmatic " .. case.fn .. "(1, true) was treated as a wheel notch")
+end
+profile.reactiveZoom = false
+rz:Refresh()
+assert(CameraZoomIn == nativeIn and CameraZoomOut == nativeOut,
+    "native handlers were not restored after the marker check")
+
+print("probe_reactive_zoom: PASS (native, default step, safety fallback, watchdog timeout, FPS throttle, coexistence, re-install chain, programmatic marker)")
