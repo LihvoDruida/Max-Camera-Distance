@@ -111,6 +111,10 @@ L["RESAMPLE_ALWAYS_SHARPEN_DESC"] = "Forces the game to apply a sharpness filter
 
 L["SOFT_TARGET_INTERACT"] = "Soft Target Interact Icons"
 L["SOFT_TARGET_INTERACT_DESC"] = "Displays interaction icons over game objects (mailboxes, herbs, portals, NPCs) for easier targeting."
+L["SOFT_TARGET_ICONS_MODE_DESC"] = "Controls the global SoftTargetIconGameObject setting for every character and addon. \"Game setting\" never writes it, so gathering addons such as NodeSight can manage it. Current game value: %s."
+L["SOFT_TARGET_ICONS_MODE_GAME"] = "Game setting (do not change)"
+L["SOFT_TARGET_ICONS_MODE_ON"] = "Always on"
+L["SOFT_TARGET_ICONS_MODE_OFF"] = "Always off"
 
 -- ============================================================================
 -- Extra Features

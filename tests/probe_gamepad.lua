@@ -1061,5 +1061,86 @@ check("phase 17: logout restores temporary blocker CVars",
 check("phase 17: logout cleanup does not erase the saved ActionCam preference",
     db.actionCamShoulderInCombat == true and db.actionCamShoulderOutOfCombat == true and db.actionCamPitch == true)
 
+-- ------------------------- phase 18: SoftTargetIconGameObject ownership
+-- NodeSight Sparkles needs SoftTargetIconGameObject = 1. The old boolean
+-- option re-wrote the global CVar on world entry, every camera apply and on
+-- every external CVAR_UPDATE, so another addon's 1 was reverted to 0.
+local function SoftTargetWrites()
+    local count = 0
+    for _, entry in ipairs(cvars.writeLog) do
+        if entry:match("^softtargeticongameobject=") then count = count + 1 end
+    end
+    return count
+end
+local advancedArgs = ns.Config.options.args.advancedSettings.args
+local iconMode = advancedArgs.softTargetIconsMode
+check("phase 18: icon option is a three-way mode, legacy toggle removed",
+    iconMode and iconMode.type == "select" and advancedArgs.softTargetInteract == nil)
+check("phase 18: new profiles default to the game setting",
+    db.softTargetIconsMode == "game" and iconMode.get() == "game", tostring(db.softTargetIconsMode))
+
+cvars:Set("SoftTargetIconGameObject", 0)
+db.softTargetInteract = false -- legacy value must not matter any more
+cvars:ResetCounters()
+cvars:Set("SoftTargetIconGameObject", 1)
+stub.Fire("CVAR_UPDATE", "SoftTargetIconGameObject", "1")
+Functions:ApplyManagedCVars()
+Functions:AdjustCamera(true)
+stub.Fire("PLAYER_ENTERING_WORLD", false, true)
+ns.Database:OnProfileUpdate("probe profile change")
+check("phase 18: game mode never writes the icon CVar (event, apply, world entry, profile)",
+    SoftTargetWrites() == 0 and cvars:Number("SoftTargetIconGameObject") == 1,
+    table.concat(cvars.writeLog, ","))
+
+cvars:Set("SoftTargetIconGameObject", 0)
+stub.Fire("CVAR_UPDATE", "SoftTargetIconGameObject", "0")
+check("phase 18: game mode also leaves an external 0 alone",
+    SoftTargetWrites() == 0 and cvars:Number("SoftTargetIconGameObject") == 0)
+
+iconMode.set(nil, "on")
+check("phase 18: explicit 'on' applies immediately",
+    cvars:Number("SoftTargetIconGameObject") == 1 and db.softTargetInteract == true)
+cvars:Set("SoftTargetIconGameObject", 0)
+stub.Fire("CVAR_UPDATE", "SoftTargetIconGameObject", "0")
+check("phase 18: explicit 'on' still enforces 1 against an external write",
+    cvars:Number("SoftTargetIconGameObject") == 1)
+
+iconMode.set(nil, "off")
+check("phase 18: explicit 'off' applies immediately",
+    cvars:Number("SoftTargetIconGameObject") == 0 and db.softTargetInteract == false)
+
+iconMode.set(nil, "game")
+cvars:ResetCounters()
+cvars:Set("SoftTargetIconGameObject", 1)
+Functions:ApplyManagedCVars()
+check("phase 18: returning to game mode releases ownership",
+    SoftTargetWrites() == 0 and cvars:Number("SoftTargetIconGameObject") == 1)
+
+local state = Functions:GetSoftTargetIconsState()
+check("phase 18: status exposes mode, enforced and live value",
+    state.mode == "game" and state.desired == nil and tonumber(state.live) == 1,
+    tostring(state.mode) .. "/" .. tostring(state.desired) .. "/" .. tostring(state.live))
+
+db.softTargetIconsMode = "bogus"
+ns.Database:ApplyMigrations(db)
+check("phase 18: unknown mode values normalize to the game setting",
+    db.softTargetIconsMode == "game", tostring(db.softTargetIconsMode))
+
+-- ---------------------- phase 19: Reactive Zoom follows the active profile
+-- Changing/copying/resetting a profile used to leave the global zoom wrappers
+-- of the PREVIOUS profile in place until the toggle was clicked again.
+local profileNativeIn = function() end
+local profileNativeOut = function() end
+_G.CameraZoomIn, _G.CameraZoomOut = profileNativeIn, profileNativeOut
+db.reactiveZoom = true
+ns.Database:OnProfileUpdate("probe profile enables reactive zoom")
+check("phase 19: profile change to enabled installs reactive zoom",
+    _G.CameraZoomOut ~= profileNativeOut and ns.ReactiveZoom:GetStatus().installed == true)
+db.reactiveZoom = false
+ns.Database:OnProfileUpdate("probe profile disables reactive zoom")
+check("phase 19: profile change to disabled restores native zoom",
+    _G.CameraZoomIn == profileNativeIn and _G.CameraZoomOut == profileNativeOut
+        and ns.ReactiveZoom:GetStatus().installed == false)
+
 print(failures == 0 and "PROBE PASSED" or ("PROBE FAILED (" .. failures .. ")"))
 os.exit(failures == 0 and 0 or 1)

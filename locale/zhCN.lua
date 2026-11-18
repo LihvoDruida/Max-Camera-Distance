@@ -105,6 +105,10 @@ L["RESAMPLE_ALWAYS_SHARPEN_DESC"] = "强制游戏应用锐化滤镜（FidelityFX
 
 L["SOFT_TARGET_INTERACT"] = "软目标交互图标"
 L["SOFT_TARGET_INTERACT_DESC"] = "在游戏对象（邮箱、草药、传送门、NPC）上显示交互图标，便于选中目标。"
+L["SOFT_TARGET_ICONS_MODE_DESC"] = "控制所有角色和插件共用的全局设置 SoftTargetIconGameObject。“游戏设置”从不写入该值，以便 NodeSight 等采集插件自行管理。当前游戏值：%s。"
+L["SOFT_TARGET_ICONS_MODE_GAME"] = "游戏设置（不更改）"
+L["SOFT_TARGET_ICONS_MODE_ON"] = "始终开启"
+L["SOFT_TARGET_ICONS_MODE_OFF"] = "始终关闭"
 
 -- ============================================================================
 -- 额外功能
