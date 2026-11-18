@@ -1632,6 +1632,8 @@ updateFrame:SetScript("OnUpdate", function(self)
     updatePending = false
     self:Hide()
 
+    Functions:EnsureGroupCombatWatch()
+
     -- Always refresh ActionCam too, so shoulder mode can switch on combat enter/leave.
     -- Pass methods directly instead of allocating two closures for every update.
     RunGuarded(Functions.UpdateActionCam, "UpdateActionCam", Functions)
@@ -1706,6 +1708,75 @@ function Functions:IsGroupInCombat()
     runtimeCache.groupCombatExpiresAt = now + GROUP_COMBAT_CACHE_SECONDS
 
     return result
+end
+
+-- ---------------------------------------------------------------------
+-- Group combat watch
+-- ---------------------------------------------------------------------
+-- A party member entering/leaving combat while the player stays out of it
+-- produced no event the camera listened to, so the controller kept its old
+-- state until the roster changed. UNIT_FLAGS (Core.lua) covers members in
+-- range; this bounded poll covers missed or out-of-range signals and only runs
+-- while grouped with a consumer of the group trigger.
+Functions._groupWatch = { running = false, last = nil, interval = 0.5 }
+
+function Functions:NeedsGroupCombatWatch()
+    local db = DB()
+    if not db or db.combatZoomOnGroup == false then return false end
+    local shoulderSplit = (db.actionCamShoulderInCombat and true or false)
+        ~= (db.actionCamShoulderOutOfCombat and true or false)
+    if not (db.autoCombatZoom or shoulderSplit) then return false end
+    return SafeBoolCall(IsInRaid) or SafeBoolCall(IsInGroup) or false
+end
+
+-- Re-read group combat and queue one camera pass only when it changed.
+function Functions:PollGroupCombat()
+    local watch = self._groupWatch
+    runtimeCache.groupCombat = nil
+    runtimeCache.groupCombatExpiresAt = 0
+    local now = self:IsGroupInCombat() and true or false
+    local changed = (watch.last ~= now)
+    watch.last = now
+    if changed then
+        self:RequestUpdate()
+    end
+    return changed
+end
+
+-- UNIT_FLAGS fires often in raids. Only the flagged unit is read unless it
+-- could end group combat (a member dropping out while the group was fighting).
+function Functions:OnGroupUnitFlags(unit)
+    local watch = self._groupWatch
+    if watch.last == nil then
+        return self:PollGroupCombat()
+    end
+    local isSelf = IsTruthySafe(SafeValueCall(UnitIsUnit, unit, "player"))
+    if isSelf then return false end
+    local fighting = IsTruthySafe(SafeValueCall(UnitAffectingCombat, unit))
+    if fighting == watch.last then
+        -- Already in group combat and this member fights, or nobody fought
+        -- and this member still does not: nothing can have changed.
+        return false
+    end
+    return self:PollGroupCombat()
+end
+
+function Functions:EnsureGroupCombatWatch()
+    local watch = self._groupWatch
+    if watch.running or not self:NeedsGroupCombatWatch() then return end
+    if not (C_Timer and C_Timer.After) then return end
+    watch.running = true
+    watch.last = self:IsGroupInCombat() and true or false
+    local function Tick()
+        if not Functions:NeedsGroupCombatWatch() then
+            watch.running = false
+            watch.last = nil
+            return
+        end
+        Functions:PollGroupCombat()
+        C_Timer.After(watch.interval, Tick)
+    end
+    C_Timer.After(watch.interval, Tick)
 end
 
 -- Activity detection now lives in Contexts.lua, which distinguishes arena from
@@ -2745,9 +2816,24 @@ function Functions:ShouldEnableShoulderNow()
         return true
     end
 
+    -- Explicit branch: `inCombat and inCombatEnabled or outOfCombatEnabled`
+    -- fell through to the out-of-combat flag whenever the in-combat one was off,
+    -- so "out of combat only" stayed active during combat.
+    if self:IsShoulderCombatContext() then
+        return inCombatEnabled
+    end
+    return outOfCombatEnabled
+end
+
+-- The single combat rule for the shoulder camera: the same combined trigger
+-- (player, group, threat) that the combat camera uses. Both applying the
+-- shoulder and the toggle command must read this, or the toggle edits the
+-- checkbox for the other context.
+function Functions:IsShoulderCombatContext()
+    local db = DB()
+    if not db then return false end
     local signals = GetCombatSignals(db)
-    local inCombat = GetCombatActivation(db, signals)
-    return inCombat and inCombatEnabled or outOfCombatEnabled
+    return GetCombatActivation(db, signals) and true or false
 end
 
 function Functions:UpdateActionCam()
@@ -2897,7 +2983,7 @@ function Functions:ToggleActionCamShoulderForCurrentContext()
     local db = DB()
     if not db then return false end
 
-    local inCombat = SafeBoolCall(UnitAffectingCombat, "player")
+    local inCombat = self:IsShoulderCombatContext()
     local key = inCombat and "actionCamShoulderInCombat" or "actionCamShoulderOutOfCombat"
     db[key] = not db[key]
     self:UpdateActionCam()
@@ -3133,6 +3219,8 @@ function Functions:UpdateSmartZoomState(event)
     if not db then return end
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
+    Functions:EnsureGroupCombatWatch()
+
     local previousState = currentZoomState
     local previousCombatContext = lastCombatContext
     local newState, targetYards, snapshot = ComputeDesiredState(db)
@@ -3183,6 +3271,18 @@ function Functions:UpdateSmartZoomState(event)
     -- closer saved zoom. Explicit edits still replace the transition.
     if newState == currentZoomState and event ~= "manual_update"
         and runtimeCache.pendingZoomCap == targetYards and not afkCamera.exiting then
+        NotifyConfigChanged(newState, targetYards)
+        return
+    end
+
+    -- A scheduled return is still valid while its deadline is pending and the
+    -- normal target is unchanged. A routine re-evaluation (aura, roster,
+    -- queued event) must not cut the delay short; only a new pull/mount, a
+    -- changed target or an explicit manual update replaces it.
+    if newState == ZOOM_STATE_NONE and currentZoomState == ZOOM_STATE_NONE
+        and pendingReturnInfo and event ~= "manual_update" and not afkCamera.exiting
+        and pendingReturnInfo.target == targetYards
+        and GetPendingReturnRemaining() > 0 then
         NotifyConfigChanged(newState, targetYards)
         return
     end
@@ -3277,6 +3377,7 @@ function Functions:UpdateSmartZoomState(event)
             kind = returnKind,
             context = returnContext,
             delay = delay,
+            target = targetYards,
             fireAt = (GetTime and GetTime() or 0) + delay,
         }
         if CameraStateController and CameraStateController.SetPendingReturn then
