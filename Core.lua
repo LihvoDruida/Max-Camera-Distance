@@ -599,6 +599,18 @@ eventHandlers.LOADING_SCREEN_DISABLED = function()
 end
 eventHandlers.PLAYER_CONTROL_GAINED = ForceSmartUpdate
 eventHandlers.PLAYER_CONTROL_LOST = ForceSmartUpdate
+-- Combat flag changes of party/raid members. Fires for every unit token
+-- (target, nameplates, ...), so filter by prefix and enabled consumers first.
+eventHandlers.UNIT_FLAGS = function(event, unit)
+    if type(unit) ~= "string" or unit == "player" then return end
+    local prefix = unit:sub(1, 4)
+    if prefix ~= "part" and prefix ~= "raid" then return end
+    local functions = ns.Functions
+    if not (functions and functions.NeedsGroupCombatWatch and functions.OnGroupUnitFlags) then return end
+    if not functions:NeedsGroupCombatWatch() then return end
+    SafeCall(functions.OnGroupUnitFlags, "OnGroupUnitFlags", functions, unit)
+end
+
 eventHandlers.GROUP_ROSTER_UPDATE = RequestSmartUpdate
 -- Pre-MoP rosters use separate party/raid notifications.
 eventHandlers.PARTY_MEMBERS_CHANGED = RequestSmartUpdate

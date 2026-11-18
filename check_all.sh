@@ -115,6 +115,7 @@ stage "Probe: CVar write policy"   lua51_probe tests/probe_cvar_policy.lua
 stage "Probe: activity and mount capabilities" lua51_probe tests/probe_context_mounts.lua
 stage "Probe: AFK zoom and restoration" lua51_probe tests/probe_afk_zoom.lua
 stage "Probe: AFK lifecycle" lua51_probe tests/probe_afk_lifecycle.lua
+stage "Probe: combat transitions" lua51_probe tests/probe_combat_transitions.lua
 stage "Probe: optional library compatibility" lua51_probe tests/probe_library_fallback.lua
 stage "Probe: timer API variants" lua51_probe tests/probe_timers.lua
 stage "Probe: cross-client API shapes" lua51_probe tests/probe_cross_client.lua
