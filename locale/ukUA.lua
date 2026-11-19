@@ -285,6 +285,8 @@ L["STATUS_ZONE_SOURCE_SCENARIO"] = "Сценарій / Delve"
 
 L["STATUS_REASON_PLAYER"] = "Гравець"
 L["STATUS_REASON_GROUP"] = "Група"
+L["STATUS_REASON_ENCOUNTER"] = "Сутичка з босом"
+L["STATUS_GROUP_INCOMPLETE"] = "дані неповні"
 L["STATUS_REASON_THREAT"] = "Загроза"
 L["STATUS_REASON_MOUNTED"] = "На маунті"
 L["STATUS_REASON_WORLD_BOSS"] = "Світовий бос"

@@ -263,6 +263,8 @@ L["STATUS_ZONE_SOURCE_SCENARIO"] = "Scenario / Delve"
 
 L["STATUS_REASON_PLAYER"] = "Player"
 L["STATUS_REASON_GROUP"] = "Group"
+L["STATUS_REASON_ENCOUNTER"] = "Boss Encounter"
+L["STATUS_GROUP_INCOMPLETE"] = "incomplete data"
 L["STATUS_REASON_THREAT"] = "Threat"
 L["STATUS_REASON_MOUNTED"] = "Mounted"
 L["STATUS_REASON_WORLD_BOSS"] = "World Boss"

@@ -186,6 +186,8 @@ L["STATUS_ZONE_SOURCE_SCENARIO"] = "Scénario / Gouffre"
 
 L["STATUS_REASON_PLAYER"] = "Player"
 L["STATUS_REASON_GROUP"] = "Group"
+L["STATUS_REASON_ENCOUNTER"] = "Rencontre de boss"
+L["STATUS_GROUP_INCOMPLETE"] = "données incomplètes"
 L["STATUS_REASON_THREAT"] = "Threat"
 L["STATUS_REASON_MOUNTED"] = "Mounted"
 L["STATUS_REASON_WORLD_BOSS"] = "World Boss"
