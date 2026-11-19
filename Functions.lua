@@ -3,6 +3,40 @@ local LibStub = _G.LibStub
 ns.Functions = ns.Functions or {}
 local Functions = ns.Functions
 
+-- ---------------------------------------------------------------------
+-- Performance counters (/mcd perf). Plain integer increments on paths that
+-- already do real work; no timers, no per-frame cost. Lets players report
+-- what the addon actually does in a Mythic+ key or a raid.
+-- ---------------------------------------------------------------------
+Functions.perf = { startedAt = (type(GetTime) == "function" and GetTime()) or nil, counts = {} }
+Functions.PERF_KEYS = {
+    "events", "unitFlags", "cameraPasses", "cameraAnimations", "rosterScans",
+    "memberReads", "groupPolls", "cvarWrites", "uiRebuilds", "uiStatusUpdates",
+}
+
+function Functions:PerfCount(key, amount)
+    local counts = self.perf.counts
+    counts[key] = (counts[key] or 0) + (amount or 1)
+end
+
+function Functions:PerfReset()
+    self.perf.counts = {}
+    self.perf.startedAt = (type(GetTime) == "function" and GetTime()) or 0
+end
+
+function Functions:GetPerfSnapshot()
+    local now = (type(GetTime) == "function" and GetTime()) or 0
+    local started = self.perf.startedAt or now
+    local elapsed = math.max(0, now - started)
+    local result = { elapsed = elapsed, counts = {}, perMinute = {} }
+    for _, key in ipairs(self.PERF_KEYS) do
+        local value = self.perf.counts[key] or 0
+        result.counts[key] = value
+        result.perMinute[key] = elapsed > 0 and (value * 60 / elapsed) or 0
+    end
+    return result
+end
+
 
 local L = setmetatable({}, {
     __index = function(_, key)
@@ -893,6 +927,7 @@ local function UpdateCVar(key, value)
 
     isInternalUpdate = true
     SafeSetCVar(key, normalizedValue)
+    Functions:PerfCount("cvarWrites")
     isInternalUpdate = false
 
     if guard and guard.EndInternalWrite then
@@ -1517,6 +1552,7 @@ local function ApplyZoomTransition(targetYards, transitionTime, capYards)
     targetYards = targetYards == 0 and 0 or NormalizeTargetYards(targetYards)
     capYards = NormalizeTargetYards(capYards or targetYards)
     targetYards = math.min(targetYards, capYards)
+    Functions:PerfCount("cameraAnimations")
     lastAutoAppliedZoomYards = targetYards
     lastAutoAppliedAt = (GetTime and GetTime() or 0)
 
@@ -1690,6 +1726,7 @@ function Functions:IsGroupInCombat()
     local result = false
     local incomplete = false
     local readable = 0
+    local reads = 0
     local ReadTriState = Functions.ReadTriState
 
     -- Roster counts already define which raid/party unit tokens can exist, so
@@ -1709,6 +1746,7 @@ function Functions:IsGroupInCombat()
             if isSelf == nil then
                 incomplete = true
             elseif not isSelf then
+                reads = reads + 1
                 local fighting = ReadTriState(UnitAffectingCombat, unit)
                 if fighting then return true end
                 if fighting == nil then incomplete = true else readable = readable + 1 end
@@ -1719,6 +1757,7 @@ function Functions:IsGroupInCombat()
 
     local function ScanParty(count)
         for i = 1, count do
+            reads = reads + 1
             local fighting = ReadTriState(UnitAffectingCombat, PARTY_UNITS[i])
             if fighting then return true end
             if fighting == nil then incomplete = true else readable = readable + 1 end
@@ -1736,6 +1775,11 @@ function Functions:IsGroupInCombat()
 
     -- Zoning/loading can make every member unreadable at once. That is no
     -- evidence that the group left combat: keep the last readable answer.
+    if memberCount > 0 then
+        Functions:PerfCount("rosterScans")
+        Functions:PerfCount("memberReads", reads)
+    end
+
     local positiveAlly = result
     if not result and incomplete and readable == 0 and memberCount > 0 then
         result = runtimeCache.groupCombatLastKnown and true or false
@@ -1784,6 +1828,7 @@ end
 
 -- Re-read group combat and queue one camera pass only when it changed.
 function Functions:PollGroupCombat()
+    self:PerfCount("groupPolls")
     local watch = self._groupWatch
     if not self:IsGroupCombatDecisive() then
         -- Forget the old answer: the first poll after personal combat ends
@@ -3324,6 +3369,7 @@ function Functions:UpdateSmartZoomState(event)
     if not db.autoCombatZoom and not db.autoMountZoom then return end
 
     Functions:EnsureGroupCombatWatch()
+    Functions:PerfCount("cameraPasses")
 
     local previousState = currentZoomState
     local previousCombatContext = lastCombatContext
@@ -3514,6 +3560,36 @@ function Functions:GetStatusSnapshot()
     return BuildStatusSnapshot(db)
 end
 
+
+-- Plain-text performance report: no player or realm names, safe to paste.
+function Functions:BuildPerfReportLines()
+    local snap = self:GetPerfSnapshot()
+    local groupText = "solo"
+    if SafeBoolCall(IsInRaid) then
+        groupText = "raid " .. tostring(tonumber(SafeValueCall(GetNumGroupMembers)) or 0)
+    elseif SafeBoolCall(IsInGroup) then
+        groupText = "party " .. tostring((tonumber(SafeValueCall(GetNumSubgroupMembers)) or 0) + 1)
+    end
+    local inInstance, instanceType = SafeIsInInstance()
+    local lines = {
+        string.format(L["PERF_HEADER"] or "Performance counters for the last %.0f s", snap.elapsed),
+        string.format(" - client: %s %s interface=%s | %s | %s",
+            tostring(Compat.CLIENT_TAG or "?"), tostring(Compat.VERSION or "?"), tostring(Compat.INTERFACE or "?"),
+            groupText, inInstance and ("instance " .. tostring(instanceType or "?")) or "world"),
+    }
+    for _, key in ipairs(self.PERF_KEYS) do
+        lines[#lines + 1] = string.format(" - %s: %d (%.1f/min)",
+            L["PERF_" .. key:upper()] or key, snap.counts[key], snap.perMinute[key])
+    end
+    return lines
+end
+
+function Functions:PrintPerfReport()
+    for _, line in ipairs(self:BuildPerfReportLines()) do
+        self:SendMessage(line)
+    end
+    self:SendMessage(L["PERF_HINT"] or "Use /mcd perf reset before a key or a pull, then /mcd perf after it.")
+end
 
 local function FormatBool(value)
     return value and (L["STATUS_YES"] or "Yes") or (L["STATUS_NO"] or "No")
@@ -4199,7 +4275,7 @@ function Functions:SlashCmdHandler(msg)
     local db = ns.Database.db.profile
 
     if command == "" or command == "help" then
-        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | shoulder [toggle|swap|center] | status | gamepad [cvars] | deps | fastzoom | slowzoom | reset | debug on | debug off")
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | shoulder [toggle|swap|center] | status | perf [reset] | gamepad [cvars] | deps | fastzoom | slowzoom | reset | debug on | debug off")
 
     elseif command == "config" then
         if ns.Config and ns.Config.Open then
@@ -4238,6 +4314,14 @@ function Functions:SlashCmdHandler(msg)
 
     elseif command == "status" then
         Functions:PrintRuntimeStatus()
+
+    elseif command == "perf" then
+        if arg == "reset" then
+            Functions:PerfReset()
+            Functions:SendMessage(L["PERF_RESET"] or "Performance counters reset.")
+        else
+            Functions:PrintPerfReport()
+        end
 
     elseif command == "deps" then
         Functions:PrintDependencyStatus()
@@ -4297,6 +4381,6 @@ function Functions:SlashCmdHandler(msg)
         end
 
     else
-        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off")
+        Functions:SendMessage(L["CMD_USAGE"] or "Usage: /mcd config | autozoom | automount | status | perf [reset] | deps | fastzoom | slowzoom | reset | debug on | debug off")
     end
 end

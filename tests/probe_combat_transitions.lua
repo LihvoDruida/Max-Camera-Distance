@@ -277,6 +277,23 @@ for _, case in ipairs({ { "Retail", "12.1.0", 120100, 1 }, { "Forever", "1.60.1"
     RunFrames()
     inRaid, raidSize, selfToken = false, 0, nil
 
+    -- 8b) /mcd perf counters: real work is counted, report carries no names.
+    inRaid, raidSize, selfToken = true, 40, "raid1"
+    combat = { player = false }
+    f:PerfReset()
+    f:InvalidateRuntimeCaches()
+    f:IsGroupInCombat()
+    Pass("probe_perf")
+    local perf = f:GetPerfSnapshot()
+    assert(perf.counts.rosterScans >= 1 and perf.counts.memberReads == 39 * perf.counts.rosterScans
+        and perf.counts.cameraPasses >= 1, label .. "perf counters missed roster or camera work")
+    local report = table.concat(f:BuildPerfReportLines(), "\n")
+    assert(not report:find("Tester", 1, true) and not report:find("Realm", 1, true)
+        and report:find("raid 40", 1, true), label .. "perf report leaked names or missed the group size")
+    f:PerfReset()
+    assert(f:GetPerfSnapshot().counts.rosterScans == 0, label .. "perf reset kept old counts")
+    inRaid, raidSize, selfToken = false, 0, nil
+
     -- 9) Unreadable personal flag falls back to the combat events.
     combat = { player = "error" }
     f:SetPlayerCombatEvent(true) -- PLAYER_REGEN_DISABLED
@@ -289,4 +306,4 @@ for _, case in ipairs({ { "Retail", "12.1.0", 120100, 1 }, { "Forever", "1.60.1"
     combat = {}
 end
 
-print("probe_combat_transitions: PASS (group combat watch, return deadline, stale timer, shoulder matrix, shoulder toggle, roster unknowns, encounter option, zoning, cheap path, aura cache, regen fallback)")
+print("probe_combat_transitions: PASS (group combat watch, return deadline, stale timer, shoulder matrix, shoulder toggle, roster unknowns, encounter option, zoning, cheap path, aura cache, perf counters, regen fallback)")

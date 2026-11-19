@@ -423,7 +423,7 @@ L["DEBUG_LEVEL_INFO"] = "Інформація"
 L["DEBUG_LEVEL_DEBUG"] = "Налагодження"
 
 -- Runtime diagnostics and slash commands
-L["CMD_USAGE"] = 'Використання: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off'
+L["CMD_USAGE"] = 'Використання: /mcd config | autozoom | automount | status | perf [reset] | deps | fastzoom | slowzoom | reset | debug on | debug off'
 L["STATUS_STATE_AFK"] = 'AFK'
 L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = 'Перша особа у гонці'
 L["STATUS_STATE_NORMAL"] = 'Звичайний'
@@ -635,3 +635,19 @@ L["UI_FOREVER_GRAPHICS"] = "Графіка Forever"
 
 L["UI_YARDS"] = "ярди"
 L["CONTEXT_SCENARIO_CLASSIC"] = "Сценарії"
+
+-- /mcd perf
+L["PERF_HEADER"] = "Лічильники роботи за останні %.0f с"
+L["PERF_HINT"] = "Виконайте /mcd perf reset перед ключем чи пулом, а після нього — /mcd perf."
+L["PERF_RESET"] = "Лічильники скинуто."
+L["PERF_RESET_BUTTON"] = "Скинути лічильники"
+L["PERF_EVENTS"] = "Оброблені події"
+L["PERF_UNITFLAGS"] = "Отримано UNIT_FLAGS"
+L["PERF_CAMERAPASSES"] = "Рішення камери"
+L["PERF_CAMERAANIMATIONS"] = "Анімації камери"
+L["PERF_ROSTERSCANS"] = "Перевірки групи"
+L["PERF_MEMBERREADS"] = "Читання бою учасників"
+L["PERF_GROUPPOLLS"] = "Опитування групового бою"
+L["PERF_CVARWRITES"] = "Записи CVar"
+L["PERF_UIREBUILDS"] = "Перебудови налаштувань"
+L["PERF_UISTATUSUPDATES"] = "Оновлення статусу вікна"

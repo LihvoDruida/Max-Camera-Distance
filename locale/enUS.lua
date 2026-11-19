@@ -391,7 +391,7 @@ L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Click to open settings'
 L["SETTINGS_APPLIED_FULL"] = "|cff00ff00Applied|r — distance: %.1f |cff888888(transition %.2fs)|r"
 
 -- Runtime diagnostics and slash commands
-L["CMD_USAGE"] = 'Usage: /mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off'
+L["CMD_USAGE"] = 'Usage: /mcd config | autozoom | automount | status | perf [reset] | deps | fastzoom | slowzoom | reset | debug on | debug off'
 L["STATUS_STATE_AFK"] = 'AFK'
 L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = 'Dragon Race First Person'
 L["STATUS_STATE_NORMAL"] = 'Normal'
@@ -603,3 +603,19 @@ L["UI_FOREVER_GRAPHICS"] = "Forever graphics"
 
 L["UI_YARDS"] = "yards"
 L["CONTEXT_SCENARIO_CLASSIC"] = "Scenarios"
+
+-- /mcd perf
+L["PERF_HEADER"] = "Performance counters for the last %.0f s"
+L["PERF_HINT"] = "Use /mcd perf reset before a key or a pull, then /mcd perf after it."
+L["PERF_RESET"] = "Performance counters reset."
+L["PERF_RESET_BUTTON"] = "Reset Counters"
+L["PERF_EVENTS"] = "Handled events"
+L["PERF_UNITFLAGS"] = "UNIT_FLAGS received"
+L["PERF_CAMERAPASSES"] = "Camera decisions"
+L["PERF_CAMERAANIMATIONS"] = "Camera animations"
+L["PERF_ROSTERSCANS"] = "Group scans"
+L["PERF_MEMBERREADS"] = "Member combat reads"
+L["PERF_GROUPPOLLS"] = "Group combat polls"
+L["PERF_CVARWRITES"] = "CVar writes"
+L["PERF_UIREBUILDS"] = "Settings rebuilds"
+L["PERF_UISTATUSUPDATES"] = "Settings status updates"

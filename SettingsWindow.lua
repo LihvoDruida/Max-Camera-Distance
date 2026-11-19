@@ -632,6 +632,7 @@ function UI:RenderVisible()
 end
 
 function UI:Rebuild(resetScroll)
+    if ns.Functions and ns.Functions.PerfCount then ns.Functions:PerfCount("uiRebuilds") end
     self:CloseChoices()
     self.pages = self:GetPages()
     local selectedVisible = false
@@ -701,6 +702,7 @@ function UI:SelectPage(key)
 end
 
 function UI:UpdateStatus()
+    if ns.Functions and ns.Functions.PerfCount then ns.Functions:PerfCount("uiStatusUpdates") end
     local zoom
     if type(GetCameraZoom) == "function" then
         local ok, value = pcall(GetCameraZoom)
