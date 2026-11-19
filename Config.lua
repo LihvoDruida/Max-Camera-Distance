@@ -454,6 +454,9 @@ local function BuildCameraSummaryText(snapshot)
     if snapshot.groupType ~= "solo" then
         if snapshot.groupInCombat then
             add(L["SUMMARY_ALLY_IN"] or "Ally in combat", not triggerConfig.group)
+        elseif snapshot.groupCombatUnavailable then
+            add(snapshot.inInstance and (L["SUMMARY_ALLY_UNAVAILABLE_INSTANCE"] or "Ally combat cannot be read in this instance; boss encounters still enable the combat camera")
+                or (L["SUMMARY_ALLY_UNAVAILABLE"] or "Ally combat cannot be read right now"))
         elseif snapshot.groupCombatIncomplete then
             add(L["SUMMARY_ALLY_INCOMPLETE"] or "Ally data incomplete")
         else
