@@ -92,6 +92,8 @@ stage "XML well-formedness"       xml_wellformed
 stage "TOC files current"         python3 tools/generate_tocs.py --check
 stage "Manifest references (source)" python3 tools/verify_manifest.py --allow-missing-externals
 stage "Manifest policy regression" python3 tests/probe_manifest.py
+stage "Locale completeness"       python3 tools/verify_locales.py
+stage "Official client check (offline)" python3 tests/probe_official_clients.py
 stage "Probe: release package"    python3 tests/probe_package.py
 stage "Probe: late Ace3"          lua51_probe tests/probe_lateace3.lua
 stage "Probe: gamepad/shoulder"   lua51_probe tests/probe_gamepad.lua

@@ -4144,20 +4144,22 @@ function Functions:ClearAllQuestTracking()
         return
     end
 
-    local numWatches = C_QuestLog.GetNumQuestWatches()
-    if not numWatches or numWatches <= 0 then
+    local ok, numWatches = pcall(C_QuestLog.GetNumQuestWatches)
+    numWatches = ok and tonumber(numWatches) or 0
+    if numWatches <= 0 then
         Functions:SendMessage(L["QUEST_TRACKER_EMPTY"] or "Quest tracker is already empty.")
         return
     end
 
+    local removed = 0
     for i = numWatches, 1, -1 do
-        local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-        if questID then
-            C_QuestLog.RemoveQuestWatch(questID)
+        local okID, questID = pcall(C_QuestLog.GetQuestIDForQuestWatchIndex, i)
+        if okID and questID and pcall(C_QuestLog.RemoveQuestWatch, questID) then
+            removed = removed + 1
         end
     end
 
-    Functions:SendMessage(string.format(L["QUEST_TRACKER_CLEARED"] or "Stopped tracking %d quests.", numWatches))
+    Functions:SendMessage(string.format(L["QUEST_TRACKER_CLEARED"] or "Stopped tracking %d quests.", removed))
 end
 
 -- =====================================================================
