@@ -328,6 +328,44 @@ for _, row in ipairs(ui.rows) do if row.dynamicName then summaryRow = true end e
 assert(summaryRow, "overview has no live camera decision summary")
 ui.Rebuild = realRebuild
 
+-- Stage 6: an event-driven rebuild must not close an open list or drop a
+-- number the player is typing.
+ui:SelectPage("generalSettings")
+stub.Script(ui.window, "OnUpdate", 0.1)
+local selectRow
+for _, row in ipairs(ui.rows) do if row.option.type == "select" and not row.disabled then selectRow = row; break end end
+assert(selectRow, "no select row to open")
+ui:ShowChoices(selectRow)
+local busyRebuilds = 0
+local plainRebuild = ui.Rebuild
+ui.Rebuild = function(...) busyRebuilds = busyRebuilds + 1; return plainRebuild(...) end
+ns.Config:NotifyChange()
+stub.Script(ui.window, "OnUpdate", 0.1)
+assert(ui.choices:IsShown() and busyRebuilds == 0, "a refresh closed the open choice list")
+ui:CloseChoices()
+stub.Script(ui.window, "OnUpdate", 0.1)
+assert(busyRebuilds == 1, "deferred rebuild did not run after the list closed")
+local numberFrame
+for _, f in ipairs(ui.pools.range or {}) do if f:IsShown() and not f.row.disabled then numberFrame = f; break end end
+assert(numberFrame and numberFrame.number, "no numeric input to edit")
+stub.Script(numberFrame.number, "OnEditFocusGained")
+numberFrame.number:SetText("12.5")
+ns.Config:NotifyChange()
+stub.Script(ui.window, "OnUpdate", 0.1); stub.Script(ui.window, "OnUpdate", 1.1)
+assert(numberFrame.number:GetText() == "12.5" and busyRebuilds == 1, "a refresh replaced the number being typed")
+stub.Script(numberFrame.number, "OnEditFocusLost")
+ui.Rebuild = plainRebuild
+-- Standalone window on a 900 x 600 screen: scaled to fit, not clipped.
+do
+    local parent = ui.window:GetParent()
+    local w, h = UIParent:GetWidth(), UIParent:GetHeight()
+    UIParent:SetSize(900, 600)
+    ui:FitScreen()
+    assert(ui.window.scale * ui.window:GetWidth() <= 900 and ui.window.scale * 670 <= 600,
+        "standalone window does not fit 900 x 600")
+    UIParent:SetSize(w, h); ui:FitScreen()
+end
+
 -- The game AddOns category embeds the complete renderer, without AceGUI.
 local integration = ns.SettingsIntegration
 if arg[4] == "late" then
