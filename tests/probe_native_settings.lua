@@ -165,7 +165,16 @@ for _, page in ipairs(ui:GetPages()) do
 end
 local search = ui:CollectRows("overview", ns.Locale:Get("MAX_ZOOM_FACTOR"):upper())
 assert(#search > 0, "global search does not find non-overview settings")
-ns.Database.db.profile.language = "ukUA"
+-- The language is account-wide: an old per-profile choice is adopted once,
+-- and later profile switches no longer change it.
+_G.MaxCameraDistanceDB.global = nil
+rawset(ns.Database.db.profile, "language", "ukUA")
+assert(ns.Locale:GetOverride() == "ukUA", "legacy per-profile language was not migrated")
+assert(_G.MaxCameraDistanceDB.global.language == "ukUA", "migrated language was not stored globally")
+local languageProfile = ns.Database.db.profile
+ns.Database.db.profile = setmetatable({ language = "deDE" }, { __index = languageProfile })
+assert(ns.Locale:GetOverride() == "ukUA", "switching profile changed the addon language")
+ns.Database.db.profile = languageProfile
 ns.Config.options = nil; ns.Config:SetupOptions()
 assert(#ui:CollectRows("overview", "МАКСИМАЛЬНА") > 0, "uppercase Ukrainian search fails")
 assert(#ui:CollectRows("overview", "impossible-search-no-match") == 0)
@@ -331,7 +340,7 @@ for _, locale in ipairs({ "ukUA", "zhCN", "deDE", "frFR" }) do
     for key in pairs(ns.LocaleData.enUS) do
         if key:match("^UI_") then assert(ns.LocaleData[locale][key], locale .. " lacks " .. key) end
     end
-    ns.Database.db.profile.language = locale
+    ns.Locale:SetOverride(locale)
     ns.Config.options = nil; ns.Config:SetupOptions()
     assert(ns.Locale:Get("UI_OVERVIEW") == ns.LocaleData[locale].UI_OVERVIEW)
     ui:SelectPage("overview")
