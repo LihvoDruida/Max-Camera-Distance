@@ -90,11 +90,41 @@ function Layout:Apply(options)
         "foreverEnvironmentHeader", "foreverEnvironmentDesc", "foreverGroundEffectsOverride", "groundEffectDensity",
         "groundEffectDensityReset", "groundEffectDist", "groundEffectDistReset", "groundEffectFade", "groundEffectFadeReset" }, 1)
     root.advancedSettings.order = 8
-    root.extraFeatures.order = 10
-    root.extraFeatures.hidden = function()
-        local o = extra.clearTrackerBtn
-        return not o or (type(o.hidden) == "function" and o.hidden())
+
+    -- Task-oriented pages (roadmap stage 4). Every option keeps its handler and
+    -- profile key; only where it is shown changes.
+    -- 1) Combat: what enables the camera and when it returns. Per-activity
+    --    distances get their own page instead of 25 rows on the same scroll.
+    root.smartSettings.name = L:Get("COMBAT_SETTINGS")
+    move(zoom, combat, { "zoomTransition" }, 13)
+    local activities = page("activitySettings", "UI_ACTIVITY_DISTANCES", 4.5)
+    move(combat, activities, { "normalDistanceHeader", "normalDistanceDesc", "normalZoomPreset",
+        "combatMinZoom", "normalZoomPresetInfo" }, 1)
+    move(combat, activities, { "activities_neutral" }, 11)
+    move(combat, activities, { "activities_pve" }, 12)
+    -- PvP activities are a separate page: on Retail eight activities with three
+    -- controls each would otherwise fill one scroll with 26 controls.
+    local pvp = page("pvpActivitySettings", "UI_PVP_DISTANCES", 4.6, function()
+        return not combat.activities_pvp and not (root.pvpActivitySettings and next(root.pvpActivitySettings.args))
+    end)
+    move(combat, pvp, { "activities_pvp" }, 1)
+
+    -- 2) Mouse wheel and zoom speed on one page with a name that says so.
+    root.zoomSettings.name = L:Get("UI_WHEEL_PAGE")
+
+    -- 3) The one-button "Extra Features" page joins the world/visual page.
+    local advanced = root.advancedSettings.args
+    root.advancedSettings.name = L:Get("UI_WORLD_PAGE")
+    if extra.clearTrackerBtn then
+        advanced.worldHeader = { type = "header", name = L:Get("UI_QUESTS_HEADER"), order = 30,
+            hidden = extra.clearTrackerBtn.hidden }
+        move(extra, advanced, { "clearTrackerBtn" }, 31)
     end
+    root.extraFeatures = nil
+
+    -- 4) A full reset belongs with the profiles, not next to Reload UI.
+    move(root.reloadGroup.args, root.profiles.args, { "resetBtn" }, 7)
+
     root.debugSettings.order, root.profiles.order = 11, 12
     root.reloadGroup.args.languageOverride.sorting = ns.Locale.order
 end
