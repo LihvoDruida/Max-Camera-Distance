@@ -20,7 +20,8 @@ local OVERVIEW_SECTIONS = {
     { "smartSettings", { "autoCombatZoom", "zoomTransition" } },
     { "mountSettings", { "autoMountZoom" } },
     { "afkSettings", { "enableAFK" } },
-    { "reloadGroup", { "minimapButton", "languageOverride" } },
+    { "reloadGroup", { "quickStartHealer", "quickStartMelee", "quickStartGatherer", "quickStartMinimal",
+        "minimapButton", "languageOverride" } },
 }
 
 -- Widget methods were added in different patches. Use the older equivalents

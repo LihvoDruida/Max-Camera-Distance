@@ -126,5 +126,19 @@ function Layout:Apply(options)
     move(root.reloadGroup.args, root.profiles.args, { "resetBtn" }, 7)
 
     root.debugSettings.order, root.profiles.order = 11, 12
+
+    -- Every settings page ends with a reset of just that page.
+    for key, group in pairs(root) do
+        if type(group) == "table" and group.type == "group" and group.args
+            and key ~= "reloadGroup" and key ~= "debugSettings" and key ~= "profiles" then
+            local pageKey = key
+            group.args.pageReset = {
+                type = "execute", confirm = true, order = 999,
+                name = L:Get("UI_RESET_PAGE"),
+                desc = L:Get("UI_RESET_PAGE_DESC"),
+                func = function() ns.Config:ResetPage(pageKey) end,
+            }
+        end
+    end
     root.reloadGroup.args.languageOverride.sorting = ns.Locale.order
 end
