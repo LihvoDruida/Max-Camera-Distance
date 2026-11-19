@@ -148,6 +148,10 @@ function UI:CollectRows(pageKey, query)
     local searching = query ~= ""
     if pageKey == "overview" and not searching then
         rows[#rows + 1] = { option = { type = "description" }, name = L.UI_OVERVIEW_DESC, info = {} }
+        if ns.Config and ns.Config.BuildCameraSummaryText then
+            local function summary() return ns.Config:BuildCameraSummaryText() end
+            rows[#rows + 1] = { option = { type = "description" }, name = summary(), info = {}, dynamicName = summary }
+        end
         for _, section in ipairs(OVERVIEW_SECTIONS) do
             local group = root.args[section[1]]
             if group and not self:Evaluate(group, "hidden", { section[1] }, false) then
@@ -206,8 +210,12 @@ function UI:CollectRows(pageKey, query)
                                 end
                             end
                         elseif o.type ~= "header" or not searching then
+                            local dynamicName
+                            if o.type == "description" and type(o.name) == "function" then
+                                dynamicName = function() return UI:Evaluate(o, "name", info, "") end
+                            end
                             rows[#rows + 1] = { option = o, info = info, name = name,
-                                desc = desc, disabled = disabled, trail = trail }
+                                desc = desc, disabled = disabled, trail = trail, dynamicName = dynamicName }
                         end
                     end
                 end
@@ -233,6 +241,44 @@ end
 
 function UI:RequestRefresh()
     self.dirty = true
+end
+
+-- Periodic live text (status, diagnostics) only rewrites labels. A full
+-- Rebuild re-sorts pages and re-measures every row; it is requested only when
+-- a changed text no longer fits its measured row height.
+function UI:RowHeightFor(kind, text)
+    self.measure:SetWidth((kind == "toggle" or kind == "multiselect") and 451 or 485)
+    self.measure:SetText(text)
+    local textHeight = self.measure:GetStringHeight()
+    if kind == "description" then return max(38, textHeight + 23) end
+    if kind == "range" then return max(88, textHeight + 61) end
+    if kind == "select" or kind == "input" then return max(80, textHeight + 54) end
+    return max(46, textHeight + 23)
+end
+
+function UI:RefreshDynamicRows()
+    if not self.rows then return false end
+    local needsRebuild = false
+    for _, row in ipairs(self.rows) do
+        if row.dynamicName then
+            local ok, text = pcall(row.dynamicName)
+            text = ok and tostring(text or "") or row.name
+            if text ~= row.name then
+                if self:RowHeightFor(row.option.type, text) ~= row.height then
+                    needsRebuild = true
+                else
+                    row.name = text
+                    for _, pool in pairs(self.pools) do
+                        for _, f in ipairs(pool) do
+                            if f.row == row and f.title then f.title:SetText(text) end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if needsRebuild then self:RequestRefresh() end
+    return needsRebuild
 end
 
 function UI:ShowDetails(row)
@@ -619,17 +665,7 @@ function UI:Rebuild(resetScroll)
     self.rows = self:CollectRows(self.pageKey, query)
     local y = 0
     for _, row in ipairs(self.rows) do
-        local kind = row.option.type
-        local height = (kind == "range" and 88) or ((kind == "select" or kind == "input") and 80) or 46
-        self.measure:SetWidth((kind == "toggle" or kind == "multiselect") and 451 or 485)
-        self.measure:SetText(row.name)
-        local textHeight = self.measure:GetStringHeight()
-        if kind == "range" then height = max(height, textHeight + 61)
-        elseif kind == "select" or kind == "input" then height = max(height, textHeight + 54)
-        else height = max(height, textHeight + 23) end
-        if kind == "description" then
-            height = max(38, textHeight + 23)
-        end
+        local height = self:RowHeightFor(row.option.type, row.name)
         row.y, row.height = y, height
         y = y + height
     end
@@ -825,9 +861,9 @@ function UI:Create()
         shown(self.clearSearch, self.search:GetText() ~= "")
         if statusTick >= 1 then
             statusTick = 0; self:UpdateStatus()
-            -- Diagnostic names depend on camera state. Rebuild only this page,
-            -- through the normal interaction/debounce guard, while it is open.
-            if self.pageKey == "debugSettings" then self:RequestRefresh() end
+            -- Live texts depend on camera state. Update labels in place; a
+            -- structural Rebuild still goes through the interaction guard.
+            if not self.interacting then self:RefreshDynamicRows() end
         end
     end)
     w:RegisterEvent("DISPLAY_SIZE_CHANGED"); w:RegisterEvent("UI_SCALE_CHANGED")

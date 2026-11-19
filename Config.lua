@@ -421,6 +421,69 @@ local function BuildCollisionSummaryText()
     )
 end
 
+-- One-line explanation of the camera decision: membership and place, personal
+-- and ally combat, the APPLIED controller state (and the fresh evaluation when
+-- they differ), the distance source and the pending return.
+local function BuildCameraSummaryText(snapshot)
+    snapshot = snapshot or (ns.Functions and ns.Functions.GetStatusSnapshot and ns.Functions:GetStatusSnapshot())
+    if not snapshot then
+        return L["STATUS_UNAVAILABLE"] or "Live status is unavailable right now."
+    end
+    local triggerConfig = snapshot.triggerConfig or {}
+    local activeTriggers = snapshot.activeTriggers or {}
+
+    local membership
+    if snapshot.groupType == "raid" then
+        membership = string.format(L["SUMMARY_RAID"] or "Raid %d", snapshot.groupSize or 0)
+    elseif snapshot.groupType == "party" then
+        membership = string.format(L["SUMMARY_PARTY"] or "Group %d", snapshot.groupSize or 0)
+    else
+        membership = L["SUMMARY_SOLO"] or "Solo"
+    end
+    local place = snapshot.inInstance and ContextText(snapshot.rawContext)
+        or (L["SUMMARY_WORLD"] or "Open world")
+
+    local parts = { membership .. " · " .. place .. "." }
+    local function add(text, off)
+        if off then text = text .. " " .. (L["SUMMARY_TRIGGER_OFF"] or "(trigger off)") end
+        parts[#parts + 1] = text .. "."
+    end
+    add(snapshot.playerInCombat and (L["SUMMARY_YOU_IN"] or "You are in combat")
+        or (L["SUMMARY_YOU_OUT"] or "You are out of combat"),
+        snapshot.playerInCombat and not triggerConfig.player)
+    if snapshot.groupType ~= "solo" then
+        if snapshot.groupInCombat then
+            add(L["SUMMARY_ALLY_IN"] or "Ally in combat", not triggerConfig.group)
+        elseif snapshot.groupCombatIncomplete then
+            add(L["SUMMARY_ALLY_INCOMPLETE"] or "Ally data incomplete")
+        else
+            add(L["SUMMARY_ALLY_NONE"] or "No combat found among reachable allies")
+        end
+        if snapshot.raidEncounter then
+            add(L["SUMMARY_ENCOUNTER"] or "Boss encounter active", not triggerConfig.group)
+        end
+    end
+    if activeTriggers.threat and not activeTriggers.player then
+        add(L["SUMMARY_THREAT"] or "Combat camera via threat")
+    end
+
+    local applied = snapshot.appliedState or snapshot.state
+    local camera = string.format(L["SUMMARY_CAMERA"] or "Camera: %s, distance source: %s",
+        StateText(applied), DistanceKeyText and DistanceKeyText(snapshot.targetDistanceKey) or tostring(snapshot.targetDistanceKey))
+    if snapshot.appliedState and snapshot.state and snapshot.appliedState ~= snapshot.state then
+        camera = camera .. " (" .. string.format(L["SUMMARY_FRESH"] or "fresh evaluation: %s", StateText(snapshot.state)) .. ")"
+    end
+    parts[#parts + 1] = camera .. "."
+    if snapshot.pendingReturnActive then
+        parts[#parts + 1] = string.format(L["SUMMARY_RETURN"] or "Return in %.1f s", snapshot.pendingReturnRemaining or 0) .. "."
+    end
+    return table.concat(parts, " ")
+end
+
+function Config:BuildCameraSummaryText()
+    return BuildCameraSummaryText()
+end
+
 local function BuildLiveStatusText()
     if not (ns.Functions and ns.Functions.GetStatusSnapshot) then
         return L["STATUS_UNAVAILABLE"] or "Live status is unavailable right now."
@@ -441,6 +504,8 @@ local function BuildLiveStatusText()
     local activeTriggers = snapshot.activeTriggers or {}
 
     return table.concat({
+        BuildCameraSummaryText(snapshot),
+        "",
         string.format("%s: %s", L["STATUS_ZOOM_STATE"] or "Zoom State", StateText(snapshot.state)),
         string.format("%s: %s", L["STATUS_CONTEXT"] or "Context", ContextText(snapshot.resolvedContext)),
         string.format("%s: %.1f", L["STATUS_TARGET_DISTANCE"] or "Target Distance", snapshot.targetYards or 0),
@@ -471,7 +536,7 @@ local function BuildLiveStatusText()
             BoolText(triggerConfig.player),
             L["COMBAT_TRIGGER_GROUP"] or "Group Combat",
             BoolText(triggerConfig.group),
-            L["COMBAT_TRIGGER_THREAT"] or "Threat Only",
+            L["COMBAT_TRIGGER_THREAT"] or "Also zoom on threat",
             BoolText(triggerConfig.threat)
         ),
         string.format("%s: %s=%s, %s=%s, %s=%s, %s=%s, %s=%s",
@@ -1251,7 +1316,7 @@ function Config:SetupOptions()
                     },
                     combatZoomOnThreat = {
                         type = "toggle",
-                        name = L["COMBAT_TRIGGER_THREAT"] or "Zoom on threat only",
+                        name = L["COMBAT_TRIGGER_THREAT"] or "Also zoom on threat",
                         desc = L["COMBAT_TRIGGER_THREAT_DESC"] or "Triggers combat zoom when you have threat, even if the normal combat flag has not settled yet.",
                         get = function() return GetOption("combatZoomOnThreat") end,
                         set = function(_, val) SetOption("combatZoomOnThreat", val) end,
