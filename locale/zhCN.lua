@@ -389,7 +389,7 @@ L["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "当 Smart Zoom 在坐骑或战斗状态�
 L["STATUS_DYNAMIC_BEHAVIOR"] = "动态行为"
 
 L["LANGUAGE_SETTING"] = '插件语言'
-L["LANGUAGE_SETTING_DESC"] = "选择插件语言。|cffffd100客户端默认|r 会跟随游戏客户端语言。修改此选项后界面会 |cffff5555立即重载|r。"
+L["LANGUAGE_SETTING_DESC"] = "选择插件语言。|cffffd100客户端默认|r 会跟随游戏客户端语言。新语言立即生效；游戏的插件列表和按键绑定名称会在 /reload 后更新。"
 L["LANGUAGE_CLIENT_DEFAULT"] = '客户端默认'
 L["ADDON_TITLE"] = 'Max Camera Distance'
 L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = '点击打开设置'
@@ -640,3 +640,21 @@ L["QUICK_START_MINIMAL_DESC"] = "只保留扩展的镜头距离：不使用智�
 L["QUICK_START_APPLIED"] = "已套用快速开始：%s。"
 L["UI_RESET_PAGE"] = "重置本页"
 L["UI_RESET_PAGE_DESC"] = "只把本页的设置恢复为默认值。其他页面和配置文件保持不变。"
+L["RELOAD_HINT"] = "输入 /reload 重载界面。"
+L["LANGUAGE_CHANGED"] = "语言已更改。游戏的插件列表和按键绑定名称会在 /reload 后更新。"
+
+-- Chat replies to /mcd commands
+L["MSG_QUEST_API_MISSING"] = "此客户端没有任务追踪 API。"
+L["MSG_SETTINGS_NOT_READY"] = "错误：设置尚未就绪。请使用 /mcd status 进行诊断。"
+L["MSG_AUTO_COMBAT_ZOOM"] = "自动战斗缩放"
+L["MSG_AUTO_MOUNT_ZOOM"] = "自动坐骑缩放"
+L["MSG_SHOULDER_CONTEXT"] = "越肩镜头（当前情境）"
+L["MSG_SHOULDER_OFFSET"] = "肩部偏移：%.2f"
+L["MSG_USAGE_SHOULDER"] = "用法：/mcd shoulder toggle | swap | center | config"
+L["MSG_GAMEPAD_STATUS"] = "手柄状态："
+L["MSG_GAMEPAD_CVARS_HINT"] = " - 输入 |cffffff00/mcd gamepad cvars|r 查看此客户端的全部手柄 CVar。"
+L["MSG_FAST_ZOOM"] = "已启用快速手动缩放。"
+L["MSG_SLOW_ZOOM"] = "已启用慢速手动缩放。"
+L["MSG_RESET_UNAVAILABLE"] = "错误：无法重置配置文件。"
+L["MSG_DEBUG_LOGGING"] = "调试日志"
+L["MSG_USAGE_DEBUG"] = "用法：/mcd debug on | debug off"

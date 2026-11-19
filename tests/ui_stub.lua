@@ -33,6 +33,9 @@ function methods:GetHeight() return self.height end
 function methods:SetPoint(...) self.point = { ... } end
 function methods:ClearAllPoints() self.point = nil end
 function methods:SetAllPoints() end
+function methods:SetAttribute(key, value) self.attributes = self.attributes or {}; self.attributes[key] = value end
+function methods:GetAttribute(key) return self.attributes and self.attributes[key] end
+function methods:RegisterForClicks() end
 function methods:Show() local changed = not self.shown; self.shown = true; if changed then call(self, "OnShow") end end
 function methods:Hide() local changed = self.shown; self.shown = false; if changed then call(self, "OnHide") end end
 function methods:SetShown(value) if value then self:Show() else self:Hide() end end

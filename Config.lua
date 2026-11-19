@@ -40,7 +40,23 @@ local clientTag = Compat.CLIENT_TAG or (IS_RETAIL and "Retail" or "Classic")
 -- =====================================================================
 local function SafeReload()
     if Compat.SafeReload then
-        Compat.SafeReload()
+        Compat.SafeReload(L["RELOAD_HINT"] or "Type /reload to reload the interface.")
+    end
+end
+
+-- Apply a language change at once: rebuild the option tree (its names are
+-- resolved when it is built) and relabel the open window. No reload needed.
+local function ApplyLanguageLive()
+    if ns.Locale and ns.Locale.GetActiveLocale then ns.Locale:GetActiveLocale() end
+    Config.options = nil
+    Config:SetupOptions()
+    local window = ns.SettingsWindow
+    if window and window.window then
+        if window.UpdateLabels then window:UpdateLabels() end
+        if window.RequestRefresh then window:RequestRefresh() end
+    end
+    if ns.Functions and ns.Functions.SendMessage then
+        ns.Functions:SendMessage(L["LANGUAGE_CHANGED"] or "Language changed. The game's AddOns list and key bindings update after /reload.")
     end
 end
 
@@ -89,8 +105,7 @@ local function SetLanguageOption(value)
         ns.Locale:SetOverride(normalized)
     end
 
-    Config:NotifyChange()
-    SafeReload()
+    ApplyLanguageLive()
 end
 
 local function ApplyNow()
@@ -1016,6 +1031,9 @@ function Config:SetupOptions()
                         name = L["RELOAD_BUTTON"],
                         desc = L["RELOAD_BUTTON_DESC"],
                         type = "execute",
+                        -- The click lands on a secure /reload overlay; this
+                        -- handler only runs where that overlay is unavailable.
+                        secureMacro = "/reload",
                         func = SafeReload,
                         width = "normal"
                     },

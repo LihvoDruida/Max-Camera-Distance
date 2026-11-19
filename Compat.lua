@@ -10,7 +10,6 @@ local tostring = tostring
 local GetCVar = GetCVar
 local GetCVarDefault = GetCVarDefault
 local SetCVar = SetCVar
-local ReloadUI = ReloadUI
 local GetAddOnMetadata = GetAddOnMetadata
 local InCombatLockdown = InCombatLockdown
 
@@ -569,12 +568,11 @@ function Compat.GetAddonVersion()
     return 'Dev'
 end
 
-function Compat.SafeReload()
-    if C_UI and C_UI.Reload then
-        C_UI.Reload()
-    elseif ReloadUI then
-        ReloadUI()
-    end
+-- Never reload from addon code: C_UI.Reload / ReloadUI are protected on
+-- current clients and the call is blocked (ADDON_ACTION_BLOCKED). The settings
+-- window offers a secure /reload button; everywhere else, tell the player.
+function Compat.SafeReload(message)
+    print("|cff0070deMCD:|r " .. tostring(message or "Type /reload to reload the interface."))
 end
 
 -- Shared policy for bundled LibCamera without replacing global camera APIs.
