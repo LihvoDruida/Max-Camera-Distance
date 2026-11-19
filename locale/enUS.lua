@@ -115,6 +115,7 @@ L["SOFT_TARGET_ICONS_MODE_DESC"] = "Controls the global SoftTargetIconGameObject
 L["SOFT_TARGET_ICONS_MODE_GAME"] = "Game setting (do not change)"
 L["SOFT_TARGET_ICONS_MODE_ON"] = "Always on"
 L["SOFT_TARGET_ICONS_MODE_OFF"] = "Always off"
+L["SOFT_TARGET_ICONS_LEGACY"] = "Earlier MCD versions saved: %s."
 
 -- ============================================================================
 -- Extra Features
@@ -280,6 +281,7 @@ L["SUMMARY_TRIGGER_OFF"] = "(trigger off)"
 L["SUMMARY_CAMERA"] = "Camera: %s, distance source: %s"
 L["SUMMARY_FRESH"] = "fresh evaluation: %s"
 L["SUMMARY_RETURN"] = "Return in %.1f s"
+L["STATUS_LAST_DECISION"] = "Last camera decision: %s (%s), %.1f s ago"
 L["STATUS_REASON_THREAT"] = "Threat"
 L["STATUS_REASON_MOUNTED"] = "Mounted"
 L["STATUS_REASON_WORLD_BOSS"] = "World Boss"
@@ -327,6 +329,8 @@ L["COMBAT_TRIGGER_GROUP"] = "Zoom when party or raid enters combat"
 L["COMBAT_TRIGGER_GROUP_DESC"] = "Triggers combat zoom when your party or raid is fighting, even if you are not actively in combat yet. An active raid boss encounter also counts. Allies out of range or in another zone may not report combat."
 L["COMBAT_TRIGGER_THREAT"] = "Also zoom on threat"
 L["COMBAT_TRIGGER_THREAT_DESC"] = "Triggers combat zoom when you have threat, even if the normal combat flag has not settled yet."
+L["COMBAT_TRIGGER_ENCOUNTER"] = "Zoom during boss encounters"
+L["COMBAT_TRIGGER_ENCOUNTER_DESC"] = "An active boss encounter enables the combat camera: in a raid together with the group trigger, outdoors (world bosses) on its own, even when you and your allies report no combat yet."
 L["STATUS_TRIGGER_RULES"] = "Trigger Rules"
 L["STATUS_ACTIVE_TRIGGERS"] = "Active Triggers"
 

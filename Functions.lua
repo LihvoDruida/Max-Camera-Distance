@@ -1689,6 +1689,7 @@ function Functions:IsGroupInCombat()
 
     local result = false
     local incomplete = false
+    local readable = 0
     local ReadTriState = Functions.ReadTriState
 
     -- Roster counts already define which raid/party unit tokens can exist, so
@@ -1710,7 +1711,7 @@ function Functions:IsGroupInCombat()
             elseif not isSelf then
                 local fighting = ReadTriState(UnitAffectingCombat, unit)
                 if fighting then return true end
-                if fighting == nil then incomplete = true end
+                if fighting == nil then incomplete = true else readable = readable + 1 end
             end
         end
         return false
@@ -1720,7 +1721,7 @@ function Functions:IsGroupInCombat()
         for i = 1, count do
             local fighting = ReadTriState(UnitAffectingCombat, PARTY_UNITS[i])
             if fighting then return true end
-            if fighting == nil then incomplete = true end
+            if fighting == nil then incomplete = true else readable = readable + 1 end
         end
         return false
     end
@@ -1733,8 +1734,18 @@ function Functions:IsGroupInCombat()
         result = ScanParty(math.min(memberCount, 4))
     end
 
+    -- Zoning/loading can make every member unreadable at once. That is no
+    -- evidence that the group left combat: keep the last readable answer.
+    local positiveAlly = result
+    if not result and incomplete and readable == 0 and memberCount > 0 then
+        result = runtimeCache.groupCombatLastKnown and true or false
+    elseif readable > 0 or result then
+        runtimeCache.groupCombatLastKnown = result
+    end
+    if memberCount == 0 then runtimeCache.groupCombatLastKnown = nil end
+
     runtimeCache.groupCombatKey = key
-    runtimeCache.groupCombatIncomplete = incomplete and not result
+    runtimeCache.groupCombatIncomplete = incomplete and not positiveAlly
     runtimeCache.groupCombat = result
     runtimeCache.groupCombatExpiresAt = now + GROUP_COMBAT_CACHE_SECONDS
 
@@ -2056,6 +2067,7 @@ local function GetCombatTriggerConfig(db)
         player = (db and db.combatZoomOnPlayer ~= false) and true or false,
         group = (db and db.combatZoomOnGroup ~= false) and true or false,
         threat = (db and db.combatZoomOnThreat ~= false) and true or false,
+        encounter = (db and db.combatZoomOnEncounter ~= false) and true or false,
     }
 end
 
@@ -2067,12 +2079,12 @@ local function GetCombatActivation(db, signals, full)
     local activeTriggers = { player = false, group = false, encounter = false, threat = false, worldBoss = false }
 
     activeTriggers.player = triggerConfig.player and signals.playerInCombat or false
-    activeTriggers.worldBoss = signals.forceCombatZoom and true or false
+    activeTriggers.worldBoss = triggerConfig.encounter and signals.forceCombatZoom and true or false
     if full or not (activeTriggers.player or activeTriggers.worldBoss) then
         activeTriggers.threat = triggerConfig.threat and signals.hasThreat or false
     end
     if full or not (activeTriggers.player or activeTriggers.worldBoss or activeTriggers.threat) then
-        activeTriggers.encounter = triggerConfig.group and signals.raidEncounter or false
+        activeTriggers.encounter = triggerConfig.group and triggerConfig.encounter and signals.raidEncounter or false
     end
     if full or not (activeTriggers.player or activeTriggers.worldBoss or activeTriggers.threat or activeTriggers.encounter) then
         activeTriggers.group = triggerConfig.group and signals.groupInCombat or false

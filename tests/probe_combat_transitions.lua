@@ -239,7 +239,24 @@ for _, case in ipairs({ { "Retail", "12.1.0", 120100, 1 }, { "Forever", "1.60.1"
     group, incomplete, snap = Signals()
     assert(group == false and snap.raidEncounter == true and snap.activeTriggers.encounter == true
         and snap.state == "combat", label .. "encounter mixed into ally combat or lost its camera effect")
+    db.combatZoomOnEncounter = false
+    group, incomplete, snap = Signals()
+    assert(snap.activeTriggers.encounter == false and snap.state == "normal",
+        label .. "disabled encounter option still enabled the combat camera")
+    db.combatZoomOnEncounter = true
     encounter = false
+
+    -- 6b) Zoning: every member unreadable keeps the last readable answer.
+    combat = { player = false, raid12 = true }
+    group = Signals()
+    assert(group == true, label .. "setup: ally combat not seen")
+    for i = 2, 40 do combat["raid" .. i] = "error" end
+    group, incomplete = Signals()
+    assert(group == true and incomplete == true,
+        label .. "unreadable roster during zoning was taken as proof the group left combat")
+    combat = { player = false }
+    group, incomplete = Signals()
+    assert(group == false and incomplete == false, label .. "readable roster did not replace the sticky value")
 
     -- 7) Cheap path: personal combat decides the camera without a roster scan.
     combat = { player = true }
@@ -272,4 +289,4 @@ for _, case in ipairs({ { "Retail", "12.1.0", 120100, 1 }, { "Forever", "1.60.1"
     combat = {}
 end
 
-print("probe_combat_transitions: PASS (group combat watch, return deadline, stale timer, shoulder matrix, shoulder toggle, roster unknowns, encounter, cheap path, aura cache, regen fallback)")
+print("probe_combat_transitions: PASS (group combat watch, return deadline, stale timer, shoulder matrix, shoulder toggle, roster unknowns, encounter option, zoning, cheap path, aura cache, regen fallback)")

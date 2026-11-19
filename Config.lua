@@ -503,8 +503,17 @@ local function BuildLiveStatusText()
     local triggerConfig = snapshot.triggerConfig or {}
     local activeTriggers = snapshot.activeTriggers or {}
 
+    local lastDecision = ""
+    if snapshot.appliedState then
+        local now = (GetTime and GetTime()) or 0
+        local age = (snapshot.lastAppliedAt and now > 0) and math.max(0, now - snapshot.lastAppliedAt) or 0
+        lastDecision = string.format(L["STATUS_LAST_DECISION"] or "Last camera decision: %s (%s), %.1f s ago",
+            StateText(snapshot.appliedState), tostring(snapshot.sourceEvent or "-"), age)
+    end
+
     return table.concat({
         BuildCameraSummaryText(snapshot),
+        lastDecision,
         "",
         string.format("%s: %s", L["STATUS_ZOOM_STATE"] or "Zoom State", StateText(snapshot.state)),
         string.format("%s: %s", L["STATUS_CONTEXT"] or "Context", ContextText(snapshot.resolvedContext)),
@@ -538,7 +547,7 @@ local function BuildLiveStatusText()
             BoolText(triggerConfig.group),
             L["COMBAT_TRIGGER_THREAT"] or "Also zoom on threat",
             BoolText(triggerConfig.threat)
-        ),
+        ) .. string.format(", %s=%s", L["STATUS_REASON_ENCOUNTER"] or "Boss Encounter", BoolText(triggerConfig.encounter)),
         string.format("%s: %s=%s, %s=%s, %s=%s, %s=%s, %s=%s",
             L["STATUS_ACTIVE_TRIGGERS"] or "Active Triggers",
             L["STATUS_REASON_PLAYER"] or "Player",
@@ -1268,7 +1277,9 @@ function Config:SetupOptions()
                                 ns.Functions:ResetCombatRhythm()
                             end
                         end,
-                        order = 13,
+                        -- Grouped with the return delays: rules read "what enables
+                        -- the camera" -> "which distance" -> "when to return".
+                        order = 81.1,
                         width = "full",
                         disabled = function() return not GetOption("autoCombatZoom") end,
                     },
@@ -1279,7 +1290,7 @@ function Config:SetupOptions()
                         min = 1, max = 15, step = 0.5,
                         get = function() return GetOption("adaptiveCombatReturnMax") end,
                         set = function(_, val) SetOption("adaptiveCombatReturnMax", val) end,
-                        order = 14,
+                        order = 81.2,
                         disabled = function()
                             return not GetOption("autoCombatZoom") or not GetOption("adaptiveCombatReturn")
                         end,
@@ -1321,6 +1332,16 @@ function Config:SetupOptions()
                         get = function() return GetOption("combatZoomOnThreat") end,
                         set = function(_, val) SetOption("combatZoomOnThreat", val) end,
                         order = 24,
+                        disabled = function() return not GetOption("autoCombatZoom") end,
+                        width = "full",
+                    },
+                    combatZoomOnEncounter = {
+                        type = "toggle",
+                        name = L["COMBAT_TRIGGER_ENCOUNTER"] or "Zoom during boss encounters",
+                        desc = L["COMBAT_TRIGGER_ENCOUNTER_DESC"] or "An active boss encounter enables the combat camera: in a raid together with the group trigger, outdoors (world bosses) on its own, even when you and your allies report no combat yet.",
+                        get = function() return GetOption("combatZoomOnEncounter") ~= false end,
+                        set = function(_, val) SetOption("combatZoomOnEncounter", val) end,
+                        order = 25,
                         disabled = function() return not GetOption("autoCombatZoom") end,
                         width = "full",
                     },
@@ -1541,8 +1562,18 @@ function Config:SetupOptions()
                         name = L["SOFT_TARGET_INTERACT"],
                         desc = function()
                             local live = Compat.SafeGetCVar and Compat.SafeGetCVar("SoftTargetIconGameObject")
-                            return (L["SOFT_TARGET_ICONS_MODE_DESC"] or "Controls the global SoftTargetIconGameObject setting for every character and addon. \"Game setting\" never writes it, so gathering addons such as NodeSight can manage it. Current game value: %s.")
+                            local text = (L["SOFT_TARGET_ICONS_MODE_DESC"] or "Controls the global SoftTargetIconGameObject setting for every character and addon. \"Game setting\" never writes it, so gathering addons such as NodeSight can manage it. Current game value: %s.")
                                 :format(tostring(live or "?"))
+                            -- The pre-mode boolean, only when this profile actually
+                            -- saved one (rawget skips AceDB defaults). A hint only:
+                            -- it may come from the old live-CVar migration.
+                            local db = GetDB()
+                            local legacy = db and rawget(db, "softTargetInteract")
+                            if type(legacy) == "boolean" and GetOption("softTargetIconsMode") == "game" then
+                                text = text .. " " .. (L["SOFT_TARGET_ICONS_LEGACY"] or "Earlier MCD versions saved: %s.")
+                                    :format(legacy and (L["SOFT_TARGET_ICONS_MODE_ON"] or "Always on") or (L["SOFT_TARGET_ICONS_MODE_OFF"] or "Always off"))
+                            end
+                            return text
                         end,
                         values = function()
                             return {

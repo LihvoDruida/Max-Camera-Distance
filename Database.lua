@@ -244,6 +244,7 @@ local PROFILE_DEFAULTS = {
     combatZoomOnPlayer = true,
     combatZoomOnGroup = true,
     combatZoomOnThreat = true,
+    combatZoomOnEncounter = true, -- boss encounters keep their pre-option effect
     mountZoomFactor = MAX_YARDS,
 
     -- Per-activity combat distances and return delays are generated from
@@ -648,6 +649,7 @@ function Database:ApplyMigrations(profile)
     profile.combatZoomOnPlayer = NormalizeBoolean(profile.combatZoomOnPlayer, PROFILE_DEFAULTS.combatZoomOnPlayer)
     profile.combatZoomOnGroup = NormalizeBoolean(profile.combatZoomOnGroup, PROFILE_DEFAULTS.combatZoomOnGroup)
     profile.combatZoomOnThreat = NormalizeBoolean(profile.combatZoomOnThreat, PROFILE_DEFAULTS.combatZoomOnThreat)
+    profile.combatZoomOnEncounter = NormalizeBoolean(profile.combatZoomOnEncounter, PROFILE_DEFAULTS.combatZoomOnEncounter)
     profile.reduceUnexpectedMovement = NormalizeBoolean(profile.reduceUnexpectedMovement, PROFILE_DEFAULTS.reduceUnexpectedMovement)
     profile.cameraIndirectVisibility = NormalizeBoolean(profile.cameraIndirectVisibility, PROFILE_DEFAULTS.cameraIndirectVisibility)
     profile.cameraIndirectOffset = Clamp(tonumber(profile.cameraIndirectOffset) or PROFILE_DEFAULTS.cameraIndirectOffset, 0, 10)

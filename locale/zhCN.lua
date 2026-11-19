@@ -109,6 +109,7 @@ L["SOFT_TARGET_ICONS_MODE_DESC"] = "控制所有角色和插件共用的全局�
 L["SOFT_TARGET_ICONS_MODE_GAME"] = "游戏设置（不更改）"
 L["SOFT_TARGET_ICONS_MODE_ON"] = "始终开启"
 L["SOFT_TARGET_ICONS_MODE_OFF"] = "始终关闭"
+L["SOFT_TARGET_ICONS_LEGACY"] = "旧版 MCD 曾保存：%s。"
 
 -- ============================================================================
 -- 额外功能
@@ -249,6 +250,7 @@ L["SUMMARY_TRIGGER_OFF"] = "（触发器已关闭）"
 L["SUMMARY_CAMERA"] = "镜头：%s，距离来源：%s"
 L["SUMMARY_FRESH"] = "最新评估：%s"
 L["SUMMARY_RETURN"] = "%.1f 秒后恢复"
+L["STATUS_LAST_DECISION"] = "最近一次镜头决策：%s（%s），%.1f 秒前"
 L["STATUS_REASON_THREAT"] = "仇恨"
 L["STATUS_REASON_MOUNTED"] = "已骑乘"
 L["STATUS_REASON_WORLD_BOSS"] = "世界首领"
@@ -296,6 +298,8 @@ L["COMBAT_TRIGGER_GROUP"] = "小队或团队进入战斗时缩放"
 L["COMBAT_TRIGGER_GROUP_DESC"] = "当你的小队或团队进入战斗时触发战斗缩放，即使你自己还没有正式进入战斗。进行中的团队首领战斗也会计入。超出范围或位于其他区域的队友可能无法报告战斗状态。"
 L["COMBAT_TRIGGER_THREAT"] = "有仇恨时也缩放"
 L["COMBAT_TRIGGER_THREAT_DESC"] = "当你获得仇恨时触发战斗缩放，即使常规战斗标记还未完全稳定。"
+L["COMBAT_TRIGGER_ENCOUNTER"] = "首领战斗时缩放"
+L["COMBAT_TRIGGER_ENCOUNTER_DESC"] = "进行中的首领战斗会启用战斗镜头：在团队中与小队触发器一起生效，在野外（世界首领）单独生效，即使你和队友尚未进入战斗。"
 L["STATUS_TRIGGER_RULES"] = "触发规则"
 L["STATUS_ACTIVE_TRIGGERS"] = "当前激活的触发条件"
 
