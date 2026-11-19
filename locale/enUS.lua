@@ -384,7 +384,7 @@ L["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "When Smart Zoom is active for Mount or Co
 L["STATUS_DYNAMIC_BEHAVIOR"] = "Dynamic Behavior"
 
 L["LANGUAGE_SETTING"] = 'Addon Language'
-L["LANGUAGE_SETTING_DESC"] = "Choose the addon language. |cffffd100Client Default|r follows the game client language. The UI |cffff5555reloads immediately|r after changing this option."
+L["LANGUAGE_SETTING_DESC"] = "Choose the addon language. |cffffd100Client Default|r follows the game client language. The new language applies at once; the game's AddOns list and key bindings follow after /reload."
 L["LANGUAGE_CLIENT_DEFAULT"] = 'Client Default'
 L["ADDON_TITLE"] = 'Max Camera Distance'
 L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Click to open settings'
@@ -642,3 +642,21 @@ L["QUICK_START_MINIMAL_DESC"] = "Only the extended camera distance: no smart zoo
 L["QUICK_START_APPLIED"] = "Quick start applied: %s."
 L["UI_RESET_PAGE"] = "Reset This Page"
 L["UI_RESET_PAGE_DESC"] = "Restores the defaults for the settings on this page only. Other pages and profiles stay as they are."
+L["RELOAD_HINT"] = "Type /reload to reload the interface."
+L["LANGUAGE_CHANGED"] = "Language changed. The game's AddOns list and key bindings update after /reload."
+
+-- Chat replies to /mcd commands
+L["MSG_QUEST_API_MISSING"] = "Quest tracking API not available in this client."
+L["MSG_SETTINGS_NOT_READY"] = "Error: settings are not ready. Use /mcd status for diagnostics."
+L["MSG_AUTO_COMBAT_ZOOM"] = "Auto Combat Zoom"
+L["MSG_AUTO_MOUNT_ZOOM"] = "Auto Mount Zoom"
+L["MSG_SHOULDER_CONTEXT"] = "Shoulder camera (current situation)"
+L["MSG_SHOULDER_OFFSET"] = "Shoulder offset: %.2f"
+L["MSG_USAGE_SHOULDER"] = "Usage: /mcd shoulder toggle | swap | center | config"
+L["MSG_GAMEPAD_STATUS"] = "Gamepad status:"
+L["MSG_GAMEPAD_CVARS_HINT"] = " - use |cffffff00/mcd gamepad cvars|r to list every gamepad CVar this client has."
+L["MSG_FAST_ZOOM"] = "Fast manual zoom enabled."
+L["MSG_SLOW_ZOOM"] = "Slow manual zoom enabled."
+L["MSG_RESET_UNAVAILABLE"] = "Error: profile reset is unavailable."
+L["MSG_DEBUG_LOGGING"] = "Debug logging"
+L["MSG_USAGE_DEBUG"] = "Usage: /mcd debug on | debug off"

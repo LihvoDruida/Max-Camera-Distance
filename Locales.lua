@@ -34,10 +34,18 @@ function Locale:IsSupported(localeCode)
     return type(localeCode) == "string" and self.supported[localeCode] == true
 end
 
+-- Client locales without their own table borrow the closest shipped one:
+-- Traditional Chinese readers get the Chinese translation, not English.
+Locale.aliases = Locale.aliases or { zhTW = "zhCN", enGB = "enUS" }
+
 function Locale:GetClientLocale()
     local clientLocale = GetLocale and GetLocale() or "enUS"
     if self:IsSupported(clientLocale) then
         return clientLocale
+    end
+    local alias = self.aliases[clientLocale]
+    if alias and self:IsSupported(alias) then
+        return alias
     end
     return "enUS"
 end

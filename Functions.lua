@@ -4158,12 +4158,12 @@ end
 -- =====================================================================
 function Functions:ClearAllQuestTracking()
     if not C_QuestLog or not C_QuestLog.GetNumQuestWatches then
-        Functions:SendMessage("Quest tracking API not available in this client.")
+        Functions:SendMessage(L["MSG_QUEST_API_MISSING"])
         return
     end
 
     if not (C_QuestLog.GetQuestIDForQuestWatchIndex and C_QuestLog.RemoveQuestWatch) then
-        Functions:SendMessage("Quest tracking API not available in this client.")
+        Functions:SendMessage(L["MSG_QUEST_API_MISSING"])
         return
     end
 
@@ -4306,35 +4306,35 @@ function Functions:SlashCmdHandler(msg)
         if ns.Config and ns.Config.Open then
             ns.Config:Open()
         else
-            Functions:SendMessage("Error: native settings are not ready. Use /mcd status for diagnostics.")
+            Functions:SendMessage(L["MSG_SETTINGS_NOT_READY"])
         end
 
     elseif command == "autozoom" then
         db.autoCombatZoom = not db.autoCombatZoom
         Functions:AdjustCamera(true)
         local state = db.autoCombatZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
-        Functions:SendMessage("Auto Combat Zoom: " .. state)
+        Functions:SendMessage(L["MSG_AUTO_COMBAT_ZOOM"] .. ": " .. state)
 
     elseif command == "automount" then
         db.autoMountZoom = not db.autoMountZoom
         Functions:AdjustCamera(true)
         local state = db.autoMountZoom and (L["ENABLED"] or "|cff00ff00Enabled|r") or (L["DISABLED"] or "|cffff0000Disabled|r")
-        Functions:SendMessage("Auto Mount Zoom: " .. state)
+        Functions:SendMessage(L["MSG_AUTO_MOUNT_ZOOM"] .. ": " .. state)
 
     elseif command == "shoulder" or command == "actioncam" then
         if arg == "toggle" or arg == "" then
             local enabled = Functions:ToggleActionCamShoulderForCurrentContext()
-            Functions:SendMessage("ActionCam shoulder (current context): " .. (enabled and (L["ENABLED"] or "enabled") or (L["DISABLED"] or "disabled")))
+            Functions:SendMessage(L["MSG_SHOULDER_CONTEXT"] .. ": " .. (enabled and L["ENABLED"] or L["DISABLED"]))
         elseif arg == "swap" then
             local offset = Functions:SwapActionCamShoulder()
-            Functions:SendMessage(string.format("ActionCam shoulder offset: %.2f", tonumber(offset) or 0))
+            Functions:SendMessage(string.format(L["MSG_SHOULDER_OFFSET"], tonumber(offset) or 0))
         elseif arg == "center" then
             Functions:CenterActionCamShoulder()
-            Functions:SendMessage("ActionCam shoulder offset: 0")
+            Functions:SendMessage(string.format(L["MSG_SHOULDER_OFFSET"], 0))
         elseif arg == "config" then
             Functions:OpenActionCamSettings()
         else
-            Functions:SendMessage("Usage: /mcd shoulder toggle | swap | center | config")
+            Functions:SendMessage(L["MSG_USAGE_SHOULDER"])
         end
 
     elseif command == "status" then
@@ -4355,26 +4355,26 @@ function Functions:SlashCmdHandler(msg)
         if ns.GamePad and ns.GamePad.Refresh then
             pcall(ns.GamePad.Refresh, ns.GamePad, true)
         end
-        Functions:SendMessage("GamePad status:")
+        Functions:SendMessage(L["MSG_GAMEPAD_STATUS"])
         Functions:PrintGamePadStatus()
         if arg == "cvars" then
             Functions:PrintGamePadCVarInventory()
         else
-            Functions:SendMessage(" - use |cffffff00/mcd gamepad cvars|r to list every gamepad CVar this client has.")
+            Functions:SendMessage(L["MSG_GAMEPAD_CVARS_HINT"])
         end
 
     elseif command == "fastzoom" then
         db.moveViewDistance = 50
         db.zoomTransitionTime = 0.1
         UpdateCVar("cameraDistanceMoveSpeed", 50)
-        Functions:SendMessage("Fast manual zoom enabled.")
+        Functions:SendMessage(L["MSG_FAST_ZOOM"])
         NotifyConfigChanged()
 
     elseif command == "slowzoom" then
         db.moveViewDistance = 20
         db.zoomTransitionTime = 0.5
         UpdateCVar("cameraDistanceMoveSpeed", 20)
-        Functions:SendMessage("Slow manual zoom enabled.")
+        Functions:SendMessage(L["MSG_SLOW_ZOOM"])
         NotifyConfigChanged()
 
     elseif command == "reset" then
@@ -4386,7 +4386,7 @@ function Functions:SlashCmdHandler(msg)
             Functions:AdjustCamera(true)
             Functions:SendMessage(L["SETTINGS_RESET"] or "Profile has been reset to default values.")
         else
-            Functions:SendMessage("Error: profile reset is unavailable.")
+            Functions:SendMessage(L["MSG_RESET_UNAVAILABLE"])
         end
 
     elseif command == "debug" then
@@ -4397,12 +4397,12 @@ function Functions:SlashCmdHandler(msg)
             db.debugLevel.warning = true
             db.debugLevel.info = true
             db.debugLevel.debug = true
-            Functions:SendMessage("Debug logging: " .. (L["ENABLED"] or "enabled"))
+            Functions:SendMessage(L["MSG_DEBUG_LOGGING"] .. ": " .. L["ENABLED"])
         elseif arg == "off" then
             db.enableDebugLogging = false
-            Functions:SendMessage("Debug logging: " .. (L["DISABLED"] or "disabled"))
+            Functions:SendMessage(L["MSG_DEBUG_LOGGING"] .. ": " .. L["DISABLED"])
         else
-            Functions:SendMessage("Usage: /mcd debug on | debug off")
+            Functions:SendMessage(L["MSG_USAGE_DEBUG"])
         end
 
     else

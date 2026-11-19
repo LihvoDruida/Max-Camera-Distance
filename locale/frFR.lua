@@ -343,7 +343,7 @@ L["RESPECT_MANUAL_STATE_ZOOM_DESC"] = "Lorsque Smart Zoom est actif pour la mont
 L["STATUS_DYNAMIC_BEHAVIOR"] = "Comportement dynamique"
 
 L["LANGUAGE_SETTING"] = "Langue de l'addon"
-L["LANGUAGE_SETTING_DESC"] = "Choisissez la langue de l'addon. |cffffd100Langue du client|r suit la langue du jeu. L'interface est |cffff5555rechargée immédiatement|r après la modification de cette option."
+L["LANGUAGE_SETTING_DESC"] = "Choisissez la langue de l'addon. |cffffd100Langue du client|r suit la langue du jeu. La nouvelle langue s'applique tout de suite ; la liste des addons du jeu et les raccourcis suivent après /reload."
 L["LANGUAGE_CLIENT_DEFAULT"] = 'Langue du client'
 L["ADDON_TITLE"] = 'Max Camera Distance'
 L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = 'Cliquez pour ouvrir les paramètres'
@@ -465,7 +465,7 @@ L["GAMEPAD_ACTIONCAM_BLOCKED_GENERIC"] = "|cffff5555La compatibilité Action Cam
 
 L["GAMEPAD_ADVANCED_OVERRIDE_DESC"] = "API-only values start from the client's built-in defaults. Enabling management applies those defaults; disabling it restores them."
 
-L["GAMEPAD_ACTIONCAM_COMPAT_HEADER"] = "Gamepad Compatibility"
+L["GAMEPAD_ACTIONCAM_COMPAT_HEADER"] = "Compatibilité manette"
 
 L["GAMEPAD_ACTIONCAM_COMPAT_DESC"] = "Applied only while Action Camera requests the over-shoulder camera."
 
@@ -592,3 +592,21 @@ L["QUICK_START_MINIMAL_DESC"] = "Seulement la distance de caméra étendue : pas
 L["QUICK_START_APPLIED"] = "Démarrage rapide appliqué : %s."
 L["UI_RESET_PAGE"] = "Réinitialiser cette page"
 L["UI_RESET_PAGE_DESC"] = "Rétablit les valeurs par défaut des réglages de cette page uniquement. Les autres pages et profils ne changent pas."
+L["RELOAD_HINT"] = "Tapez /reload pour recharger l'interface."
+L["LANGUAGE_CHANGED"] = "Langue modifiée. La liste des addons du jeu et les raccourcis seront mis à jour après /reload."
+
+-- Chat replies to /mcd commands
+L["MSG_QUEST_API_MISSING"] = "L'API de suivi des quêtes n'est pas disponible dans ce client."
+L["MSG_SETTINGS_NOT_READY"] = "Erreur : les réglages ne sont pas prêts. Utilisez /mcd status pour le diagnostic."
+L["MSG_AUTO_COMBAT_ZOOM"] = "Zoom de combat automatique"
+L["MSG_AUTO_MOUNT_ZOOM"] = "Zoom automatique en monture"
+L["MSG_SHOULDER_CONTEXT"] = "Caméra d'épaule (situation actuelle)"
+L["MSG_SHOULDER_OFFSET"] = "Décalage d'épaule : %.2f"
+L["MSG_USAGE_SHOULDER"] = "Utilisation : /mcd shoulder toggle | swap | center | config"
+L["MSG_GAMEPAD_STATUS"] = "État de la manette :"
+L["MSG_GAMEPAD_CVARS_HINT"] = " - tapez |cffffff00/mcd gamepad cvars|r pour lister toutes les CVars de manette de ce client."
+L["MSG_FAST_ZOOM"] = "Zoom manuel rapide activé."
+L["MSG_SLOW_ZOOM"] = "Zoom manuel lent activé."
+L["MSG_RESET_UNAVAILABLE"] = "Erreur : la réinitialisation du profil est indisponible."
+L["MSG_DEBUG_LOGGING"] = "Journal de débogage"
+L["MSG_USAGE_DEBUG"] = "Utilisation : /mcd debug on | debug off"

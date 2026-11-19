@@ -593,6 +593,7 @@ function UI:BindRow(f, row)
     elseif o.type == "execute" then
         f.control:SetHeight(max(30, row.height - 12))
         f.control.text:SetText(row.name); enabled(f.control, not row.disabled)
+        self:BindSecureMacro(f, o.secureMacro)
     end
     f.syncing = false
 end
@@ -741,6 +742,32 @@ function UI:SetStandaloneEscape(enabled)
         if UISpecialFrames[i] == name then table.remove(UISpecialFrames, i) end
     end
     if enabled then table.insert(UISpecialFrames, name) end
+end
+
+-- Reloading the UI is a protected action on current clients: C_UI.Reload() and
+-- ReloadUI() called from addon code raise ADDON_ACTION_BLOCKED. A secure
+-- macro button lying over our button runs /reload from the player's own
+-- click instead. Secure frames cannot be shown or re-attributed in combat, so
+-- the overlay is only (re)bound outside combat; the plain button then explains.
+function UI:BindSecureMacro(f, macro)
+    local secure = f.secure
+    if InCombatLockdown and InCombatLockdown() then return end
+    if not macro then
+        if secure then secure:Hide() end
+        return
+    end
+    if not secure then
+        local ok, created = pcall(CreateFrame, "Button", nil, f.control, "SecureActionButtonTemplate")
+        if not ok or not created then return end
+        secure = created
+        secure:SetAllPoints(f.control)
+        if secure.RegisterForClicks then secure:RegisterForClicks("AnyUp", "AnyDown") end
+        secure:SetScript("OnEnter", function() UI:ShowDetails(f.row) end)
+        f.secure = secure
+    end
+    secure:SetAttribute("type", "macro")
+    secure:SetAttribute("macrotext", macro)
+    secure:Show()
 end
 
 function UI:UpdateLabels()

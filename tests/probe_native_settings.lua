@@ -366,6 +366,43 @@ do
     UIParent:SetSize(w, h); ui:FitScreen()
 end
 
+-- Language switch applies live and never calls the protected reload API.
+do
+    local reloads = 0
+    local savedC_UI, savedReloadUI = _G.C_UI, _G.ReloadUI
+    _G.C_UI = { Reload = function() reloads = reloads + 1 end }
+    _G.ReloadUI = function() reloads = reloads + 1 end
+    local languageRow
+    for _, row in ipairs(ui:CollectRows("overview", "")) do
+        if row.info[2] == "languageOverride" then languageRow = row end
+    end
+    assert(languageRow, "language selector missing from Overview")
+    ui:Apply(languageRow, "deDE")
+    assert(reloads == 0, "changing the language called the protected reload API")
+    assert(ns.Locale:GetActiveLocale() == "deDE", "language did not switch")
+    stub.Script(ui.window, "OnUpdate", 0.1)
+    assert(ui.pageTitle:GetText() == ns.Config.options.args[ui.pageKey].name
+        and ui.doneButton.text:GetText() == ns.LocaleData.deDE.UI_CLOSE, "open window kept the old language")
+    local smartName = ns.Config.options.args.smartSettings.name
+    assert(smartName == ns.LocaleData.deDE.COMBAT_SETTINGS, "option tree kept the old language: " .. tostring(smartName))
+    -- The Reload UI button is covered by a secure /reload macro button.
+    ui:SelectPage("overview")
+    local reloadOption = ns.Config.options.args.reloadGroup.args.reloadBtn
+    assert(reloadOption.secureMacro == "/reload", "reload button has no secure macro")
+    local fake = { control = stub.CreateFrame("Button") }
+    ui:BindSecureMacro(fake, "/reload")
+    assert(fake.secure and fake.secure:GetAttribute("type") == "macro"
+        and fake.secure:GetAttribute("macrotext") == "/reload", "secure reload overlay not configured")
+    reloadOption.func()
+    assert(reloads == 0, "reload button fallback called the protected reload API")
+    ns.Locale:SetOverride("client"); ns.Config.options = nil; ns.Config:SetupOptions()
+    local expected = ({ zhTW = "zhCN", enGB = "enUS" })[GetLocale()]
+        or (ns.Locale:IsSupported(GetLocale()) and GetLocale()) or "enUS"
+    assert(ns.Locale:GetActiveLocale() == expected,
+        "client locale " .. GetLocale() .. " resolved to " .. ns.Locale:GetActiveLocale() .. ", expected " .. expected)
+    _G.C_UI, _G.ReloadUI = savedC_UI, savedReloadUI
+end
+
 -- The game AddOns category embeds the complete renderer, without AceGUI.
 local integration = ns.SettingsIntegration
 if arg[4] == "late" then
