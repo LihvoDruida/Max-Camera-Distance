@@ -63,11 +63,10 @@ local function GetLanguageChoices()
 end
 
 local function GetLanguageOption()
-    local db = GetDB()
-    if not db or type(db.language) ~= "string" then
-        return "client"
+    if ns.Locale and ns.Locale.GetOverride then
+        return ns.Locale:GetOverride()
     end
-    return db.language
+    return "client"
 end
 
 local function SetLanguageOption(value)
@@ -77,8 +76,6 @@ local function SetLanguageOption(value)
     local normalized = type(value) == "string" and value or "client"
     if ns.Locale and ns.Locale.SetOverride then
         ns.Locale:SetOverride(normalized)
-    else
-        db.language = normalized
     end
 
     Config:NotifyChange()

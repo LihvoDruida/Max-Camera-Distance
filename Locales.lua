@@ -43,8 +43,8 @@ function Locale:GetClientLocale()
 end
 
 function Locale:GetOverride()
-    local db = ns.Database and ns.Database.db and ns.Database.db.profile
-    local value = db and db.language or "client"
+    local database = ns.Database
+    local value = (database and database.GetLanguage and database:GetLanguage()) or "client"
     if value == "client" then
         return value
     end
@@ -90,13 +90,13 @@ function Locale:Get(key)
 end
 
 function Locale:SetOverride(localeCode)
-    local db = ns.Database and ns.Database.db and ns.Database.db.profile
-    if not db then return end
+    local database = ns.Database
+    if not (database and database.SetLanguage) then return end
 
     if localeCode == "client" or self:IsSupported(localeCode) then
-        db.language = localeCode
+        database:SetLanguage(localeCode)
     else
-        db.language = "client"
+        database:SetLanguage("client")
     end
 end
 

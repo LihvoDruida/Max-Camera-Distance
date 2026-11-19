@@ -1003,6 +1003,39 @@ end
 -- ============================================================================
 -- HELPERS
 -- ============================================================================
+-- ============================================================================
+-- ADDON LANGUAGE (account-wide)
+-- ============================================================================
+-- The language used to live in the profile, so switching profile or logging
+-- in on another character silently switched the UI language. It is now stored
+-- in MaxCameraDistanceDB.global, the same table AceDB exposes as db.global.
+-- The first read adopts the active profile's old choice once.
+local function GlobalStore()
+    local rawDb = _G.MaxCameraDistanceDB
+    if type(rawDb) ~= "table" then return nil end
+    if type(rawDb.global) ~= "table" then rawDb.global = {} end
+    return rawDb.global
+end
+
+function Database:GetLanguage()
+    local store = GlobalStore()
+    if store and type(store.language) == "string" then
+        return store.language
+    end
+    local profile = self.db and self.db.profile
+    local legacy = profile and rawget(profile, "language")
+    if type(legacy) ~= "string" then legacy = "client" end
+    if store then store.language = legacy end
+    return legacy
+end
+
+function Database:SetLanguage(value)
+    local store = GlobalStore()
+    if store then
+        store.language = type(value) == "string" and value or "client"
+    end
+end
+
 function Database:GetCVarFactor(yards)
     return (tonumber(yards) or 0) / CONVERSION_RATIO
 end
