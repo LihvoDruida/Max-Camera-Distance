@@ -2350,6 +2350,24 @@ function Config:SetupOptions()
                         fontSize = "medium",
                         order = 0.2,
                     },
+                    perfReport = {
+                        type = "description",
+                        name = function()
+                            if not (ns.Functions and ns.Functions.BuildPerfReportLines) then return "" end
+                            return table.concat(ns.Functions:BuildPerfReportLines(), "\n")
+                        end,
+                        fontSize = "medium",
+                        order = 0.3,
+                    },
+                    perfReset = {
+                        type = "execute",
+                        name = L["PERF_RESET_BUTTON"] or "Reset Counters",
+                        desc = L["PERF_HINT"] or "Use /mcd perf reset before a key or a pull, then /mcd perf after it.",
+                        func = function()
+                            if ns.Functions and ns.Functions.PerfReset then ns.Functions:PerfReset() end
+                        end,
+                        order = 0.4,
+                    },
                     loggingHeader = {
                         type = "header",
                         name = L["DEBUG_LOGGING_HEADER"] or "Chat Logging",

@@ -396,7 +396,7 @@ L["MINIMAP_TOOLTIP_OPEN_SETTINGS"] = '点击打开设置'
 L["SETTINGS_APPLIED_FULL"] = "|cff00ff00已应用|r — 距离：%.1f |cff888888（过渡 %.2fs）|r"
 
 -- Runtime diagnostics and slash commands
-L["CMD_USAGE"] = '用法：/mcd config | autozoom | automount | status | deps | fastzoom | slowzoom | reset | debug on | debug off'
+L["CMD_USAGE"] = '用法：/mcd config | autozoom | automount | status | perf [reset] | deps | fastzoom | slowzoom | reset | debug on | debug off'
 L["STATUS_STATE_AFK"] = '暂离'
 L["STATUS_STATE_DRAGONRACE_FIRST_PERSON"] = '竞速第一人称'
 L["STATUS_STATE_NORMAL"] = '常规'
@@ -559,3 +559,19 @@ L["UI_FOREVER_GRAPHICS"] = "Forever 图形"
 
 L["UI_YARDS"] = "码"
 L["CONTEXT_SCENARIO_CLASSIC"] = "场景战役"
+
+-- /mcd perf
+L["PERF_HEADER"] = "最近 %.0f 秒的性能计数"
+L["PERF_HINT"] = "在钥石或拉怪前执行 /mcd perf reset，结束后执行 /mcd perf。"
+L["PERF_RESET"] = "性能计数已重置。"
+L["PERF_RESET_BUTTON"] = "重置计数"
+L["PERF_EVENTS"] = "已处理事件"
+L["PERF_UNITFLAGS"] = "收到的 UNIT_FLAGS"
+L["PERF_CAMERAPASSES"] = "镜头决策"
+L["PERF_CAMERAANIMATIONS"] = "镜头动画"
+L["PERF_ROSTERSCANS"] = "队伍扫描"
+L["PERF_MEMBERREADS"] = "成员战斗读取"
+L["PERF_GROUPPOLLS"] = "队伍战斗轮询"
+L["PERF_CVARWRITES"] = "CVar 写入"
+L["PERF_UIREBUILDS"] = "设置重建"
+L["PERF_UISTATUSUPDATES"] = "状态更新"

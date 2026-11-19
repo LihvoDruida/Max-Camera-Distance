@@ -625,6 +625,7 @@ end
 -- (target, nameplates, ...), so filter by prefix and enabled consumers first.
 eventHandlers.UNIT_FLAGS = function(event, unit)
     if type(unit) ~= "string" or unit == "player" then return end
+    if ns.Functions and ns.Functions.PerfCount then ns.Functions:PerfCount("unitFlags") end
     local prefix = unit:sub(1, 4)
     if prefix ~= "part" and prefix ~= "raid" then return end
     local functions = ns.Functions
@@ -709,6 +710,7 @@ end
 frame:SetScript("OnEvent", function(self, event, ...)
     local handler = eventHandlers[event]
     if handler then
+        if ns.Functions and ns.Functions.PerfCount then ns.Functions:PerfCount("events") end
         -- LogEvent(event, ...)
         local ok, err = pcall(handler, event, ...)
         if not ok then
