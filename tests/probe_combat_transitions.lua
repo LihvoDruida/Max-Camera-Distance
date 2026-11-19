@@ -28,13 +28,23 @@ _G.GetTime = function() return clock end
 
 local combat = {}
 local inGroup, partySize = false, 0
-_G.UnitAffectingCombat = function(unit) return combat[unit] and true or false end
-_G.UnitIsUnit = function(a, b) return a == b end
-_G.IsInGroup = function() return inGroup end
-_G.IsInRaid = function() return false end
+local inRaid, raidSize, selfToken, identityError, encounter = false, 0, nil, {}, false
+local unitCombatReads = 0
+_G.UnitAffectingCombat = function(unit)
+    if unit ~= "player" then unitCombatReads = unitCombatReads + 1 end
+    if combat[unit] == "error" then error("unit combat unavailable") end
+    return combat[unit] and true or false
+end
+_G.UnitIsUnit = function(a, b)
+    if identityError[a] then error("identity unavailable") end
+    return a == b or (b == "player" and a == selfToken)
+end
+_G.IsInGroup = function() return inGroup or inRaid end
+_G.IsInRaid = function() return inRaid end
 _G.GetNumSubgroupMembers = function() return partySize end
-_G.GetNumGroupMembers = function() return inGroup and (partySize + 1) or 0 end
-_G.IsEncounterInProgress = function() return false end
+_G.GetNumGroupMembers = function() return inRaid and raidSize or (inGroup and (partySize + 1) or 0) end
+_G.IsEncounterInProgress = function() return encounter end
+_G.InCombatLockdown = function() return false end
 _G.IsMounted = function() return false end
 _G.UnitIsAFK = function() return false end
 local zoom = 25
@@ -200,6 +210,66 @@ for _, case in ipairs({ { "Retail", "12.1.0", 120100, 1 }, { "Forever", "1.60.1"
     f:InvalidateRuntimeCaches()
     assert(f:ShouldEnableShoulderNow() == false, label .. "toggle left the shoulder active")
     combat.party1, inGroup, partySize = false, false, 0
+    db.actionCamShoulderInCombat, db.actionCamShoulderOutOfCombat = false, false
+
+    -- 5) Incomplete raid roster data: yes / no / unknown.
+    inRaid, raidSize, selfToken = true, 40, "raid1"
+    local function Signals()
+        f:InvalidateRuntimeCaches()
+        local snap = f:GetStatusSnapshot()
+        return snap.groupInCombat, snap.groupCombatIncomplete, snap
+    end
+    combat = { player = true, raid1 = true }
+    identityError = { raid1 = true }
+    local group, incomplete = Signals()
+    assert(group == false and incomplete == true,
+        label .. "own combat counted as an ally when identity was unreadable")
+    identityError = {}
+    combat = { player = false, raid40 = "error" }
+    group, incomplete = Signals()
+    assert(group == false and incomplete == true, label .. "unreadable member not reported as incomplete")
+    combat = { player = false, raid40 = "error", raid12 = true }
+    group, incomplete = Signals()
+    assert(group == true and incomplete == false, label .. "readable fighting ally did not win over unknowns")
+
+    -- 6) A raid encounter is its own signal; existing profiles keep its effect.
+    combat = { player = false }
+    encounter = true
+    local snap
+    group, incomplete, snap = Signals()
+    assert(group == false and snap.raidEncounter == true and snap.activeTriggers.encounter == true
+        and snap.state == "combat", label .. "encounter mixed into ally combat or lost its camera effect")
+    encounter = false
+
+    -- 7) Cheap path: personal combat decides the camera without a roster scan.
+    combat = { player = true }
+    f:InvalidateRuntimeCaches()
+    unitCombatReads = 0
+    f:UpdateSmartZoomState("probe_raid_combat")
+    assert(controller:GetState() == "combat" and unitCombatReads == 0,
+        label .. "camera pass scanned " .. unitCombatReads .. " raid members during personal combat")
+
+    -- 8) Player aura keeps the group cache through the update queue.
+    combat = { player = false }
+    f:InvalidateRuntimeCaches()
+    f:IsGroupInCombat()
+    unitCombatReads = 0
+    f:RequestUpdate("combat-only")
+    f:IsGroupInCombat()
+    assert(unitCombatReads == 0, label .. "player aura wiped the group-combat cache")
+    RunFrames()
+    inRaid, raidSize, selfToken = false, 0, nil
+
+    -- 9) Unreadable personal flag falls back to the combat events.
+    combat = { player = "error" }
+    f:SetPlayerCombatEvent(true) -- PLAYER_REGEN_DISABLED
+    Pass("probe_regen_disabled")
+    assert(controller:GetState() == "combat", label .. "REGEN_DISABLED ignored when the personal flag was unreadable")
+    f:SetPlayerCombatEvent(false) -- PLAYER_REGEN_ENABLED
+    Pass("probe_regen_enabled")
+    clock = clock + 5; RunDueTimers()
+    assert(controller:GetState() == "normal", label .. "REGEN_ENABLED fallback did not leave combat")
+    combat = {}
 end
 
-print("probe_combat_transitions: PASS (group combat watch, return deadline, stale timer, shoulder matrix, shoulder toggle)")
+print("probe_combat_transitions: PASS (group combat watch, return deadline, stale timer, shoulder matrix, shoulder toggle, roster unknowns, encounter, cheap path, aura cache, regen fallback)")

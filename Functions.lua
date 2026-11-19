@@ -412,6 +412,7 @@ function Functions:InvalidateRuntimeCaches(scope)
         runtimeCache.groupCombat = nil
         runtimeCache.groupCombatExpiresAt = 0
         runtimeCache.groupCombatKey = nil
+        runtimeCache.groupCombatIncomplete = nil
     end
 end
 
@@ -1597,8 +1598,10 @@ function Functions:ScheduleStabilizedUpdate(delays, forceNow)
     end
 end
 
-function Functions:RequestUpdate()
-    self:InvalidateRuntimeCaches()
+-- `scope` follows InvalidateRuntimeCaches: "combat-only" (player aura) keeps
+-- the group-combat cache, anything else drops everything.
+function Functions:RequestUpdate(scope)
+    self:InvalidateRuntimeCaches(scope)
     if updatePending then return end
     updatePending = true
     updateFrame:Show()
@@ -1643,6 +1646,25 @@ end)
 -- =====================================================================
 -- 10) COMBAT DETECT (group-safe)
 -- =====================================================================
+-- true / false / nil(unknown). An API that is missing, errors or returns a
+-- secret value is "unknown", never a proven "no".
+function Functions.ReadTriState(func, ...)
+    if type(func) ~= "function" then return nil end
+    local ok, value = pcall(func, ...)
+    if not ok or (Compat.IsSecret and Compat.IsSecret(value)) then return nil end
+    return IsTruthySafe(value)
+end
+
+-- Personal combat from PLAYER_REGEN_DISABLED/ENABLED, seeded on world entry.
+-- Used only when UnitAffectingCombat("player") cannot be read.
+Functions._playerCombatEvent = nil
+function Functions:SetPlayerCombatEvent(inCombat)
+    self._playerCombatEvent = inCombat and true or false
+end
+
+function Functions:IsGroupCombatDataIncomplete()
+    return runtimeCache.groupCombatIncomplete and true or false
+end
 function Functions:IsGroupInCombat()
     -- This helper is intentionally GROUP-ONLY. Personal combat should be
     -- checked separately. The result is cached very briefly because the same
@@ -1666,6 +1688,8 @@ function Functions:IsGroupInCombat()
     end
 
     local result = false
+    local incomplete = false
+    local ReadTriState = Functions.ReadTriState
 
     -- Roster counts already define which raid/party unit tokens can exist, so
     -- UnitExists() was pure duplicate work. Prebuilt unit-token arrays also avoid
@@ -1673,12 +1697,20 @@ function Functions:IsGroupInCombat()
     -- returns may be secret on modern clients, so each value still goes through
     -- the secret-safe helper; an unreadable member is ignored instead of aborting
     -- the whole scan.
+    -- A member whose identity cannot be established is NOT counted as a proven
+    -- ally: on a failed UnitIsUnit the player's own combat used to be reported
+    -- as group combat. A readable positive ally always wins; unreadable values
+    -- only mark the result incomplete for diagnostics.
     local function ScanRaid(count)
         for i = 1, count do
             local unit = RAID_UNITS[i]
-            local isSelf = IsTruthySafe(SafeValueCall(UnitIsUnit, unit, "player"))
-            if not isSelf and IsTruthySafe(SafeValueCall(UnitAffectingCombat, unit)) then
-                return true
+            local isSelf = ReadTriState(UnitIsUnit, unit, "player")
+            if isSelf == nil then
+                incomplete = true
+            elseif not isSelf then
+                local fighting = ReadTriState(UnitAffectingCombat, unit)
+                if fighting then return true end
+                if fighting == nil then incomplete = true end
             end
         end
         return false
@@ -1686,24 +1718,23 @@ function Functions:IsGroupInCombat()
 
     local function ScanParty(count)
         for i = 1, count do
-            if IsTruthySafe(SafeValueCall(UnitAffectingCombat, PARTY_UNITS[i])) then
-                return true
-            end
+            local fighting = ReadTriState(UnitAffectingCombat, PARTY_UNITS[i])
+            if fighting then return true end
+            if fighting == nil then incomplete = true end
         end
         return false
     end
 
+    -- An active boss encounter is its own signal (raidEncounter below); it is
+    -- not evidence that another member is in combat.
     if inRaid then
-        if SafeBoolCall(IsEncounterInProgress) then
-            result = true
-        else
-            result = ScanRaid(math.min(memberCount, 40))
-        end
+        result = ScanRaid(math.min(memberCount, 40))
     elseif inGroup then
         result = ScanParty(math.min(memberCount, 4))
     end
 
     runtimeCache.groupCombatKey = key
+    runtimeCache.groupCombatIncomplete = incomplete and not result
     runtimeCache.groupCombat = result
     runtimeCache.groupCombatExpiresAt = now + GROUP_COMBAT_CACHE_SECONDS
 
@@ -1729,9 +1760,26 @@ function Functions:NeedsGroupCombatWatch()
     return SafeBoolCall(IsInRaid) or SafeBoolCall(IsInGroup) or false
 end
 
+-- While the player's own combat already activates the combat camera, the
+-- group result cannot change the outcome: skip roster reads entirely.
+function Functions:IsGroupCombatDecisive()
+    local db = DB()
+    if not db then return false end
+    if db.combatZoomOnPlayer == false then return true end
+    local value = Functions.ReadTriState(UnitAffectingCombat, "player")
+    if value == nil then value = self._playerCombatEvent end
+    return not value
+end
+
 -- Re-read group combat and queue one camera pass only when it changed.
 function Functions:PollGroupCombat()
     local watch = self._groupWatch
+    if not self:IsGroupCombatDecisive() then
+        -- Forget the old answer: the first poll after personal combat ends
+        -- must count as a change if the group state differs by then.
+        watch.last = nil
+        return false
+    end
     runtimeCache.groupCombat = nil
     runtimeCache.groupCombatExpiresAt = 0
     local now = self:IsGroupInCombat() and true or false
@@ -1747,7 +1795,7 @@ end
 -- could end group combat (a member dropping out while the group was fighting).
 function Functions:OnGroupUnitFlags(unit)
     local watch = self._groupWatch
-    if watch.last == nil then
+    if watch.last == nil or not self:IsGroupCombatDecisive() then
         return self:PollGroupCombat()
     end
     local isSelf = IsTruthySafe(SafeValueCall(UnitIsUnit, unit, "player"))
@@ -1766,7 +1814,7 @@ function Functions:EnsureGroupCombatWatch()
     if watch.running or not self:NeedsGroupCombatWatch() then return end
     if not (C_Timer and C_Timer.After) then return end
     watch.running = true
-    watch.last = self:IsGroupInCombat() and true or false
+    watch.last = nil
     local function Tick()
         if not Functions:NeedsGroupCombatWatch() then
             watch.running = false
@@ -1852,10 +1900,24 @@ end
 -- autoMountZoom was switched off entirely and it could never be read.
 local LAZY_SIGNALS = {
     playerInCombat = function()
-        return SafeBoolCall(UnitAffectingCombat, "player")
+        local value = Functions.ReadTriState(UnitAffectingCombat, "player")
+        if value ~= nil then return value end
+        -- Unreadable: fall back to the combat events, then to lockdown.
+        if Functions._playerCombatEvent ~= nil then return Functions._playerCombatEvent end
+        return SafeBoolCall(InCombatLockdown)
     end,
     groupInCombat = function()
         return Functions:IsGroupInCombat()
+    end,
+    groupCombatIncomplete = function(db, s)
+        local _ = s.groupInCombat
+        return Functions:IsGroupCombatDataIncomplete()
+    end,
+    -- Raid boss encounter in progress. Historically counted as "group in
+    -- combat"; kept under the group trigger for existing profiles, but reported
+    -- separately so diagnostics do not present it as a fighting ally.
+    raidEncounter = function()
+        return SafeBoolCall(IsInRaid) and SafeBoolCall(IsEncounterInProgress) or false
     end,
     hasThreat = function()
         return ResolveThreatFlag()
@@ -1997,16 +2059,28 @@ local function GetCombatTriggerConfig(db)
     }
 end
 
-local function GetCombatActivation(db, signals)
+-- `full` evaluates every enabled trigger for the diagnostics table. A camera
+-- pass only needs the first sufficient one, so cheap personal signals go first
+-- and the roster scan is skipped once the outcome is decided.
+local function GetCombatActivation(db, signals, full)
     local triggerConfig = GetCombatTriggerConfig(db)
-    local activeTriggers = {
-        player = triggerConfig.player and signals.playerInCombat or false,
-        group = triggerConfig.group and signals.groupInCombat or false,
-        threat = triggerConfig.threat and signals.hasThreat or false,
-        worldBoss = signals.forceCombatZoom and true or false,
-    }
-    local isActive = activeTriggers.player or activeTriggers.group or activeTriggers.threat or activeTriggers.worldBoss
-    return isActive, triggerConfig, activeTriggers
+    local activeTriggers = { player = false, group = false, encounter = false, threat = false, worldBoss = false }
+
+    activeTriggers.player = triggerConfig.player and signals.playerInCombat or false
+    activeTriggers.worldBoss = signals.forceCombatZoom and true or false
+    if full or not (activeTriggers.player or activeTriggers.worldBoss) then
+        activeTriggers.threat = triggerConfig.threat and signals.hasThreat or false
+    end
+    if full or not (activeTriggers.player or activeTriggers.worldBoss or activeTriggers.threat) then
+        activeTriggers.encounter = triggerConfig.group and signals.raidEncounter or false
+    end
+    if full or not (activeTriggers.player or activeTriggers.worldBoss or activeTriggers.threat or activeTriggers.encounter) then
+        activeTriggers.group = triggerConfig.group and signals.groupInCombat or false
+    end
+
+    local isActive = activeTriggers.player or activeTriggers.group or activeTriggers.encounter
+        or activeTriggers.threat or activeTriggers.worldBoss
+    return isActive and true or false, triggerConfig, activeTriggers
 end
 
 -- Resolves ONLY what the camera pass needs: which state we are in and how far
@@ -2023,10 +2097,10 @@ local function ResolveZoomTarget(db, includeDiagnostics)
     local rawContext = signals.rawContext
     local resolvedContext = rawContext
     local triggerConfig = GetCombatTriggerConfig(db)
-    local activeTriggers = { player = false, group = false, threat = false, worldBoss = false }
+    local activeTriggers = { player = false, group = false, encounter = false, threat = false, worldBoss = false }
     local combatActive = false
     if includeDiagnostics or (db and db.autoCombatZoom) then
-        combatActive, triggerConfig, activeTriggers = GetCombatActivation(db, signals)
+        combatActive, triggerConfig, activeTriggers = GetCombatActivation(db, signals, includeDiagnostics)
     end
 
     local state = ZOOM_STATE_NORMAL
@@ -2119,6 +2193,8 @@ local function BuildStatusSnapshot(db)
         targetPresetId = targetPresetId,
         playerInCombat = signals.playerInCombat,
         groupInCombat = signals.groupInCombat,
+        groupCombatIncomplete = signals.groupCombatIncomplete,
+        raidEncounter = signals.raidEncounter,
         hasThreat = signals.hasThreat,
         isMounted = signals.isMounted,
         isTravelForm = signals.isTravelForm,
@@ -3510,7 +3586,11 @@ function Functions:PrintRuntimeStatus()
     self:SendMessage(" - state: " .. tostring(snapshot and snapshot.state or "unknown") .. " previous=" .. tostring(snapshot and snapshot.previousState or (controllerSnapshot and controllerSnapshot.previousState) or "none"))
     self:SendMessage(" - target yards: " .. tostring(snapshot and snapshot.targetYards or "unknown"))
     self:SendMessage(" - pending return: " .. tostring(snapshot and snapshot.pendingReturnActive and "active" or "none") .. " remaining=" .. tostring(snapshot and snapshot.pendingReturnRemaining or 0))
-    self:SendMessage(" - combat: player=" .. FormatBool(snapshot and snapshot.playerInCombat) .. " group=" .. FormatBool(snapshot and snapshot.groupInCombat) .. " threat=" .. FormatBool(snapshot and snapshot.hasThreat))
+    self:SendMessage(" - combat: player=" .. FormatBool(snapshot and snapshot.playerInCombat)
+        .. " group=" .. FormatBool(snapshot and snapshot.groupInCombat)
+        .. (snapshot and snapshot.groupCombatIncomplete and " (incomplete)" or "")
+        .. " encounter=" .. FormatBool(snapshot and snapshot.raidEncounter)
+        .. " threat=" .. FormatBool(snapshot and snapshot.hasThreat))
     self:SendMessage(" - travel: mounted=" .. FormatBool(snapshot and snapshot.isMounted)
         .. " travelForm=" .. FormatBool(snapshot and snapshot.isTravelForm)
         .. " active=" .. FormatBool(snapshot and snapshot.travelActive)

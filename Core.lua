@@ -446,7 +446,18 @@ eventHandlers.PLAYER_LOGIN = function()
     end
 end
 
+local function SetPlayerCombatEvent(inCombat)
+    if ns.Functions and ns.Functions.SetPlayerCombatEvent then
+        ns.Functions:SetPlayerCombatEvent(inCombat)
+    end
+end
+
 eventHandlers.PLAYER_ENTERING_WORLD = function(event, isLogin, isReload)
+    -- Seed the personal combat fallback (a /reload can happen mid-fight).
+    if type(InCombatLockdown) == "function" then
+        local ok, locked = pcall(InCombatLockdown)
+        SetPlayerCombatEvent(ok and locked and true or false)
+    end
     InvalidateMountCache()
     InvalidateRuntimeCaches()
 
@@ -495,6 +506,7 @@ eventHandlers.PLAYER_LOGOUT = function()
 end
 
 eventHandlers.PLAYER_REGEN_DISABLED = function(event)
+    SetPlayerCombatEvent(true)
     RequestSmartUpdate(event)
     RefreshAfkRelevantState()
 end
@@ -503,6 +515,7 @@ eventHandlers.PLAYER_REGEN_ENABLED = function(event)
     -- locked down. Force reconciliation here, but do NOT blindly re-apply every
     -- managed CVar: doing so would briefly re-enable motion-sickness CVars while
     -- an in-combat shoulder mode is still transitioning out.
+    SetPlayerCombatEvent(false)
     local guard = ns.CVarGuard or ns.CVarMonitor
     if guard and guard.Refresh then
         SafeCall(guard.Refresh, "CVarGuard.RefreshAfterCombat", guard, true)
@@ -561,18 +574,15 @@ eventHandlers.UNIT_AURA = function(event, unit)
     -- times a second. Aura-derived signals are still dropped, so travel-form
     -- detection stays as responsive as before.
     local affectsSmartZoom = AuraAffectsSmartZoom()
-    if affectsSmartZoom then
-        -- Aura changes invalidate travel/race-derived signals, but they do not
-        -- change which group members are in combat. Preserve the group-combat
-        -- cache so raid aura churn cannot trigger repeated roster scans.
-        InvalidateRuntimeCaches("combat-only")
-    end
 
     RequestShoulderRefresh()
 
     -- Combat-only and plain-distance profiles consume no aura-derived state.
-    if affectsSmartZoom then
-        RequestSmartUpdate()
+    -- Aura changes invalidate travel/race-derived signals, but they do not
+    -- change which group members are in combat. Pass the scope through the
+    -- queue: the old RequestUpdate() wiped the group cache it meant to keep.
+    if affectsSmartZoom and ns.Functions and ns.Functions.RequestUpdate then
+        ns.Functions:RequestUpdate("combat-only")
     end
 end
 
