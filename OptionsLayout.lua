@@ -56,6 +56,11 @@ function Layout:Apply(options)
     end
     root.presetSettings = nil
 
+    -- "When to return" closes the combat page: triggers -> distances -> return.
+    combat.returnHeader = { type = "header", name = L:Get("DELAY_HEADER"), order = 49 }
+    if combat.adaptiveCombatReturn then combat.adaptiveCombatReturn.order = 49.1 end
+    if combat.adaptiveCombatReturnMax then combat.adaptiveCombatReturnMax.order = 49.2 end
+
     local mounts = page("mountSettings", "MOUNT_SETTINGS_HEADER", 5)
     move(combat, mounts, { "mountHeader", "autoMountZoom", "mountZoomMode", "dragonRacingRaceFirstPerson" }, 1)
     move(presets, mounts, { "mountZoomPreset", "mountZoomPresetInfo" }, 5)
