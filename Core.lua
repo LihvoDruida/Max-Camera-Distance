@@ -99,6 +99,7 @@ end
 -- RegisterUnitEvent makes the client filter them for us.
 local PLAYER_ONLY_EVENTS = {
     UNIT_AURA = true,
+    UNIT_THREAT_SITUATION_UPDATE = true,
     UNIT_MODEL_CHANGED = true,
     UNIT_ENTERING_VEHICLE = true,
     UNIT_ENTERED_VEHICLE = true,
@@ -609,6 +610,17 @@ eventHandlers.LOADING_SCREEN_DISABLED = function()
 end
 eventHandlers.PLAYER_CONTROL_GAINED = ForceSmartUpdate
 eventHandlers.PLAYER_CONTROL_LOST = ForceSmartUpdate
+-- The threat trigger used to be re-read only when some other event queued a
+-- camera pass. Threat does not touch the group cache.
+eventHandlers.UNIT_THREAT_SITUATION_UPDATE = function(event, unit)
+    if unit ~= nil and unit ~= "player" then return end
+    local db = ns.Database and ns.Database.db and ns.Database.db.profile
+    if not (db and db.autoCombatZoom and db.combatZoomOnThreat ~= false) then return end
+    if ns.Functions and ns.Functions.RequestUpdate then
+        ns.Functions:RequestUpdate("combat-only")
+    end
+end
+
 -- Combat flag changes of party/raid members. Fires for every unit token
 -- (target, nameplates, ...), so filter by prefix and enabled consumers first.
 eventHandlers.UNIT_FLAGS = function(event, unit)

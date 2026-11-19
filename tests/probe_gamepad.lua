@@ -1163,6 +1163,20 @@ check("phase 18: 'on' mode re-enforces after an event that raced the read",
     cvars:Number("SoftTargetIconGameObject") == 1)
 gameProfile.softTargetIconsMode = "game"
 
+-- The pre-mode boolean is shown as a hint, only when the profile saved one.
+rawset(db, "softTargetInteract", true)
+check("phase 18: game mode tooltip names the previously saved MCD value",
+    tostring(iconMode.desc()):find("Always on", 1, true) ~= nil, tostring(iconMode.desc()))
+
+-- Threat changes queue a camera pass on their own.
+local threatQueued = false
+local realRequestUpdate = Functions.RequestUpdate
+Functions.RequestUpdate = function(self, scope) threatQueued = (scope == "combat-only"); return realRequestUpdate(self, scope) end
+db.autoCombatZoom, db.combatZoomOnThreat = true, true
+stub.Fire("UNIT_THREAT_SITUATION_UPDATE", "player")
+Functions.RequestUpdate = realRequestUpdate
+check("phase 18: UNIT_THREAT_SITUATION_UPDATE queues a combat-only camera pass", threatQueued)
+
 db.softTargetIconsMode = "bogus"
 ns.Database:ApplyMigrations(db)
 check("phase 18: unknown mode values normalize to the game setting",
