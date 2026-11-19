@@ -2179,8 +2179,24 @@ local function BuildStatusSnapshot(db)
 
     local controllerSnapshot = CameraStateController and CameraStateController.GetSnapshot and CameraStateController:GetSnapshot() or nil
 
+    -- Membership and place, kept apart from the distance preset: a party
+    -- questing outdoors uses the dungeon preset but is not in a dungeon.
+    local groupType, groupSize = "solo", 1
+    if SafeBoolCall(IsInRaid) then
+        groupType, groupSize = "raid", tonumber(SafeValueCall(GetNumGroupMembers)) or 0
+    elseif SafeBoolCall(IsInGroup) then
+        groupType, groupSize = "party", (tonumber(SafeValueCall(GetNumSubgroupMembers)) or 0) + 1
+    end
+    local inInstance, instanceType = SafeIsInInstance()
+
     return {
         state = state,
+        appliedState = controllerSnapshot and controllerSnapshot.currentState or nil,
+        lastAppliedAt = controllerSnapshot and controllerSnapshot.lastAppliedAt or nil,
+        groupType = groupType,
+        groupSize = groupSize,
+        inInstance = inInstance and true or false,
+        instanceType = instanceType,
         previousState = controllerSnapshot and controllerSnapshot.previousState or nil,
         stateToken = controllerSnapshot and controllerSnapshot.stateToken or stateToken,
         transitionToken = controllerSnapshot and controllerSnapshot.transitionToken or nil,

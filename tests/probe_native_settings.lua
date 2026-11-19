@@ -259,6 +259,31 @@ local liveUpdated = false
 for _, row in ipairs(ui.rows) do if row.name == "After" then liveUpdated = true end end
 assert(liveUpdated, "diagnostic snapshot stays stale until reopening")
 
+-- 10 s idle on the diagnostics page and on the overview: labels refresh, but
+-- the structure (page sort, row measuring) must not be rebuilt every second.
+local realRebuild, rebuilds = ui.Rebuild, 0
+ui.Rebuild = function(...) rebuilds = rebuilds + 1; return realRebuild(...) end
+for _, pageKey in ipairs({ "debugSettings", "overview" }) do
+    ui:SelectPage(pageKey)
+    stub.Script(ui.window, "OnUpdate", 0.1)
+    rebuilds = 0
+    for i = 1, 200 do
+        liveValue = (i % 40 == 0) and ("Tick " .. i) or liveValue
+        stub.Script(ui.window, "OnUpdate", 0.05)
+    end
+    assert(rebuilds == 0, pageKey .. ": idle page rebuilt " .. rebuilds .. " times in 10 s")
+end
+ui:SelectPage("debugSettings")
+stub.Script(ui.window, "OnUpdate", 1.1)
+local tickUpdated = false
+for _, row in ipairs(ui.rows) do if row.name == liveValue then tickUpdated = true end end
+assert(tickUpdated, "in-place label refresh lost the latest diagnostic text")
+ui:SelectPage("overview")
+local summaryRow = false
+for _, row in ipairs(ui.rows) do if row.dynamicName then summaryRow = true end end
+assert(summaryRow, "overview has no live camera decision summary")
+ui.Rebuild = realRebuild
+
 -- The game AddOns category embeds the complete renderer, without AceGUI.
 local integration = ns.SettingsIntegration
 if arg[4] == "late" then
