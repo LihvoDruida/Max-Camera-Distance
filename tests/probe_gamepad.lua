@@ -1198,5 +1198,36 @@ check("phase 19: profile change to disabled restores native zoom",
     _G.CameraZoomIn == profileNativeIn and _G.CameraZoomOut == profileNativeOut
         and ns.ReactiveZoom:GetStatus().installed == false)
 
+-- ------------------------------ phase 20: quick start and page reset
+db = ns.Database.db.profile
+local reloadArgs = ns.Config.options.args.reloadGroup.args
+check("phase 20: four quick start buttons ask for confirmation",
+    reloadArgs.quickStartHealer and reloadArgs.quickStartMelee and reloadArgs.quickStartGatherer
+        and reloadArgs.quickStartMinimal and reloadArgs.quickStartHealer.confirm == true)
+db.minZoomFactor = 21
+ns.Config:ApplyQuickStart("gatherer")
+check("phase 20: gatherer quick start disables combat zoom and leaves icons to the game",
+    db.autoCombatZoom == false and db.autoMountZoom == true and db.softTargetIconsMode == "game")
+check("phase 20: quick start keeps the player's distances", db.minZoomFactor == 21, tostring(db.minZoomFactor))
+ns.Config:ApplyQuickStart("melee")
+check("phase 20: melee quick start ignores allies but keeps threat and encounters",
+    db.autoCombatZoom == true and db.combatZoomOnGroup == false and db.combatZoomOnThreat == true
+        and db.combatZoomOnEncounter == true)
+
+local defaults = ns.Database:GetDefaultProfile()
+local smartReset = ns.Config.options.args.smartSettings.args.pageReset
+check("phase 20: every settings page offers a confirmed page reset",
+    smartReset and smartReset.confirm == true and ns.Config.options.args.activitySettings.args.pageReset ~= nil
+        and ns.Config.options.args.profiles.args.pageReset == nil)
+db.combatZoomOnGroup, db.adaptiveCombatReturn, db.minZoomFactor = false, not defaults.adaptiveCombatReturn, 21
+local resetCount = ns.Config:ResetPage("smartSettings")
+check("phase 20: combat page reset restores its own keys",
+    resetCount > 0 and db.combatZoomOnGroup == defaults.combatZoomOnGroup
+        and db.adaptiveCombatReturn == defaults.adaptiveCombatReturn, tostring(resetCount))
+check("phase 20: combat page reset leaves the activity distances alone", db.minZoomFactor == 21, tostring(db.minZoomFactor))
+ns.Config:ResetPage("activitySettings")
+check("phase 20: activity page reset restores the normal distance",
+    db.minZoomFactor == defaults.minZoomFactor, tostring(db.minZoomFactor))
+
 print(failures == 0 and "PROBE PASSED" or ("PROBE FAILED (" .. failures .. ")"))
 os.exit(failures == 0 and 0 or 1)

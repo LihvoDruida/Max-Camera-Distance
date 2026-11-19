@@ -44,8 +44,19 @@ local function SafeReload()
     end
 end
 
+-- While Config:ResetPage scans a page, GetDB hands out a read-recording view
+-- of the profile so the reset learns which profile keys the page shows.
+local readRecorder = nil
+
 local function GetDB()
-    return (ns.Database and ns.Database.db and ns.Database.db.profile) or nil
+    local db = (ns.Database and ns.Database.db and ns.Database.db.profile) or nil
+    if db and readRecorder then
+        return setmetatable({}, {
+            __index = function(_, key) readRecorder[key] = true; return db[key] end,
+            __newindex = function() end, -- a scan never writes
+        })
+    end
+    return db
 end
 
 local function GetLanguageChoices()
@@ -323,6 +334,84 @@ local function ResetForeverGroundEffectOption(cvarName)
     if ns.Functions and ns.Functions.ResetForeverGroundEffectCVar then
         ns.Functions:ResetForeverGroundEffectCVar(cvarName)
     end
+end
+
+-- ---------------------------------------------------------------------
+-- Quick start (roadmap stage 5): one click gives a role-appropriate setup.
+-- Only the listed keys change; distances, presets and other choices stay.
+-- ---------------------------------------------------------------------
+Config.QUICK_START = {
+    order = { "healer", "melee", "gatherer", "minimal" },
+    healer = { autoCombatZoom = true, combatZoomOnPlayer = true, combatZoomOnGroup = true,
+        combatZoomOnThreat = true, combatZoomOnEncounter = true, adaptiveCombatReturn = true, autoMountZoom = true },
+    melee = { autoCombatZoom = true, combatZoomOnPlayer = true, combatZoomOnGroup = false,
+        combatZoomOnThreat = true, combatZoomOnEncounter = true, adaptiveCombatReturn = true, autoMountZoom = true },
+    gatherer = { autoCombatZoom = false, autoMountZoom = true, softTargetIconsMode = "game" },
+    minimal = { autoCombatZoom = false, autoMountZoom = false, reactiveZoom = false, afkMode = false,
+        actionCamShoulderInCombat = false, actionCamShoulderOutOfCombat = false, actionCamPitch = false },
+}
+
+local function RefreshAfterBulkChange(reason)
+    if ns.Database and ns.Database.OnProfileUpdate then
+        ns.Database:OnProfileUpdate(reason)
+    end
+    if ns.Functions and ns.Functions.RefreshAfkMode then
+        pcall(ns.Functions.RefreshAfkMode, ns.Functions, true)
+    end
+    if ns.Functions and ns.Functions.ApplyManagedCVars then
+        pcall(ns.Functions.ApplyManagedCVars, ns.Functions)
+    end
+end
+
+function Config:ApplyQuickStart(role)
+    local values = self.QUICK_START[role]
+    local db = GetDB()
+    if type(values) ~= "table" or role == "order" or not db then return false end
+    for key, value in pairs(values) do db[key] = value end
+    RefreshAfterBulkChange("Quick start: " .. role)
+    if ns.Functions and ns.Functions.SendMessage then
+        ns.Functions:SendMessage(string.format(L["QUICK_START_APPLIED"] or "Quick start applied: %s.", L["QUICK_START_" .. role:upper()] or role))
+    end
+    return true
+end
+
+-- Reset every profile key the page's controls read back to its default.
+-- Keys are discovered by reading each control's getter through the recorder,
+-- so the list cannot drift from the page layout.
+function Config:ResetPage(pageKey)
+    local page = self.options and self.options.args and self.options.args[pageKey]
+    local db = (ns.Database and ns.Database.db and ns.Database.db.profile) or nil
+    if not (page and db and ns.Database and ns.Database.GetDefaultProfile) then return 0 end
+
+    local recorded = {}
+    readRecorder = recorded
+    local function scan(group, path)
+        for key, option in pairs(group.args or {}) do
+            local info = {}
+            for i, part in ipairs(path) do info[i] = part end
+            info[#info + 1] = key
+            if option.type == "group" then
+                scan(option, info)
+            elseif type(option.get) == "function" and option.type ~= "execute" then
+                pcall(option.get, info)
+            end
+        end
+    end
+    local ok = pcall(scan, page, { pageKey })
+    readRecorder = nil
+    if not ok then return 0 end
+
+    local defaults = ns.Database:GetDefaultProfile()
+    local count = 0
+    for key in pairs(recorded) do
+        if defaults[key] ~= nil and key ~= "language" and key ~= "minimap" then
+            db[key] = defaults[key]
+            count = count + 1
+        end
+    end
+    RefreshAfterBulkChange("Page reset: " .. tostring(pageKey))
+    self:NotifyChange()
+    return count
 end
 
 function Config:NotifyChange()
@@ -973,6 +1062,36 @@ function Config:SetupOptions()
                                 ns.Core:RefreshMinimapButton()
                             end
                         end,
+                    },
+                    quickStartHeader = { type = "header", name = L["QUICK_START_HEADER"] or "Quick Start", order = 10 },
+                    quickStartDesc = {
+                        type = "description",
+                        name = L["QUICK_START_DESC"] or "Apply a ready setup for how you play. Only combat triggers, mount zoom and a few related switches change; your distances stay.",
+                        order = 11,
+                    },
+                    quickStartHealer = {
+                        type = "execute", confirm = true, order = 12,
+                        name = L["QUICK_START_HEALER"] or "Healer or Support",
+                        desc = L["QUICK_START_HEALER_DESC"] or "Combat camera when you, your group, your threat or a boss encounter starts a fight; adaptive return; mount zoom.",
+                        func = function() Config:ApplyQuickStart("healer") end,
+                    },
+                    quickStartMelee = {
+                        type = "execute", confirm = true, order = 13,
+                        name = L["QUICK_START_MELEE"] or "Tank or Melee",
+                        desc = L["QUICK_START_MELEE_DESC"] or "Combat camera from your own combat, threat and boss encounters, not from allies; adaptive return; mount zoom.",
+                        func = function() Config:ApplyQuickStart("melee") end,
+                    },
+                    quickStartGatherer = {
+                        type = "execute", confirm = true, order = 14,
+                        name = L["QUICK_START_GATHERER"] or "Gatherer",
+                        desc = L["QUICK_START_GATHERER_DESC"] or "No combat zoom, mount zoom on, and object icons left to the game and gathering addons such as NodeSight.",
+                        func = function() Config:ApplyQuickStart("gatherer") end,
+                    },
+                    quickStartMinimal = {
+                        type = "execute", confirm = true, order = 15,
+                        name = L["QUICK_START_MINIMAL"] or "Minimal",
+                        desc = L["QUICK_START_MINIMAL_DESC"] or "Only the extended camera distance: no smart zoom, Reactive Zoom, shoulder camera or AFK mode.",
+                        func = function() Config:ApplyQuickStart("minimal") end,
                     },
                     languageOverride = {
                         type = "select",
