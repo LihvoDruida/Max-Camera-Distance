@@ -16,8 +16,8 @@ L["VERSION_PREFIX"] = "Version: "
 L["MAX_ZOOM_FACTOR"] = "Max Camera Distance"
 L["MAX_ZOOM_FACTOR_DESC"] = "Set the absolute maximum allowed camera distance (in yards) for the game client."
 
-L["MOVE_VIEW_DISTANCE"] = "Manual Wheel Zoom Speed"
-L["MOVE_VIEW_DISTANCE_DESC"] = "How fast the camera zooms in and out when using the mouse wheel or zoom hotkeys. This affects manual wheel zoom only."
+L["MOVE_VIEW_DISTANCE"] = "Wheel Step Speed"
+L["MOVE_VIEW_DISTANCE_DESC"] = "How fast one mouse-wheel step or zoom hotkey moves the camera (cameraDistanceMoveSpeed). Only on clients that still have this setting."
 
 L["ZOOM_TRANSITION"] = "Smart Zoom Transition Time"
 L["ZOOM_TRANSITION_DESC"] = "Time in seconds for automatic Smart Zoom transitions between |cffff5555Combat|r, |cff66ccffMount|r, AFK, Dragonrace, and Normal camera states. This does not control mouse-wheel zoom."
@@ -50,7 +50,7 @@ L["DISABLED"] = "|cffff0000Disabled|r"
 -- ============================================================================
 -- Smart Zoom (Combat & Mount)
 -- ============================================================================
-L["COMBAT_SETTINGS"] = "Smart Zoom System"
+L["COMBAT_SETTINGS"] = "Combat Camera"
 L["COMBAT_SETTINGS_WARNING"] = "|cffffd100System Logic:|r Camera distance adjusts automatically based on your state.\n\n|cffffd100Priority:|r |cffff5555Combat|r  >  |cff66ccffMount|r  >  |cffffffffNormal|r"
 -- Combat
 L["AUTO_ZOOM_COMBAT"] = "Enable Smart Combat Zoom"
@@ -94,8 +94,8 @@ L["SMART_ZOOM_DISABLED_MSG"] = "Smart Zoom is disabled. Using manual max distanc
 -- ============================================================================
 L["ADVANCED_SETTINGS"] = "Advanced Settings"
 
-L["REDUCE_UNEXPECTED_MOVEMENT"] = "Reduce Unexpected Movement"
-L["REDUCE_UNEXPECTED_MOVEMENT_DESC"] = "Reduces camera jumps when the camera collides with terrain or objects (Smart Pivot)."
+L["REDUCE_UNEXPECTED_MOVEMENT"] = "Smooth Camera Bumps"
+L["REDUCE_UNEXPECTED_MOVEMENT_DESC"] = "Reduces camera jumps when the camera collides with terrain or objects (Reduce Unexpected Movement, Smart Pivot)."
 
 L["INDIRECT_VISIBILITY"] = "Reduced Camera Collision"
 L["INDIRECT_VISIBILITY_DESC"] = "Turns on Blizzard's reduced camera collision behavior. This is a global client setting and applies everywhere."
@@ -106,12 +106,12 @@ L["COLLISION_DESC"] = "General camera collision behavior. These settings are |cf
 L["COLLISION_SUMMARY_TEXT"] = "|cff66ccffReduced Camera Collision:|r %s\n|cff66ccffCollision Offset:|r %s\n|cff66ccffShow Silhouette when Obstructed:|r %s\n|cff66ccffReduce Unexpected Movement:|r %s\n|cff888888These settings are global and apply everywhere.|r"
 L["VISUAL_UTILITY_HEADER"] = "Visual Utility"
 
-L["RESAMPLE_ALWAYS_SHARPEN"] = "Always Sharpen (FSR)"
+L["RESAMPLE_ALWAYS_SHARPEN"] = "Sharpen the Image (FSR)"
 L["RESAMPLE_ALWAYS_SHARPEN_DESC"] = "Forces the game to apply a sharpness filter (FidelityFX), making the image crisper even without upscaling."
 
-L["SOFT_TARGET_INTERACT"] = "Soft Target Interact Icons"
-L["SOFT_TARGET_INTERACT_DESC"] = "Displays interaction icons over game objects (mailboxes, herbs, portals, NPCs) for easier targeting."
-L["SOFT_TARGET_ICONS_MODE_DESC"] = "Controls the global SoftTargetIconGameObject setting for every character and addon. \"Game setting\" never writes it, so gathering addons such as NodeSight can manage it. Current game value: %s."
+L["SOFT_TARGET_INTERACT"] = "Object Interaction Icons"
+L["SOFT_TARGET_INTERACT_DESC"] = "Icons over herbs, ore, mailboxes, portals and NPCs (Soft Target). Displays interaction icons over game objects for easier targeting."
+L["SOFT_TARGET_ICONS_MODE_DESC"] = "Icons over herbs, ore, mailboxes, portals and NPCs (Soft Target Interact Icons). Controls the global SoftTargetIconGameObject setting for every character and addon. \"Game setting\" never writes it, so gathering addons such as NodeSight can manage it. Current game value: %s."
 L["SOFT_TARGET_ICONS_MODE_GAME"] = "Game setting (do not change)"
 L["SOFT_TARGET_ICONS_MODE_ON"] = "Always on"
 L["SOFT_TARGET_ICONS_MODE_OFF"] = "Always off"
@@ -457,8 +457,8 @@ L["REACTIVE_ZOOM_THRESHOLD"] = "Spin Detection Threshold"
 L["REACTIVE_ZOOM_THRESHOLD_DESC"] = "How far behind the camera must be before the extra steps kick in. Lower reacts sooner."
 L["REACTIVE_ZOOM_MAX_TIME"] = "Maximum Zoom Time"
 L["REACTIVE_ZOOM_MAX_TIME_DESC"] = "Upper bound on how long one eased zoom may take. Lower feels snappier, higher feels smoother."
-L["CAMERA_ZOOM_SPEED"] = "Client Zoom Speed"
-L["CAMERA_ZOOM_SPEED_DESC"] = "Blizzard's own cameraZoomSpeed CVar. Reactive Zoom uses it to work out how long a zoom should take."
+L["CAMERA_ZOOM_SPEED"] = "Zoom Animation Speed"
+L["CAMERA_ZOOM_SPEED_DESC"] = "How fast the camera travels during a zoom (Blizzard's cameraZoomSpeed, formerly \"Client Zoom Speed\"). Reactive Zoom uses it to work out how long a zoom should take."
 L["REACTIVE_ZOOM_EASING"] = "Zoom Curve"
 L["REACTIVE_ZOOM_EASING_DESC"] = "How the eased zoom is distributed over time. Out curves leave immediately and slow into the target, which feels the most responsive on a wheel."
 L["REACTIVE_ZOOM_EASING_OUTQUAD"] = "Responsive (Out Quad)"
@@ -622,3 +622,8 @@ L["PERF_UISTATUSUPDATES"] = "Settings status updates"
 L["SUMMARY_ALLY_UNAVAILABLE_INSTANCE"] = "Ally combat cannot be read in this instance; boss encounters still enable the combat camera"
 L["SUMMARY_ALLY_UNAVAILABLE"] = "Ally combat cannot be read right now"
 L["PERF_SECRETREADS"] = "Secret (unreadable) values"
+L["UI_ACTIVITY_DISTANCES"] = "World & PvE Distances"
+L["UI_WHEEL_PAGE"] = "Mouse Wheel & Zoom"
+L["UI_WORLD_PAGE"] = "World & Visuals"
+L["UI_QUESTS_HEADER"] = "Quests"
+L["UI_PVP_DISTANCES"] = "PvP Distances"

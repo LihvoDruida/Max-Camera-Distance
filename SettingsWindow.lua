@@ -16,8 +16,8 @@ local CONTROL_NAMES = { "check", "slider", "number", "control", "input" }
 -- option get/set/availability handlers and profile storage.
 local OVERVIEW_SECTIONS = {
     { "generalSettings", { "manualMaxPreset", "maxZoomFactor" } },
-    { "zoomSettings", { "reactiveZoom", "zoomTransition" } },
-    { "smartSettings", { "autoCombatZoom" } },
+    { "zoomSettings", { "reactiveZoom" } },
+    { "smartSettings", { "autoCombatZoom", "zoomTransition" } },
     { "mountSettings", { "autoMountZoom" } },
     { "afkSettings", { "enableAFK" } },
     { "reloadGroup", { "minimapButton", "languageOverride" } },

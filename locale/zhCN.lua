@@ -105,7 +105,7 @@ L["RESAMPLE_ALWAYS_SHARPEN_DESC"] = "强制游戏应用锐化滤镜（FidelityFX
 
 L["SOFT_TARGET_INTERACT"] = "软目标交互图标"
 L["SOFT_TARGET_INTERACT_DESC"] = "在游戏对象（邮箱、草药、传送门、NPC）上显示交互图标，便于选中目标。"
-L["SOFT_TARGET_ICONS_MODE_DESC"] = "控制所有角色和插件共用的全局设置 SoftTargetIconGameObject。“游戏设置”从不写入该值，以便 NodeSight 等采集插件自行管理。当前游戏值：%s。"
+L["SOFT_TARGET_ICONS_MODE_DESC"] = "草药、矿石、邮箱、传送门和 NPC 上方的图标（Soft Target）。控制所有角色和插件共用的全局设置 SoftTargetIconGameObject。“游戏设置”从不写入该值，以便 NodeSight 等采集插件自行管理。当前游戏值：%s。"
 L["SOFT_TARGET_ICONS_MODE_GAME"] = "游戏设置（不更改）"
 L["SOFT_TARGET_ICONS_MODE_ON"] = "始终开启"
 L["SOFT_TARGET_ICONS_MODE_OFF"] = "始终关闭"
@@ -620,3 +620,8 @@ L["GAMEPAD_TANK_TURN_DESC"] = "GamePadTankTurnSpeed：大于 0 时角色会像�
 L["SUMMARY_ALLY_UNAVAILABLE_INSTANCE"] = "此副本中无法读取队友的战斗状态；首领战斗仍会启用战斗镜头"
 L["SUMMARY_ALLY_UNAVAILABLE"] = "目前无法读取队友的战斗状态"
 L["PERF_SECRETREADS"] = "机密（不可读）数值"
+L["UI_ACTIVITY_DISTANCES"] = "距离：世界与 PvE"
+L["UI_WHEEL_PAGE"] = "鼠标滚轮与缩放"
+L["UI_WORLD_PAGE"] = "世界与画面"
+L["UI_QUESTS_HEADER"] = "任务"
+L["UI_PVP_DISTANCES"] = "距离：PvP"

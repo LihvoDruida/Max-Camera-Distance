@@ -698,6 +698,13 @@ local function SetPresetSelectValue(distanceKey, presetId)
     SetOption(presetKey, presetId)
 end
 
+-- In Manual mode the slider already shows its value; the status line is only
+-- worth a row when a preset owns the distance and the slider is locked.
+local function IsPresetManual(distanceKey)
+    local snapshot = GetControlSnapshot(distanceKey)
+    return snapshot == nil or snapshot.isManual and true or false
+end
+
 local function BuildPresetStatusText(distanceKey)
     local snapshot = GetControlSnapshot(distanceKey)
     if not snapshot then
@@ -824,7 +831,7 @@ local function InjectContextOptions(args, baseOrder, mode, maxDistance)
                 type = "description",
                 name = function() return BuildPresetStatusText(distanceKey) end,
                 order = order,
-                hidden = function() return not GetOption("autoCombatZoom") end,
+                hidden = function() return not GetOption("autoCombatZoom") or IsPresetManual(distanceKey) end,
             }
             order = order + 1
 
@@ -1196,6 +1203,7 @@ function Config:SetupOptions()
                         type = "description",
                         name = function() return BuildPresetStatusText("maxZoomFactor") end,
                         order = 12,
+                        hidden = function() return IsPresetManual("maxZoomFactor") end,
                     },
                     normalZoomPreset = {
                         type = "select",
@@ -1211,7 +1219,7 @@ function Config:SetupOptions()
                         type = "description",
                         name = function() return BuildPresetStatusText("minZoomFactor") end,
                         order = 14,
-                        hidden = function() return not GetOption("autoCombatZoom") end,
+                        hidden = function() return not GetOption("autoCombatZoom") or IsPresetManual("minZoomFactor") end,
                     },
                     combatPresetHeader = {
                         type = "header",
@@ -1233,7 +1241,7 @@ function Config:SetupOptions()
                         order = 61,
                         disabled = function() return not GetOption("autoMountZoom") end,
                     },
-                    mountZoomPresetInfo = { type = "description", name = function() return BuildPresetStatusText("mountZoomFactor") end, order = 62, hidden = function() return not GetOption("autoMountZoom") end },
+                    mountZoomPresetInfo = { type = "description", name = function() return BuildPresetStatusText("mountZoomFactor") end, order = 62, hidden = function() return not GetOption("autoMountZoom") or IsPresetManual("mountZoomFactor") end },
                 },
             },
 

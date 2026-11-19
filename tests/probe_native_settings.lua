@@ -34,7 +34,8 @@ _G.GetCurrentRegion = function() return ({ US = 1, KR = 2, EU = 3, TW = 4, CN = 
 _G.strlenutf8 = function(s) return #s end
 _G.securecallfunction = selected[2] >= 90000 and function(fn, ...) return fn(...) end or nil
 local cvars = { cameraDistanceMaxZoomFactor = "2.6", cameraYawMoveSpeed = "180", cameraPitchMoveSpeed = "90",
-    test_cameraOverShoulder = "0", test_cameraDynamicPitch = "0", CameraKeepCharacterCentered = "1" }
+    test_cameraOverShoulder = "0", test_cameraDynamicPitch = "0", CameraKeepCharacterCentered = "1",
+    cameraZoomSpeed = "20", cameraReduceUnexpectedMovement = "0", SoftTargetIconGameObject = "1" }
 _G.GetCVar = function(name) return cvars[name] end
 _G.GetCVarDefault = GetCVar
 _G.SetCVar = function(name, value) cvars[name] = tostring(value); return true end
@@ -103,7 +104,7 @@ assert(ui.search:GetText() == "" and ui.pageTitle:GetText() == ns.Locale:Get("UI
     "clear-search button failed to restore overview")
 assert(#ui.rows == #quickRows, "clear-search did not recover dashboard")
 -- A visible row must not re-read its getter on every scroll/render pass.
-ui:SelectPage("zoomSettings")
+ui:SelectPage("generalSettings")
 local readProbe
 for _, row in ipairs(ui.rows) do
     if row.option.type == "range" and not row.disabled then readProbe = row; break end
@@ -122,6 +123,37 @@ assert(readCount == afterBind, "visible scrolling unnecessarily rebinds unchange
 readProbe.option.get = originalGet
 
 assert(not ns.Config.options.args.presetSettings, "old preset page still duplicates activities")
+-- Stage 4 layout: combat rules and activity distances on separate pages, no
+-- one-button page, and the full reset next to the profiles.
+local smartArgs = ns.Config.options.args.smartSettings.args
+assert(smartArgs.combatZoomOnPlayer and smartArgs.zoomTransition and not smartArgs.activities_pve,
+    "combat page still carries the activity distances")
+assert(ns.Config.options.args.activitySettings.args.combatMinZoom, "normal distance missing from activity page")
+assert(not ns.Config.options.args.extraFeatures, "one-button Extra Features page is back")
+assert(ns.Config.options.args.profiles.args.resetBtn and not ns.Config.options.args.reloadGroup.args.resetBtn,
+    "full reset still sits next to Reload UI")
+-- Renamed options stay findable by the names players already know.
+if GetLocale() == "enUS" and ns.Locale:GetActiveLocale() == "enUS" then
+    for _, case in ipairs({
+        { "soft target", ns.Compat.SupportsSoftTargetIcons() },
+        { "reduce unexpected movement", ns.Compat.HasCVar("cameraReduceUnexpectedMovement") },
+        { "client zoom speed", ns.Compat.HasCVar("cameraZoomSpeed") },
+    }) do
+        if case[2] then
+            assert(#ui:CollectRows("overview", case[1]) > 0, "search lost the old name " .. case[1])
+        end
+    end
+end
+for _, page in ipairs(ui:GetPages()) do
+    ui:SelectPage(page.key)
+    local controls = 0
+    for _, row in ipairs(ui.rows) do
+        local kind = row.option.type
+        if kind ~= "description" and kind ~= "header" then controls = controls + 1 end
+    end
+    assert(page.key == "gamePadSettings" or controls <= 20,
+        page.key .. " shows " .. controls .. " controls; split the page")
+end
 assert(ns.Config.options.args.mountSettings.args.mountZoomPreset, "mount preset separated from mount settings")
 assert(ns.Config.options.args.zoomSettings.args.reactiveZoom, "wheel settings not grouped")
 assert(ns.Config.options.args.afkSettings.args.enableAFK, "AFK settings missing")
@@ -139,7 +171,10 @@ profile.afkMode = false
 if stub.legacyWidgets then
     assert((stub.legacyColorWrites or 0) > 0, "legacy texture color fallback was not used")
 end
-local groups = ns.Config.options.args.smartSettings.args
+local groups = setmetatable({}, { __index = function(_, key)
+    return ns.Config.options.args.activitySettings.args[key]
+        or (ns.Config.options.args.pvpActivitySettings and ns.Config.options.args.pvpActivitySettings.args[key])
+end })
 for _, id in ipairs(ns.Contexts.ORDER) do
     local def = ns.Contexts.DEFINITIONS[id]
     local group = groups["activities_" .. def.kind]
@@ -221,7 +256,7 @@ assert(ui.choices.buttons[1].choiceKey == "a" and ui.choices.buttons[2].choiceKe
     and ui.choices.buttons[3].choiceKey == "c")
 ui:CloseChoices()
 -- Scrolling during a drag must not rebind the slider to a different setting.
-ui:SelectPage("zoomSettings")
+ui:SelectPage("generalSettings")
 local dragging
 for _, f in ipairs(ui.pools.range) do if f:IsShown() and not f.row.disabled then dragging = f; break end end
 assert(dragging)
@@ -234,7 +269,7 @@ stub.Script(dragging.slider, "OnMouseUp")
 assert(originalRow.option.get(originalRow.info) == originalRow.option.max)
 -- Repeated wheel ticks on a numeric slider must not discard the first tick
 -- while a deferred UI repaint is pending.
-ui:SelectPage("zoomSettings")
+ui:SelectPage("generalSettings")
 local wheelControl
 for _, f in ipairs(ui.pools.range) do
     if f:IsShown() and not f.row.disabled and f.row.option.max - f.row.option.min >= 3 * (f.row.option.step or 1) then
