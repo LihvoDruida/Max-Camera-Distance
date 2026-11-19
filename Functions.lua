@@ -11,7 +11,7 @@ local Functions = ns.Functions
 Functions.perf = { startedAt = (type(GetTime) == "function" and GetTime()) or nil, counts = {} }
 Functions.PERF_KEYS = {
     "events", "unitFlags", "cameraPasses", "cameraAnimations", "rosterScans",
-    "memberReads", "groupPolls", "cvarWrites", "uiRebuilds", "uiStatusUpdates",
+    "memberReads", "secretReads", "groupPolls", "cvarWrites", "uiRebuilds", "uiStatusUpdates",
 }
 
 function Functions:PerfCount(key, amount)
@@ -447,6 +447,7 @@ function Functions:InvalidateRuntimeCaches(scope)
         runtimeCache.groupCombatExpiresAt = 0
         runtimeCache.groupCombatKey = nil
         runtimeCache.groupCombatIncomplete = nil
+        runtimeCache.groupCombatUnavailable = nil
     end
 end
 
@@ -1685,10 +1686,20 @@ end)
 -- true / false / nil(unknown). An API that is missing, errors or returns a
 -- secret value is "unknown", never a proven "no".
 function Functions.ReadTriState(func, ...)
-    if type(func) ~= "function" then return nil end
+    if type(func) ~= "function" then return nil, "missing" end
     local ok, value = pcall(func, ...)
-    if not ok or (Compat.IsSecret and Compat.IsSecret(value)) then return nil end
+    if not ok then return nil, "error" end
+    if Compat.IsSecret and Compat.IsSecret(value) then
+        Functions:PerfCount("secretReads")
+        return nil, "secret"
+    end
     return IsTruthySafe(value)
+end
+
+-- True when the last group scan could read no member at all (secret values in
+-- protected Midnight instances, zoning). Group combat is then unknown, not "no".
+function Functions:IsGroupCombatUnavailable()
+    return runtimeCache.groupCombatUnavailable and true or false
 end
 
 -- Personal combat from PLAYER_REGEN_DISABLED/ENABLED, seeded on world entry.
@@ -1787,6 +1798,7 @@ function Functions:IsGroupInCombat()
         runtimeCache.groupCombatLastKnown = result
     end
     if memberCount == 0 then runtimeCache.groupCombatLastKnown = nil end
+    runtimeCache.groupCombatUnavailable = (memberCount > 0 and readable == 0 and not positiveAlly and incomplete) or nil
 
     runtimeCache.groupCombatKey = key
     runtimeCache.groupCombatIncomplete = incomplete and not positiveAlly
@@ -1972,8 +1984,18 @@ local LAZY_SIGNALS = {
     -- Raid boss encounter in progress. Historically counted as "group in
     -- combat"; kept under the group trigger for existing profiles, but reported
     -- separately so diagnostics do not present it as a fighting ally.
-    raidEncounter = function()
-        return SafeBoolCall(IsInRaid) and SafeBoolCall(IsEncounterInProgress) or false
+    raidEncounter = function(db, s)
+        if not SafeBoolCall(IsEncounterInProgress) then return false end
+        if SafeBoolCall(IsInRaid) then return true end
+        -- Party instances: only when ally combat cannot be read at all, so a
+        -- boss pull still reaches a healer whose allies report secret values.
+        if not SafeBoolCall(IsInGroup) or not SafeIsInInstance() then return false end
+        local _ = s.groupInCombat
+        return Functions:IsGroupCombatUnavailable()
+    end,
+    groupCombatUnavailable = function(db, s)
+        local _ = s.groupInCombat
+        return Functions:IsGroupCombatUnavailable()
     end,
     hasThreat = function()
         return ResolveThreatFlag()
@@ -2267,6 +2289,7 @@ local function BuildStatusSnapshot(db)
         playerInCombat = signals.playerInCombat,
         groupInCombat = signals.groupInCombat,
         groupCombatIncomplete = signals.groupCombatIncomplete,
+        groupCombatUnavailable = signals.groupCombatUnavailable,
         raidEncounter = signals.raidEncounter,
         hasThreat = signals.hasThreat,
         isMounted = signals.isMounted,

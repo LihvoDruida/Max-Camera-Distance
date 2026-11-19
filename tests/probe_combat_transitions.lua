@@ -26,6 +26,10 @@ _G.UnitClass = function() return "Priest", "PRIEST" end
 local clock = 100
 _G.GetTime = function() return clock end
 
+-- Midnight secret values: issecretvalue() marks this sentinel as unreadable.
+local SECRET = setmetatable({}, { __tostring = function() return "<secret>" end })
+_G.issecretvalue = function(value) return value == SECRET end
+
 local combat = {}
 local inGroup, partySize = false, 0
 local inRaid, raidSize, selfToken, identityError, encounter = false, 0, nil, {}, false
@@ -33,6 +37,7 @@ local unitCombatReads = 0
 _G.UnitAffectingCombat = function(unit)
     if unit ~= "player" then unitCombatReads = unitCombatReads + 1 end
     if combat[unit] == "error" then error("unit combat unavailable") end
+    if combat[unit] == "secret" then return SECRET end
     return combat[unit] and true or false
 end
 _G.UnitIsUnit = function(a, b)
@@ -49,8 +54,9 @@ _G.IsMounted = function() return false end
 _G.UnitIsAFK = function() return false end
 local zoom = 25
 _G.GetCameraZoom = function() return zoom end
-_G.IsInInstance = function() return false, "none" end
-_G.GetInstanceInfo = function() return "World", "none", 0 end
+local instanceKind = nil
+_G.IsInInstance = function() return instanceKind ~= nil, instanceKind or "none" end
+_G.GetInstanceInfo = function() return "World", instanceKind or "none", 0 end
 
 local timers = {}
 local function Schedule(delay, callback)
@@ -294,6 +300,25 @@ for _, case in ipairs({ { "Retail", "12.1.0", 120100, 1 }, { "Forever", "1.60.1"
     assert(f:GetPerfSnapshot().counts.rosterScans == 0, label .. "perf reset kept old counts")
     inRaid, raidSize, selfToken = false, 0, nil
 
+    -- 8c) Protected instance: every ally returns a secret value.
+    inGroup, partySize, instanceKind = true, 4, "party"
+    combat = { player = false, party1 = "secret", party2 = "secret", party3 = "secret", party4 = "secret" }
+    f:PerfReset()
+    group, incomplete, snap = Signals()
+    assert(group == false and snap.groupCombatUnavailable == true and f:GetPerfSnapshot().counts.secretReads == 4,
+        label .. "secret ally values were not reported as unavailable")
+    assert(snap.state == "normal", label .. "unreadable allies alone enabled the combat camera")
+    encounter = true
+    group, incomplete, snap = Signals()
+    assert(snap.activeTriggers.encounter == true and snap.state == "combat",
+        label .. "dungeon boss pull did not reach the camera while allies were unreadable")
+    combat = { player = false, party1 = false, party2 = "secret", party3 = false, party4 = false }
+    group, incomplete, snap = Signals()
+    assert(snap.groupCombatUnavailable == false and snap.activeTriggers.encounter == false,
+        label .. "party encounter fallback stayed active while allies were readable")
+    encounter, instanceKind, inGroup, partySize = false, nil, false, 0
+    combat = {}
+
     -- 9) Unreadable personal flag falls back to the combat events.
     combat = { player = "error" }
     f:SetPlayerCombatEvent(true) -- PLAYER_REGEN_DISABLED
@@ -306,4 +331,4 @@ for _, case in ipairs({ { "Retail", "12.1.0", 120100, 1 }, { "Forever", "1.60.1"
     combat = {}
 end
 
-print("probe_combat_transitions: PASS (group combat watch, return deadline, stale timer, shoulder matrix, shoulder toggle, roster unknowns, encounter option, zoning, cheap path, aura cache, perf counters, regen fallback)")
+print("probe_combat_transitions: PASS (group combat watch, return deadline, stale timer, shoulder matrix, shoulder toggle, roster unknowns, encounter option, zoning, cheap path, aura cache, perf counters, secret allies, regen fallback)")
