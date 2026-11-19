@@ -356,6 +356,16 @@ function UI:Confirm(text, callback)
     self.confirm:Show()
 end
 
+-- A structural Rebuild closes the choice popup and rebinds rows, so it waits
+-- while the player is typing, dragging, picking from a list or confirming.
+-- Combat events and status ticks no longer close an open dropdown.
+function UI:IsBusy()
+    return self.interacting
+        or (self.choices ~= nil and self.choices:IsShown())
+        or (self.confirm ~= nil and self.confirm:IsShown())
+        or false
+end
+
 function UI:CloseChoices()
     if self.choices then self.choices:Hide() end
 end
@@ -857,7 +867,7 @@ function UI:Create()
         if tick < 0.05 then return end
         if self.searchDelay then self.searchDelay = self.searchDelay - tick end
         tick = 0
-        if self.dirty and not self.interacting and (not self.searchDelay or self.searchDelay <= 0) then
+        if self.dirty and not self:IsBusy() and (not self.searchDelay or self.searchDelay <= 0) then
             local reset = self.searchDelay ~= nil; self.searchDelay = nil; self:Rebuild(reset)
         end
         shown(self.searchHint, self.search:GetText() == "")
